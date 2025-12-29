@@ -7,8 +7,7 @@ import { ResearchProvider } from './contexts/ResearchContext';
 import { LibraryProvider } from './contexts/LibraryContext';
 import { DatabaseProvider } from './database/DatabaseContext';
 
-// Import Tailwind CSS - correct path from root to src
-import './src/styles/main.css';
+// Note: Styles are now loaded via Tailwind CDN in index.html
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

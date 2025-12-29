@@ -12,6 +12,230 @@
     
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Quicksand', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            },
+            colors: {
+              // Scholar Red Palette
+              scholar: {
+                50: '#fef2f2',
+                100: '#fce7e7',
+                200: '#f7c5c5',
+                300: '#f1a3a3',
+                400: '#e87171',
+                500: '#A36671',
+                600: '#590016', // Primary Brand
+                700: '#430010',
+                800: '#3d0010',
+                900: '#2d0008',
+              },
+              // Semantic
+              success: {
+                50: '#f0fdf4',
+                500: '#22c55e',
+                600: '#16a34a',
+                700: '#15803d',
+              },
+              warning: {
+                50: '#fffbeb',
+                500: '#f59e0b',
+                600: '#d97706',
+              },
+              error: {
+                50: '#fef2f2',
+                500: '#ef4444',
+                600: '#dc2626',
+              },
+              info: {
+                50: '#eff6ff',
+                500: '#3b82f6',
+                600: '#2563eb',
+              },
+              // Neutrals
+              cream: '#FEFDFC',
+              dark: {
+                bg: '#0f172a',
+                card: '#1e293b',
+              }
+            },
+            boxShadow: {
+              'scholar': '0 4px 12px rgba(89, 0, 22, 0.15)',
+              'scholar-lg': '0 10px 24px rgba(89, 0, 22, 0.2)',
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+              'slide-up': 'slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0', transform: 'translateY(4px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              slideUp: {
+                '0%': { opacity: '0', transform: 'translateY(8px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      /* Base Styles */
+      body {
+        font-family: 'Quicksand', sans-serif;
+        /* Default to cream, override in dark mode via Tailwind classes on body/div */
+        background-color: #FEFDFC;
+        color: #111827;
+      }
+      
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #d1d5db; 
+        border-radius: 99px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #9ca3af; 
+      }
+      
+      .dark ::-webkit-scrollbar-thumb {
+        background: #475569;
+      }
+      .dark ::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
+      }
+
+      /* Hide scrollbar utility */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+
+     .textLayer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none; /* Pass clicks through the layer itself */
+    line-height: 1; /* CRITICAL: Prevents vertical drift of text selection */
+  }
+    .textLayer > span, .textLayer .structural-item > span {
+      position: absolute;
+      white-space: pre;
+      color: transparent; /* Hide the text layer's text */
+      transform-origin: 0% 0%;
+      pointer-events: auto; /* But allow interaction with the spans */
+      cursor: text; /* Use text cursor for better UX */
+      border-radius: 2px;
+      line-height: 1; /* Ensure spans inherit tight line height */
+    }
+    
+    /* Add a pseudo-element for the hover highlight background for more control */
+    .textLayer span::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: -1px;
+      right: -1px;
+      height: 85%; /* Control highlight height */
+      transform: translateY(-50%);
+      background-color: rgba(96, 165, 250, 0.3);
+      border-radius: 2px;
+      opacity: 0;
+      transition: opacity 0.1s ease-in-out;
+      z-index: -1; /* Place it behind the (transparent) text */
+    }
+
+    /* Style for non-tagged PDFs: show highlight on hover */
+    .textLayer:not(.structurally-tagged) > span:hover::before {
+      opacity: 1;
+    }
+    
+    /* Style for tagged PDFs: show highlight for the entire structural group */
+    .textLayer.structurally-tagged .structural-item:hover > span::before {
+      opacity: 1;
+    }
+
+    /* Custom style for browser's native text selection highlight */
+    ::selection {
+      background-color: rgba(96, 165, 250, 0.5); /* Slightly darker than paragraph hover */
+      /* REMOVED GLOBAL transparent color to fix inputs */
+    }
+
+    ::-moz-selection { /* Firefox */
+      background-color: rgba(96, 165, 250, 0.5);
+    }
+    
+    /* Scoped selection for PDF Text Layer to keep transparent text invisible over canvas */
+    .textLayer ::selection {
+       color: transparent;
+    }
+    .textLayer ::-moz-selection {
+       color: transparent;
+    }
+
+    /* Style for the contextual copy button */
+    .selection-copy-button {
+      position: fixed;
+      transform: translate(-50%, -125%); /* Center horizontally, position above selection */
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background-color: #1a202c; /* gray-900 */
+      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 100;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      animation: subtleFadeIn 0.2s ease-out forwards;
+    }
+
+    @keyframes subtleFadeIn {
+        from {
+            opacity: 0;
+            transform: translate(-50%, -100%);
+        }
+        to {
+            opacity: 1;
+            transform: translate(-50%, -125%);
+        }
+    }
+
+    /* Styles for Search Highlighting */
+    .search-highlight {
+      background-color: rgba(255, 229, 0, 0.5); /* Yellow */
+    }
+    .search-highlight-active {
+      background-color: rgba(255, 165, 0, 0.6); /* Orange */
+      z-index: 10;
+      border-bottom: 2px solid rgba(255, 0, 0, 0.5);
+    }
+    </style>
   </head>
   <body>
     <div id="root"></div>
