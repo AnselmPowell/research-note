@@ -4,9 +4,15 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
+    const isProduction = mode === 'production';
+    
     return {
       server: {
         port: 3000,
+        host: '0.0.0.0',
+      },
+      preview: {
+        port: parseInt(process.env.PORT || '8080'),
         host: '0.0.0.0',
       },
       plugins: [react()],
@@ -22,6 +28,19 @@ export default defineConfig(({ mode }) => {
       },
       build: {
         target: 'esnext', // Use modern target to support top-level await
+        outDir: 'dist',
+        assetsDir: 'assets',
+        sourcemap: !isProduction, // Only generate sourcemaps in development
+        minify: isProduction ? 'esbuild' : false,
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              vendor: ['react', 'react-dom'],
+              pdf: ['pdfjs-dist'],
+              ai: ['@google/genai']
+            }
+          }
+        }
       },
       optimizeDeps: {
         exclude: ['pdfjs-dist'], // Exclude PDF.js from optimization to avoid build issues

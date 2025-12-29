@@ -92,3 +92,6 @@ bower_components/
 
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
+
+# Railway deployment (keep deployment files tracked)
+# Note: Dockerfile, railway.json, nginx.conf, etc. should be tracked

@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "verify-setup": "node scripts/verify-setup.mjs"
+    "verify-setup": "node scripts/verify-setup.mjs",
+    "start": "vite preview --host 0.0.0.0 --port $PORT",
+    "build:production": "NODE_ENV=production vite build",
+    "serve": "vite preview --port 8080 --host 0.0.0.0"
   },
   "dependencies": {
     "react": "^19.2.1",
