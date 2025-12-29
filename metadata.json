@@ -1,0 +1,5 @@
+{
+  "name": "Research Note - v2 Auth",
+  "description": "A clean, modern search engine interface powered by Google Gemini with Search Grounding to provide summarized answers and source citations.",
+  "requestFramePermissions": []
+}
