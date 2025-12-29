@@ -7,6 +7,9 @@ import { ResearchProvider } from './contexts/ResearchContext';
 import { LibraryProvider } from './contexts/LibraryContext';
 import { DatabaseProvider } from './database/DatabaseContext';
 
+// Import Tailwind CSS
+import './src/styles/main.css';
+
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
