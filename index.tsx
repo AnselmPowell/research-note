@@ -7,7 +7,7 @@ import { ResearchProvider } from './contexts/ResearchContext';
 import { LibraryProvider } from './contexts/LibraryContext';
 import { DatabaseProvider } from './database/DatabaseContext';
 
-// Import Tailwind CSS
+// Import Tailwind CSS - correct path from root to src
 import './src/styles/main.css';
 
 const rootElement = document.getElementById('root');
