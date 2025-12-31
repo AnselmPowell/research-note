@@ -1,8 +1,19 @@
-// auth/neonAuth.ts - Neon Auth integration
-import { createAuthClient } from '@neondatabase/neon-js/auth';
+// auth/neonAuth.ts - Neon Auth integration for frontend-only deployment
+import { createAuthClient } from '@neondatabase/auth';
 
-// Create auth client with environment variable
-const authClient = createAuthClient(process.env.VITE_NEON_AUTH_URL);
+// Debug environment variable
+const neonAuthUrl = process.env.VITE_NEON_AUTH_URL || '';
+console.log('[NeonAuth] Using auth URL:', neonAuthUrl);
+
+if (!neonAuthUrl) {
+  console.error('[NeonAuth] VITE_NEON_AUTH_URL is not set!');
+}
+
+// Create auth client for frontend-only deployment
+// This connects directly to Neon Auth service, not local API routes
+const authClient = createAuthClient({
+  baseURL: neonAuthUrl,
+});
 
 export { authClient };
 
