@@ -4,21 +4,17 @@
 # Stage 1: Build the application
 FROM node:20-alpine AS builder
 
-# Accept build arguments from Railway
-ARG GEMINI_API_KEY
-ARG GOOGLE_SEARCH_KEY
-ARG GOOGLE_SEARCH_CX
-ARG OPENAI_API_KEY
-ARG DATABASE_URL
+# Accept non-sensitive build arguments from Railway
 ARG NODE_ENV=production
+ARG VITE_NEON_AUTH_URL
+ARG VITE_MICROSOFT_CLIENT_ID
+ARG VITE_MICROSOFT_TENANT_ID
 
-# Set environment variables for the build process
-ENV GEMINI_API_KEY=$GEMINI_API_KEY
-ENV GOOGLE_SEARCH_KEY=$GOOGLE_SEARCH_KEY
-ENV GOOGLE_SEARCH_CX=$GOOGLE_SEARCH_CX
-ENV OPENAI_API_KEY=$OPENAI_API_KEY
-ENV DATABASE_URL=$DATABASE_URL
+# Set environment variables for the build process (non-sensitive only)
 ENV NODE_ENV=$NODE_ENV
+ENV VITE_NEON_AUTH_URL=$VITE_NEON_AUTH_URL
+ENV VITE_MICROSOFT_CLIENT_ID=$VITE_MICROSOFT_CLIENT_ID
+ENV VITE_MICROSOFT_TENANT_ID=$VITE_MICROSOFT_TENANT_ID
 
 # Set working directory
 WORKDIR /app
@@ -32,11 +28,11 @@ RUN npm ci --silent
 # Copy source code
 COPY . .
 
-# Debug: Show what we're building with
+# Debug: Show what we're building with (non-sensitive info only)
 RUN echo "🔧 Building Research Note..." && \
     echo "NODE_ENV: $NODE_ENV" && \
-    echo "Has GEMINI_API_KEY: $([ -n "$GEMINI_API_KEY" ] && echo "YES" || echo "NO")" && \
-    echo "Has GOOGLE_SEARCH: $([ -n "$GOOGLE_SEARCH_KEY" ] && echo "YES" || echo "NO")"
+    echo "Has NEON_AUTH_URL: $([ -n "$VITE_NEON_AUTH_URL" ] && echo "YES" || echo "NO")" && \
+    echo "Has MICROSOFT_CLIENT_ID: $([ -n "$VITE_MICROSOFT_CLIENT_ID" ] && echo "YES" || echo "NO")"
 
 # Build the application
 RUN npm run build
