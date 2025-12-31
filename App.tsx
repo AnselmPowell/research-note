@@ -12,7 +12,9 @@ import { NotesManager } from './components/library/NotesManager';
 import { useUI } from './contexts/UIContext';
 import { useResearch } from './contexts/ResearchContext';
 import { useLibrary } from './contexts/LibraryContext';
-import { Globe, Check, Library, ChevronsDown, ChevronsUp, AlertTriangle } from 'lucide-react';
+import { useAuth } from './contexts/AuthContext';
+import { AuthModal } from './components/auth/AuthModal';
+import { Globe, Check, Library, ChevronsDown, ChevronsUp, AlertTriangle, User, LogOut } from 'lucide-react';
 
 // Import configuration to validate on app start
 import { getConfig } from './config/env';
@@ -29,8 +31,10 @@ const ALL_SUGGESTIONS = [
 ];
 
 const App: React.FC = () => {
+  const { isAuthenticated, isLoading: authLoading, user, signOut } = useAuth();
   const [configError, setConfigError] = useState<string | null>(null);
   const [isConfigLoading, setIsConfigLoading] = useState(true);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Validate configuration on app startup
   useEffect(() => {
@@ -53,7 +57,8 @@ const App: React.FC = () => {
     isLibraryExpanded,
     setLibraryExpanded,
     setLibraryOpen,
-    libraryActiveView
+    libraryActiveView,
+    resetUI
   } = useUI();
   
   const { 
@@ -67,10 +72,11 @@ const App: React.FC = () => {
     filteredCandidates, 
     isDeepResearching,
     deepResearchResults,
-    updateSearchBar
+    updateSearchBar,
+    resetAllResearchData
   } = useResearch();
   
-  const { loadedPdfs, downloadingUris, loadPdfFromUrl, setActivePdf, isPdfInContext, togglePdfContext, failedUris } = useLibrary();
+  const { loadedPdfs, downloadingUris, loadPdfFromUrl, setActivePdf, isPdfInContext, togglePdfContext, failedUris, resetLibrary } = useLibrary();
 
   const [allWebNotesExpanded, setAllWebNotesExpanded] = useState(false);
 
@@ -79,6 +85,38 @@ const App: React.FC = () => {
       .sort(() => 0.5 - Math.random())
       .slice(0, 5);
   }, []);
+
+  // Show loading screen during authentication or config loading
+  if (authLoading || isConfigLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-cream dark:bg-dark-bg">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-scholar-200 border-t-scholar-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">
+            {authLoading ? 'Loading...' : 'Initializing...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Configuration error handling
+  if (configError) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-cream dark:bg-dark-bg">
+        <div className="text-center p-8">
+          <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Configuration Error</h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">{configError}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-500">
+            Please check your environment variables in Railway dashboard.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Remove the unauthenticated landing page barrier - let everyone use the app
 
   const handleSearchTrigger = (query: any, mode: 'web' | 'deep') => {
       if (isLibraryOpen) {
@@ -246,6 +284,73 @@ const App: React.FC = () => {
     );
   }
 
+  // User menu component
+  const UserMenu: React.FC = () => {
+    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+
+    const handleLogout = () => {
+      // Call signOut with all reset functions to clear app state
+      signOut([resetUI, resetAllResearchData, resetLibrary]);
+      setIsUserMenuOpen(false);
+    };
+
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+          className="flex items-center gap-2 px-3 py-2 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg shadow-sm border border-gray-200/50 dark:border-gray-700/50 hover:bg-white dark:hover:bg-gray-700 transition-colors"
+        >
+          <User size={16} className="text-gray-600 dark:text-gray-400" />
+          <span className="text-sm text-gray-700 dark:text-gray-300">
+            {isAuthenticated ? user?.name?.split(' ')[0] : 'Anonymous'}
+          </span>
+        </button>
+
+        {isUserMenuOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setIsUserMenuOpen(false)} />
+            <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+              <div className="p-3 border-b border-gray-100 dark:border-gray-700">
+                {isAuthenticated ? (
+                  <>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user?.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Anonymous User</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Data stored locally</p>
+                  </>
+                )}
+              </div>
+              
+              {isAuthenticated ? (
+                <button
+                  onClick={handleLogout}
+                  className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
+                >
+                  <LogOut size={14} />
+                  Sign Out
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setShowAuthModal(true);
+                    setIsUserMenuOpen(false);
+                  }}
+                  className="w-full px-3 py-2 text-left text-sm text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 transition-colors flex items-center gap-2"
+                >
+                  <User size={14} />
+                  Sign Up to Save Data
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   // Show loading screen while validating config
   if (isConfigLoading) {
     return (
@@ -260,6 +365,7 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen flex flex-col bg-cream dark:bg-dark-bg font-sans transition-colors duration-300 overflow-hidden">
+      
       <NotesManagerSidebar />
       <AgentResearcher />
       
@@ -269,7 +375,8 @@ const App: React.FC = () => {
               <SearchBar centered={true} onSearch={handleSearchTrigger} />
             </div>
           )}
-          <div className="absolute right-2 top-4">
+          <div className="absolute right-2 top-4 flex items-center gap-3">
+              <UserMenu />
               <LayoutControls />
           </div>
       </div>
@@ -327,6 +434,12 @@ const App: React.FC = () => {
           rightContent={<PdfWorkspace />}
         />
       )}
+      
+      {/* Auth Modal for anonymous users to sign up */}
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onClose={() => setShowAuthModal(false)} 
+      />
     </div>
   );
 };

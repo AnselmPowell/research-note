@@ -2,6 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { AuthProvider } from './contexts/AuthContext';
 import { UIProvider } from './contexts/UIContext';
 import { ResearchProvider } from './contexts/ResearchContext';
 import { LibraryProvider } from './contexts/LibraryContext';
@@ -17,14 +18,16 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <DatabaseProvider>
-      <UIProvider>
-        <ResearchProvider>
-          <LibraryProvider>
-            <App />
-          </LibraryProvider>
-        </ResearchProvider>
-      </UIProvider>
-    </DatabaseProvider>
+    <AuthProvider>
+      <DatabaseProvider>
+        <UIProvider>
+          <ResearchProvider>
+            <LibraryProvider>
+              <App />
+            </LibraryProvider>
+          </ResearchProvider>
+        </UIProvider>
+      </DatabaseProvider>
+    </AuthProvider>
   </React.StrictMode>
 );

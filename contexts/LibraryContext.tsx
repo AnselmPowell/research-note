@@ -22,6 +22,8 @@ interface LibraryContextType {
   togglePdfContext: (uri: string, title?: string) => void;
   isPdfInContext: (uri: string) => boolean;
   isPdfLoaded: (uri: string) => boolean;
+  // Reset library state
+  resetLibrary: () => void;
 }
 
 const LibraryContext = createContext<LibraryContextType | undefined>(undefined);
@@ -157,6 +159,16 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const isPdfInContext = (uri: string) => contextUris.has(uri);
   const isPdfLoaded = (uri: string) => loadedPdfs.some(p => p.uri === uri);
 
+  // Reset library state to initial values (for sign out)
+  const resetLibrary = () => {
+    setLoadedPdfs([]);
+    setActivePdfUri(null);
+    setDownloadingUris(new Set());
+    setFailedUris(new Set());
+    setSearchHighlight(null);
+    setContextUris(new Set());
+  };
+
   return (
     <LibraryContext.Provider value={{
       loadedPdfs,
@@ -172,7 +184,8 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setActivePdf: setActivePdfUri,
       togglePdfContext,
       isPdfInContext,
-      isPdfLoaded
+      isPdfLoaded,
+      resetLibrary
     }}>
       {children}
     </LibraryContext.Provider>

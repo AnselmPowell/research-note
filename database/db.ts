@@ -25,6 +25,10 @@ export const dbService = {
       // --- MIGRATION BLOCK: Ensure columns exist ---
       try {
         await sql`ALTER TABLE papers ADD COLUMN IF NOT EXISTS is_explicitly_saved BOOLEAN DEFAULT FALSE;`;
+        // Add user_id columns for authentication support
+        await sql`ALTER TABLE papers ADD COLUMN IF NOT EXISTS user_id TEXT;`;
+        await sql`ALTER TABLE notes ADD COLUMN IF NOT EXISTS user_id TEXT;`;
+        await sql`ALTER TABLE folders ADD COLUMN IF NOT EXISTS user_id TEXT;`;
       } catch (e) { console.warn("[DB] Migration notice:", e); }
 
       // 2. Notes Table
@@ -81,7 +85,7 @@ export const dbService = {
     }
   },
 
-  async savePaper(paper: any, isExplicit: boolean = true) {
+  async savePaper(paper: any, isExplicit: boolean = true, userId?: string) {
     const uri = paper.pdfUri || paper.uri;
     const title = paper.title || "Untitled";
     const abstract = paper.summary || paper.abstract || "";
@@ -91,21 +95,23 @@ export const dbService = {
     // Use EXCLUDED.is_explicitly_saved OR papers.is_explicitly_saved
     // If it was already true, it stays true. If it's becoming true now, we update it.
     return await sql`
-      INSERT INTO papers (uri, title, abstract, authors, num_pages, is_explicitly_saved)
-      VALUES (${uri}, ${title}, ${abstract}, ${JSON.stringify(authors)}, ${numPages}, ${isExplicit})
+      INSERT INTO papers (uri, title, abstract, authors, num_pages, is_explicitly_saved, user_id)
+      VALUES (${uri}, ${title}, ${abstract}, ${JSON.stringify(authors)}, ${numPages}, ${isExplicit}, ${userId})
       ON CONFLICT (uri) DO UPDATE SET
         title = EXCLUDED.title,
         abstract = EXCLUDED.abstract,
         num_pages = COALESCE(EXCLUDED.num_pages, papers.num_pages),
-        is_explicitly_saved = papers.is_explicitly_saved OR EXCLUDED.is_explicitly_saved
+        is_explicitly_saved = papers.is_explicitly_saved OR EXCLUDED.is_explicitly_saved,
+        user_id = COALESCE(papers.user_id, EXCLUDED.user_id)
       RETURNING *;
     `;
   },
 
-  async saveNote(note: DeepResearchNote) {
+  async saveNote(note: DeepResearchNote, userId?: string) {
     const existing = await sql`
       SELECT * FROM notes 
-      WHERE paper_uri = ${note.pdfUri} AND content = ${note.quote}
+      WHERE paper_uri = ${note.pdfUri} AND content = ${note.quote} 
+      ${userId ? sql`AND user_id = ${userId}` : sql``}
       LIMIT 1;
     `;
     
@@ -119,7 +125,8 @@ export const dbService = {
         citations, 
         related_question, 
         page_number, 
-        relevance_score
+        relevance_score,
+        user_id
       )
       VALUES (
         ${note.pdfUri}, 
@@ -128,7 +135,8 @@ export const dbService = {
         ${JSON.stringify(note.citations || [])}, 
         ${note.relatedQuestion}, 
         ${note.pageNumber}, 
-        ${note.relevanceScore || 0}
+        ${note.relevanceScore || 0},
+        ${userId}
       )
       RETURNING *;
     `;
@@ -147,10 +155,31 @@ export const dbService = {
     return await sql`UPDATE notes SET is_flagged = ${state} WHERE id = ${noteId} RETURNING *;`;
   },
 
-  async getAllLibraryData() {
+  async getAllLibraryData(userId?: string) {
+    if (userId) {
+      // Return user-specific data
+      const papers = await sql`SELECT * FROM papers WHERE user_id = ${userId} OR user_id IS NULL ORDER BY created_at DESC;`;
+      const notes = await sql`SELECT * FROM notes WHERE user_id = ${userId} OR user_id IS NULL ORDER BY created_at DESC;`;
+      return { papers, notes };
+    }
+    
+    // Fallback for non-authenticated access (existing behavior)
     const papers = await sql`SELECT * FROM papers ORDER BY created_at DESC;`;
     const notes = await sql`SELECT * FROM notes ORDER BY created_at DESC;`;
     return { papers, notes };
+  },
+
+  // User-specific data retrieval methods
+  async getUserPapers(userId: string) {
+    return await sql`SELECT * FROM papers WHERE user_id = ${userId} OR user_id IS NULL ORDER BY created_at DESC;`;
+  },
+
+  async getUserNotes(userId: string) {
+    return await sql`SELECT * FROM notes WHERE user_id = ${userId} OR user_id IS NULL ORDER BY created_at DESC;`;
+  },
+
+  async getUserFolders(userId: string) {
+    return await sql`SELECT * FROM folders WHERE user_id = ${userId} OR user_id IS NULL ORDER BY id ASC;`;
   },
 
   async deletePaper(uri: string) {
@@ -161,10 +190,10 @@ export const dbService = {
     return await sql`DELETE FROM notes WHERE id = ${id};`;
   },
 
-  async createFolder(name: string, type: string, parentId: number | null = null, description: string = '') {
+  async createFolder(name: string, type: string, parentId: number | null = null, description: string = '', userId?: string) {
     return await sql`
-      INSERT INTO folders (name, type, parent_id, description)
-      VALUES (${name}, ${type}, ${parentId}, ${description})
+      INSERT INTO folders (name, type, parent_id, description, user_id)
+      VALUES (${name}, ${type}, ${parentId}, ${description}, ${userId})
       RETURNING *;
     `;
   },
@@ -178,7 +207,10 @@ export const dbService = {
     `;
   },
 
-  async getFolders() {
+  async getFolders(userId?: string) {
+    if (userId) {
+      return this.getUserFolders(userId);
+    }
     return await sql`SELECT * FROM folders ORDER BY id ASC;`;
   }
 };

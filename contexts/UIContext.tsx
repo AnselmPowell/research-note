@@ -34,6 +34,8 @@ interface UIContextType {
   assignmentModal: AssignmentModalState;
   openAssignmentModal: (note: DeepResearchNote, sourceMetadata: any) => void;
   closeAssignmentModal: () => void;
+  // Reset UI state
+  resetUI: () => void;
 }
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
@@ -122,6 +124,21 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setAssignmentModal(prev => ({ ...prev, isOpen: false }));
   };
 
+  // Reset UI state to initial values (for sign out)
+  const resetUI = () => {
+    setColumnVisibility({
+      left: false,
+      middle: false,
+      library: false,
+      right: false
+    });
+    setIsHomeExiting(false);
+    setIsLibraryOpen(false);
+    setIsLibraryExpanded(false);
+    setLibraryActiveView('all');
+    closeAssignmentModal();
+  };
+
   return (
     <UIContext.Provider value={{
       darkMode,
@@ -143,7 +160,8 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       setLibraryActiveView,
       assignmentModal,
       openAssignmentModal,
-      closeAssignmentModal
+      closeAssignmentModal,
+      resetUI
     }}>
       {children}
     </UIContext.Provider>

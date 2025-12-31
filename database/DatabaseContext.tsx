@@ -2,6 +2,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { dbService } from './db';
 import { DeepResearchNote, FolderNode, FolderType } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { localStorageService } from '../utils/localStorageService';
 
 interface DatabaseContextType {
   savedPapers: any[];
@@ -27,6 +29,7 @@ interface DatabaseContextType {
 const DatabaseContext = createContext<DatabaseContextType | undefined>(undefined);
 
 export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isAuthenticated } = useAuth(); // Add auth dependency
   const [savedPapers, setSavedPapers] = useState<any[]>([]);
   const [savedNotes, setSavedNotes] = useState<any[]>([]);
   const [folders, setFolders] = useState<any[]>([]);
@@ -48,18 +51,35 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [folders]);
 
   const refreshData = async () => {
-    const data = await dbService.getAllLibraryData();
-    const folderData = await dbService.getFolders();
-    setSavedPapers(data.papers);
-    setSavedNotes(data.notes);
-    setFolders(folderData);
+    if (user && isAuthenticated) {
+      // Load from database for authenticated users
+      try {
+        const data = await dbService.getAllLibraryData(user.id);
+        const folderData = await dbService.getFolders(user.id);
+        setSavedPapers(data.papers);
+        setSavedNotes(data.notes);
+        setFolders(folderData);
+      } catch (error) {
+        console.error("[DB Context] Failed to refresh data:", error);
+      }
+    } else {
+      // Load from localStorage for anonymous users
+      try {
+        const localData = localStorageService.getAllLibraryData();
+        setSavedPapers(localData.papers);
+        setSavedNotes(localData.notes);
+        setFolders(localData.folders);
+      } catch (error) {
+        console.error("[DB Context] Failed to refresh local data:", error);
+      }
+    }
   };
 
   useEffect(() => {
     const init = async () => {
       try {
         await dbService.initSchema();
-        await refreshData();
+        await refreshData(); // This will now filter by user OR load from localStorage
       } catch (error) {
         console.error("[DB Context] Init failed", error);
       } finally {
@@ -67,54 +87,95 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     };
     init();
-  }, []);
+  }, [user, isAuthenticated]); // Re-run when auth state changes
 
   const savePaper = async (paper: any) => {
-    // Explicitly saving the paper from UI
-    await dbService.savePaper(paper, true);
+    if (user && isAuthenticated) {
+      // Save to database for authenticated users
+      await dbService.savePaper(paper, true, user.id);
+    } else {
+      // Save to localStorage for anonymous users
+      localStorageService.savePaper(paper);
+    }
     await refreshData();
   };
 
   const deletePaper = async (uri: string) => {
-    await dbService.deletePaper(uri);
+    if (user && isAuthenticated) {
+      await dbService.deletePaper(uri);
+    } else {
+      localStorageService.deletePaper(uri);
+    }
     await refreshData();
   };
 
   const saveNote = async (note: DeepResearchNote, paperMetadata?: any) => {
-    // Implicit save of paper metadata for reference, isExplicit = false
-    if (paperMetadata) await dbService.savePaper(paperMetadata, false);
-    const result = await dbService.saveNote(note);
+    let result;
+    
+    if (user && isAuthenticated) {
+      // Save to database for authenticated users
+      if (paperMetadata) await dbService.savePaper(paperMetadata, false, user.id);
+      result = await dbService.saveNote(note, user.id);
+    } else {
+      // Save to localStorage for anonymous users
+      result = localStorageService.saveNote(note, paperMetadata);
+    }
+    
     await refreshData();
     return result;
   };
 
   const updateNote = async (id: number, content: string) => {
-    await dbService.updateNote(id, content);
+    if (user && isAuthenticated) {
+      await dbService.updateNote(id, content);
+    } else {
+      localStorageService.updateNote(id, content);
+    }
     await refreshData();
   };
 
   const toggleStar = async (noteId: number, state: boolean) => {
-    await dbService.toggleStarNote(noteId, state);
+    if (user && isAuthenticated) {
+      await dbService.toggleStarNote(noteId, state);
+    } else {
+      localStorageService.toggleStar(noteId, state);
+    }
     await refreshData();
   };
 
   const toggleFlag = async (noteId: number, state: boolean) => {
-    await dbService.toggleFlagNote(noteId, state);
+    if (user && isAuthenticated) {
+      await dbService.toggleFlagNote(noteId, state);
+    } else {
+      localStorageService.toggleFlag(noteId, state);
+    }
     await refreshData();
   };
 
   const deleteNote = async (noteId: number) => {
-    await dbService.deleteNotePermanently(noteId);
+    if (user && isAuthenticated) {
+      await dbService.deleteNotePermanently(noteId);
+    } else {
+      localStorageService.deleteNote(noteId);
+    }
     await refreshData();
   };
 
   const createFolder = async (name: string, type: FolderType, parentId?: number | null, description?: string) => {
-    await dbService.createFolder(name, type, parentId, description);
+    if (user && isAuthenticated) {
+      await dbService.createFolder(name, type, parentId, description, user.id);
+    } else {
+      localStorageService.createFolder(name, type, parentId, description);
+    }
     await refreshData();
   };
 
   const assignNote = async (noteId: number, folderId: number) => {
-    await dbService.assignNoteToFolder(noteId, folderId);
+    if (user && isAuthenticated) {
+      await dbService.assignNoteToFolder(noteId, folderId);
+    } else {
+      localStorageService.assignNote(noteId, folderId);
+    }
     await refreshData();
   };
 

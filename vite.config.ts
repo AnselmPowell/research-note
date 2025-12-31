@@ -33,7 +33,12 @@ export default defineConfig(({ mode }) => {
         'process.env.GOOGLE_SEARCH_CX': JSON.stringify(env.GOOGLE_SEARCH_CX || process.env.GOOGLE_SEARCH_CX || ''),
         'process.env.OPENAI_API_KEY': JSON.stringify(env.OPENAI_API_KEY || process.env.OPENAI_API_KEY || ''),
         'process.env.DATABASE_URL': JSON.stringify(env.DATABASE_URL || process.env.DATABASE_URL || ''),
-        'process.env.NODE_ENV': JSON.stringify(env.NODE_ENV || process.env.NODE_ENV || mode)
+        'process.env.NODE_ENV': JSON.stringify(env.NODE_ENV || process.env.NODE_ENV || mode),
+        // Add Neon Auth URL
+        'process.env.VITE_NEON_AUTH_URL': JSON.stringify(env.VITE_NEON_AUTH_URL || process.env.VITE_NEON_AUTH_URL || ''),
+        // Add Microsoft OAuth configuration
+        'process.env.VITE_MICROSOFT_CLIENT_ID': JSON.stringify(env.VITE_MICROSOFT_CLIENT_ID || process.env.VITE_MICROSOFT_CLIENT_ID || ''),
+        'process.env.VITE_MICROSOFT_TENANT_ID': JSON.stringify(env.VITE_MICROSOFT_TENANT_ID || process.env.VITE_MICROSOFT_TENANT_ID || 'common')
       },
       build: {
         target: 'esnext', // Use modern target to support top-level await

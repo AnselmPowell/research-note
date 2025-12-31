@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Microsoft Authentication</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .container {
+      text-align: center;
+      padding: 2rem;
+    }
+    .spinner {
+      border: 3px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top: 3px solid white;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .error {
+      color: #ff6b6b;
+      background: rgba(255, 107, 107, 0.1);
+      padding: 1rem;
+      border-radius: 8px;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner"></div>
+    <h2 id="status">Processing Microsoft Authentication...</h2>
+    <p id="message">Please wait while we complete your sign-in.</p>
+  </div>
+
+  <script>
+    // Microsoft OAuth callback handler
+    (function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const error = urlParams.get('error');
+      const errorDescription = urlParams.get('error_description');
+      
+      const statusElement = document.getElementById('status');
+      const messageElement = document.getElementById('message');
+
+      if (error) {
+        statusElement.textContent = 'Authentication Failed';
+        messageElement.innerHTML = `<div class="error">Error: ${error}<br>${errorDescription || ''}</div>`;
+        console.error('Microsoft OAuth error:', error, errorDescription);
+        
+        // Close popup after showing error briefly
+        setTimeout(() => {
+          window.close();
+        }, 3000);
+        return;
+      }
+
+      if (code) {
+        statusElement.textContent = 'Authentication Successful!';
+        messageElement.textContent = 'Completing sign-in process...';
+        
+        console.log('Microsoft OAuth callback received code:', code.substring(0, 10) + '...');
+        
+        // The parent window's popup checker will detect this URL change
+        // and process the code. We just need to keep the popup open
+        // until the parent processes it.
+        
+        // Optional: You could also use postMessage to communicate with parent
+        try {
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage({
+              type: 'MICROSOFT_AUTH_SUCCESS',
+              code: code,
+              origin: window.location.origin
+            }, window.location.origin);
+          }
+        } catch (e) {
+          console.log('Could not post message to parent (this is normal for cross-origin)');
+        }
+        
+        // Keep popup open briefly, parent will close it
+        statusElement.textContent = 'Success! Closing...';
+        messageElement.textContent = 'You can close this window.';
+      } else {
+        statusElement.textContent = 'Authentication Failed';
+        messageElement.innerHTML = '<div class="error">No authorization code received</div>';
+        
+        setTimeout(() => {
+          window.close();
+        }, 3000);
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -13,6 +13,8 @@ echo "GOOGLE_SEARCH_KEY: $([ -n "$GOOGLE_SEARCH_KEY" ] && echo "SET" || echo "MI
 echo "GOOGLE_SEARCH_CX: $([ -n "$GOOGLE_SEARCH_CX" ] && echo "SET" || echo "MISSING")"
 echo "OPENAI_API_KEY: $([ -n "$OPENAI_API_KEY" ] && echo "SET" || echo "MISSING")"
 echo "DATABASE_URL: $([ -n "$DATABASE_URL" ] && echo "SET" || echo "MISSING")"
+echo "VITE_NEON_AUTH_URL: $([ -n "$VITE_NEON_AUTH_URL" ] && echo "SET" || echo "MISSING")"
+echo "VITE_MICROSOFT_CLIENT_ID: $([ -n "$VITE_MICROSOFT_CLIENT_ID" ] && echo "SET" || echo "MISSING")"
 
 # Validate required environment variables
 if [ -z "$GEMINI_API_KEY" ]; then

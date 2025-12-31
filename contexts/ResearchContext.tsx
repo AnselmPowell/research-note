@@ -52,6 +52,8 @@ interface ResearchContextType {
   setActiveSearchMode: (mode: SearchMode) => void;
   analyzeLoadedPdfs: (pdfs: LoadedPdf[], questions: string, signal?: AbortSignal) => Promise<void>;
   analyzeArxivPapers: (papers: ArxivPaper[], userQuestions: string[], keywords: string[]) => Promise<void>;
+  // Complete reset for sign out
+  resetAllResearchData: () => void;
 }
 
 const ResearchContext = createContext<ResearchContextType | undefined>(undefined);
@@ -161,6 +163,17 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setDeepResearchResults([]);
     setSelectedArxivIds(new Set());
   }, []);
+
+  // Complete reset for sign out - clears all research and search data
+  const resetAllResearchData = useCallback(() => {
+    resetSearch();
+    clearSearchBar();
+    setActiveSearchMode('web');
+    setGatheringStatus('');
+    setArxivKeywords([]);
+    setContextNotes([]);
+    setActiveQuery(null);
+  }, [resetSearch, clearSearchBar]);
 
   const performWebSearch = async (query: string) => {
     setActiveSearchMode('web');
@@ -305,7 +318,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       selectedArxivIds, toggleArxivSelection, selectAllArxivPapers, clearArxivSelection,
       isDeepResearching, deepResearchResults, contextNotes, toggleContextNote, isNoteInContext,
       performWebSearch, performDeepResearch, performHybridResearch, stopDeepResearch, resetSearch,
-      analyzeLoadedPdfs, analyzeArxivPapers
+      analyzeLoadedPdfs, analyzeArxivPapers, resetAllResearchData
     }}>
       {children}
     </ResearchContext.Provider>
