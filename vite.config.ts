@@ -11,6 +11,8 @@ export default defineConfig(({ mode }) => {
       mode,
       hasGeminiKey: !!(env.GEMINI_API_KEY || process.env.GEMINI_API_KEY),
       hasGoogleSearch: !!(env.GOOGLE_SEARCH_KEY || process.env.GOOGLE_SEARCH_KEY),
+      hasNeonAuthUrl: !!(env.VITE_NEON_AUTH_URL || process.env.VITE_NEON_AUTH_URL),
+      hasMicrosoftClientId: !!(env.VITE_MICROSOFT_CLIENT_ID || process.env.VITE_MICROSOFT_CLIENT_ID),
       nodeEnv: env.NODE_ENV || process.env.NODE_ENV || mode
     });
     
@@ -26,19 +28,18 @@ export default defineConfig(({ mode }) => {
       plugins: [react()],
       define: {
         // Map all environment variables for the frontend
-        // Use both env (from .env files) and process.env (from Railway)
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || process.env.GEMINI_API_KEY || ''),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || process.env.GEMINI_API_KEY || ''),
-        'process.env.GOOGLE_SEARCH_KEY': JSON.stringify(env.GOOGLE_SEARCH_KEY || process.env.GOOGLE_SEARCH_KEY || ''),
-        'process.env.GOOGLE_SEARCH_CX': JSON.stringify(env.GOOGLE_SEARCH_CX || process.env.GOOGLE_SEARCH_CX || ''),
-        'process.env.OPENAI_API_KEY': JSON.stringify(env.OPENAI_API_KEY || process.env.OPENAI_API_KEY || ''),
-        'process.env.DATABASE_URL': JSON.stringify(env.DATABASE_URL || process.env.DATABASE_URL || ''),
-        'process.env.NODE_ENV': JSON.stringify(env.NODE_ENV || process.env.NODE_ENV || mode),
-        // Add Neon Auth URL
-        'process.env.VITE_NEON_AUTH_URL': JSON.stringify(env.VITE_NEON_AUTH_URL || process.env.VITE_NEON_AUTH_URL || ''),
-        // Add Microsoft OAuth configuration
-        'process.env.VITE_MICROSOFT_CLIENT_ID': JSON.stringify(env.VITE_MICROSOFT_CLIENT_ID || process.env.VITE_MICROSOFT_CLIENT_ID || ''),
-        'process.env.VITE_MICROSOFT_TENANT_ID': JSON.stringify(env.VITE_MICROSOFT_TENANT_ID || process.env.VITE_MICROSOFT_TENANT_ID || 'common')
+        // Railway provides these as process.env during build, prioritize them
+        'process.env.API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || ''),
+        'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || ''),
+        'process.env.GOOGLE_SEARCH_KEY': JSON.stringify(process.env.GOOGLE_SEARCH_KEY || env.GOOGLE_SEARCH_KEY || ''),
+        'process.env.GOOGLE_SEARCH_CX': JSON.stringify(process.env.GOOGLE_SEARCH_CX || env.GOOGLE_SEARCH_CX || ''),
+        'process.env.OPENAI_API_KEY': JSON.stringify(process.env.OPENAI_API_KEY || env.OPENAI_API_KEY || ''),
+        'process.env.DATABASE_URL': JSON.stringify(process.env.DATABASE_URL || env.DATABASE_URL || ''),
+        'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || env.NODE_ENV || mode),
+        // Prioritize Railway environment variables for VITE_ variables
+        'process.env.VITE_NEON_AUTH_URL': JSON.stringify(process.env.VITE_NEON_AUTH_URL || env.VITE_NEON_AUTH_URL || ''),
+        'process.env.VITE_MICROSOFT_CLIENT_ID': JSON.stringify(process.env.VITE_MICROSOFT_CLIENT_ID || env.VITE_MICROSOFT_CLIENT_ID || ''),
+        'process.env.VITE_MICROSOFT_TENANT_ID': JSON.stringify(process.env.VITE_MICROSOFT_TENANT_ID || env.VITE_MICROSOFT_TENANT_ID || 'common')
       },
       build: {
         target: 'esnext', // Use modern target to support top-level await

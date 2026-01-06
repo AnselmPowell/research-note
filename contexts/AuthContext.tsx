@@ -42,12 +42,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         console.log('[Auth] Initializing authentication...');
         
-        if (!authClient) {
-          console.error('[Auth] Auth client is not available');
-          setError('Authentication service unavailable');
-          return;
-        }
-        
         const result = await authClient.getSession();
         
         if (result.data?.session && result.data?.user) {
@@ -73,10 +67,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       console.log('[Auth] Signing in user:', email);
-      
-      if (!authClient) {
-        throw new Error('Authentication service unavailable');
-      }
       
       // Check if there's localStorage data to migrate
       const hasDataToMigrate = dataMigrationService.hasLocalDataToMigrate();

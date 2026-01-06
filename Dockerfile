@@ -4,18 +4,6 @@
 # Stage 1: Build the application
 FROM node:20-alpine AS builder
 
-# Accept non-sensitive build arguments from Railway
-ARG NODE_ENV=production
-ARG VITE_NEON_AUTH_URL
-ARG VITE_MICROSOFT_CLIENT_ID
-ARG VITE_MICROSOFT_TENANT_ID
-
-# Set environment variables for the build process (non-sensitive only)
-ENV NODE_ENV=$NODE_ENV
-ENV VITE_NEON_AUTH_URL=$VITE_NEON_AUTH_URL
-ENV VITE_MICROSOFT_CLIENT_ID=$VITE_MICROSOFT_CLIENT_ID
-ENV VITE_MICROSOFT_TENANT_ID=$VITE_MICROSOFT_TENANT_ID
-
 # Set working directory
 WORKDIR /app
 
@@ -28,13 +16,12 @@ RUN npm ci --silent
 # Copy source code
 COPY . .
 
-# Debug: Show what we're building with (non-sensitive info only)
+# Debug: Show build environment (Railway variables will be available during build)
 RUN echo "🔧 Building Research Note..." && \
-    echo "NODE_ENV: $NODE_ENV" && \
-    echo "Has NEON_AUTH_URL: $([ -n "$VITE_NEON_AUTH_URL" ] && echo "YES" || echo "NO")" && \
-    echo "Has MICROSOFT_CLIENT_ID: $([ -n "$VITE_MICROSOFT_CLIENT_ID" ] && echo "YES" || echo "NO")"
+    echo "NODE_ENV: production" && \
+    echo "Railway build environment ready"
 
-# Build the application
+# Build the application - Railway environment variables automatically available
 RUN npm run build
 
 # Verify build output

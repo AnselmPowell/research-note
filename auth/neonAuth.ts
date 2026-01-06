@@ -1,27 +1,27 @@
 // auth/neonAuth.ts - Neon Auth integration
 import { createAuthClient } from '@neondatabase/neon-js/auth';
 
-// Debug environment variable
+// Get environment variable with Railway prioritization
 const neonAuthUrl = process.env.VITE_NEON_AUTH_URL || '';
-console.log('[NeonAuth] Using auth URL:', neonAuthUrl);
-console.log('[NeonAuth] All environment variables:', {
-  VITE_NEON_AUTH_URL: process.env.VITE_NEON_AUTH_URL,
+
+// Enhanced debugging
+console.log('[NeonAuth] Initializing auth client...');
+console.log('[NeonAuth] Environment check:', {
+  VITE_NEON_AUTH_URL: neonAuthUrl ? `SET (${neonAuthUrl.substring(0, 40)}...)` : 'NOT SET',
   NODE_ENV: process.env.NODE_ENV,
   VITE_MICROSOFT_CLIENT_ID: process.env.VITE_MICROSOFT_CLIENT_ID ? 'SET' : 'NOT SET'
 });
 
 if (!neonAuthUrl) {
-  console.error('[NeonAuth] VITE_NEON_AUTH_URL is not set!');
-  // Don't throw error in production, let's see what's happening
-  console.error('[NeonAuth] Cannot initialize auth client without URL');
+  console.error('[NeonAuth] CRITICAL: VITE_NEON_AUTH_URL is not set!');
+  console.error('[NeonAuth] This will cause auth to fail in production');
+  throw new Error('VITE_NEON_AUTH_URL environment variable is required');
 }
 
-// Create auth client - but handle case where URL might not be available
-const authClient = neonAuthUrl ? createAuthClient(neonAuthUrl) : null;
+// Create auth client with the Neon Auth URL
+const authClient = createAuthClient(neonAuthUrl);
 
-if (!authClient) {
-  console.error('[NeonAuth] Failed to create auth client');
-}
+console.log('[NeonAuth] Auth client created successfully');
 
 export { authClient };
 
