@@ -2,6 +2,17 @@
 import { authClient } from './neonAuth';
 import { dataMigrationService } from '../utils/dataMigrationService';
 
+// Runtime environment variable access function (same as neonAuth.ts)
+function getEnvVar(key: string): string {
+  if (typeof window !== 'undefined' && (window as any).ENV) {
+    // Runtime environment (Railway production)
+    return (window as any).ENV[key] || '';
+  } else {
+    // Build-time environment (local development)  
+    return (import.meta.env as any)[key] || '';
+  }
+}
+
 interface MicrosoftUser {
   id: string;
   email: string;
@@ -24,9 +35,9 @@ interface MicrosoftAuthResult {
   error?: string;
 }
 
-// Microsoft OAuth configuration
-const MICROSOFT_CLIENT_ID = import.meta.env.VITE_MICROSOFT_CLIENT_ID || '';
-const MICROSOFT_TENANT_ID = import.meta.env.VITE_MICROSOFT_TENANT_ID || 'common';
+// Microsoft OAuth configuration with runtime support
+const MICROSOFT_CLIENT_ID = getEnvVar('VITE_MICROSOFT_CLIENT_ID');
+const MICROSOFT_TENANT_ID = getEnvVar('VITE_MICROSOFT_TENANT_ID') || 'common';
 
 // PKCE helper functions
 function generateCodeVerifier(): string {
