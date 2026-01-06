@@ -1,15 +1,26 @@
 // auth/neonAuth.ts - Neon Auth integration
 import { createAuthClient } from '@neondatabase/neon-js/auth';
 
-// Get environment variable with Railway prioritization
-const neonAuthUrl = process.env.VITE_NEON_AUTH_URL || '';
+// Get environment variable with Railway runtime support
+function getEnvVar(key: string): string {
+  if (typeof window !== 'undefined' && (window as any).ENV) {
+    // Runtime environment (Railway production)
+    return (window as any).ENV[key] || '';
+  } else {
+    // Build-time environment (local development)
+    return (process.env as any)[key] || '';
+  }
+}
+
+const neonAuthUrl = getEnvVar('VITE_NEON_AUTH_URL');
 
 // Enhanced debugging
 console.log('[NeonAuth] Initializing auth client...');
 console.log('[NeonAuth] Environment check:', {
   VITE_NEON_AUTH_URL: neonAuthUrl ? `SET (${neonAuthUrl.substring(0, 40)}...)` : 'NOT SET',
-  NODE_ENV: process.env.NODE_ENV,
-  VITE_MICROSOFT_CLIENT_ID: process.env.VITE_MICROSOFT_CLIENT_ID ? 'SET' : 'NOT SET'
+  NODE_ENV: getEnvVar('NODE_ENV'),
+  VITE_MICROSOFT_CLIENT_ID: getEnvVar('VITE_MICROSOFT_CLIENT_ID') ? 'SET' : 'NOT SET',
+  runtimeMode: typeof window !== 'undefined' && (window as any).ENV ? 'RUNTIME' : 'BUILD-TIME'
 });
 
 if (!neonAuthUrl) {

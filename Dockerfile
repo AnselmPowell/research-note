@@ -16,12 +16,12 @@ RUN npm ci --silent
 # Copy source code
 COPY . .
 
-# Debug: Show build environment (Railway variables will be available during build)
-RUN echo "🔧 Building Research Note..." && \
-    echo "NODE_ENV: production" && \
-    echo "Railway build environment ready"
+# Build without environment variables (they'll be injected at runtime)
+RUN echo "🔧 Building Research Note for runtime environment injection..." && \
+    echo "NODE_ENV: production"
 
-# Build the application - Railway environment variables automatically available
+# Build the application with empty environment variables
+ENV NODE_ENV=production
 RUN npm run build
 
 # Verify build output
@@ -36,6 +36,10 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy custom nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
 
+# Copy environment injection script
+COPY inject-env.sh /inject-env.sh
+RUN chmod +x /inject-env.sh
+
 # Expose port
 EXPOSE 8080
 
@@ -43,5 +47,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start with environment injection
+CMD ["/inject-env.sh"]

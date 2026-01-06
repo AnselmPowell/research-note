@@ -31,19 +31,37 @@ class ConfigurationError extends Error {
 }
 
 /**
+ * Gets environment variable with runtime support (Railway) and build-time fallback
+ */
+function getEnvVar(key: string, fallback: string = ''): string {
+  // In production (Railway), environment variables are loaded from window.ENV
+  // In development, they come from process.env via Vite
+  
+  if (typeof window !== 'undefined' && (window as any).ENV) {
+    // Runtime environment (Railway production)
+    return (window as any).ENV[key] || fallback;
+  } else {
+    // Build-time environment (local development)  
+    return (process.env as any)[key] || fallback;
+  }
+}
+
+/**
  * Validates and returns the application configuration
- * Note: Uses Vite's process.env injection which happens at build time
+ * Supports both build-time (Vite) and runtime (Railway) environment injection
  */
 export function getConfig(): AppConfig {
   // Core validation - Gemini API Key is required
-  const geminiApiKey = (process.env.API_KEY || process.env.GEMINI_API_KEY || '').trim();
+  const geminiApiKey = (getEnvVar('API_KEY') || getEnvVar('GEMINI_API_KEY')).trim();
   
   if (!geminiApiKey || geminiApiKey === 'undefined' || geminiApiKey === 'null') {
     console.error('🔥 CONFIGURATION ERROR: GEMINI_API_KEY is missing');
-    console.error('📋 Available process.env values:', {
-      API_KEY: process.env.API_KEY ? 'SET' : 'MISSING',
-      GEMINI_API_KEY: process.env.GEMINI_API_KEY ? 'SET' : 'MISSING',
-      NODE_ENV: process.env.NODE_ENV
+    console.error('📋 Available environment values:', {
+      API_KEY: getEnvVar('API_KEY') ? 'SET' : 'MISSING',
+      GEMINI_API_KEY: getEnvVar('GEMINI_API_KEY') ? 'SET' : 'MISSING', 
+      VITE_NEON_AUTH_URL: getEnvVar('VITE_NEON_AUTH_URL') ? 'SET' : 'MISSING',
+      NODE_ENV: getEnvVar('NODE_ENV'),
+      runtimeMode: typeof window !== 'undefined' && (window as any).ENV ? 'RUNTIME' : 'BUILD-TIME'
     });
     throw new ConfigurationError(
       'GEMINI_API_KEY is required. Please set it in Railway environment variables.'
@@ -53,13 +71,13 @@ export function getConfig(): AppConfig {
   // Get environment variables with fallbacks and clean them
   const config: AppConfig = {
     geminiApiKey,
-    googleSearchKey: (process.env.GOOGLE_SEARCH_KEY || '').trim(),
-    googleSearchCx: (process.env.GOOGLE_SEARCH_CX || '').trim(),
-    openaiApiKey: (process.env.OPENAI_API_KEY || '').trim(),
-    databaseUrl: (process.env.DATABASE_URL || '').trim(),
-    nodeEnv: (process.env.NODE_ENV || 'production').trim(),
-    isDevelopment: (process.env.NODE_ENV || 'production') === 'development',
-    isProduction: (process.env.NODE_ENV || 'production') === 'production'
+    googleSearchKey: getEnvVar('GOOGLE_SEARCH_KEY').trim(),
+    googleSearchCx: getEnvVar('GOOGLE_SEARCH_CX').trim(),
+    openaiApiKey: getEnvVar('OPENAI_API_KEY').trim(),
+    databaseUrl: getEnvVar('DATABASE_URL').trim(),
+    nodeEnv: (getEnvVar('NODE_ENV') || 'production').trim(),
+    isDevelopment: (getEnvVar('NODE_ENV') || 'production') === 'development',
+    isProduction: (getEnvVar('NODE_ENV') || 'production') === 'production'
   };
 
   // Debug logging for production (only show if environment variable is set vs missing)
