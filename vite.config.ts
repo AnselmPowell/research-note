@@ -9,11 +9,15 @@ export default defineConfig(({ mode }) => {
     // Debug environment variables during build
     console.log('🔧 Vite Build Environment:', {
       mode,
+      // Server-side variables (only injected in development)
       hasGeminiKey: !!(env.GEMINI_API_KEY || process.env.GEMINI_API_KEY),
       hasGoogleSearch: !!(env.GOOGLE_SEARCH_KEY || process.env.GOOGLE_SEARCH_KEY),
+      // Client-side variables (always injected)
       hasNeonAuthUrl: !!(env.VITE_NEON_AUTH_URL || process.env.VITE_NEON_AUTH_URL),
       hasMicrosoftClientId: !!(env.VITE_MICROSOFT_CLIENT_ID || process.env.VITE_MICROSOFT_CLIENT_ID),
-      nodeEnv: env.NODE_ENV || process.env.NODE_ENV || mode
+      nodeEnv: env.NODE_ENV || process.env.NODE_ENV || mode,
+      serverVarsInjected: mode === 'development',
+      note: mode === 'production' ? 'Production: Server-side API keys accessed via Railway process.env at runtime' : 'Development: All variables injected at build time'
     });
     
     return {
@@ -27,19 +31,25 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react()],
       define: {
-        // Map all environment variables for the frontend
-        // Railway provides these as process.env during build, prioritize them
-        'process.env.API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || ''),
-        'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || ''),
-        'process.env.GOOGLE_SEARCH_KEY': JSON.stringify(process.env.GOOGLE_SEARCH_KEY || env.GOOGLE_SEARCH_KEY || ''),
-        'process.env.GOOGLE_SEARCH_CX': JSON.stringify(process.env.GOOGLE_SEARCH_CX || env.GOOGLE_SEARCH_CX || ''),
-        'process.env.OPENAI_API_KEY': JSON.stringify(process.env.OPENAI_API_KEY || env.OPENAI_API_KEY || ''),
-        'process.env.DATABASE_URL': JSON.stringify(process.env.DATABASE_URL || env.DATABASE_URL || ''),
-        'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || env.NODE_ENV || mode),
-        // Prioritize Railway environment variables for VITE_ variables
+        // IMPORTANT: Only inject client-safe variables AND server variables for localhost development
+        
+        // Client-side authentication variables (safe for browser exposure)
         'process.env.VITE_NEON_AUTH_URL': JSON.stringify(process.env.VITE_NEON_AUTH_URL || env.VITE_NEON_AUTH_URL || ''),
         'process.env.VITE_MICROSOFT_CLIENT_ID': JSON.stringify(process.env.VITE_MICROSOFT_CLIENT_ID || env.VITE_MICROSOFT_CLIENT_ID || ''),
-        'process.env.VITE_MICROSOFT_TENANT_ID': JSON.stringify(process.env.VITE_MICROSOFT_TENANT_ID || env.VITE_MICROSOFT_TENANT_ID || 'common')
+        'process.env.VITE_MICROSOFT_TENANT_ID': JSON.stringify(process.env.VITE_MICROSOFT_TENANT_ID || env.VITE_MICROSOFT_TENANT_ID || 'common'),
+        
+        // Server-side variables - ONLY inject for localhost development
+        ...(mode === 'development' ? {
+          'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
+          'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.API_KEY || ''),
+          'process.env.GOOGLE_SEARCH_KEY': JSON.stringify(env.GOOGLE_SEARCH_KEY || ''),
+          'process.env.GOOGLE_SEARCH_CX': JSON.stringify(env.GOOGLE_SEARCH_CX || ''),
+          'process.env.OPENAI_API_KEY': JSON.stringify(env.OPENAI_API_KEY || ''),
+          'process.env.DATABASE_URL': JSON.stringify(env.DATABASE_URL || '')
+        } : {}),
+        
+        // Environment indicator
+        'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || env.NODE_ENV || mode)
       },
       build: {
         target: 'esnext', // Use modern target to support top-level await

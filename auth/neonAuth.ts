@@ -1,15 +1,20 @@
 // auth/neonAuth.ts - Neon Auth integration
 import { createAuthClient } from '@neondatabase/neon-js/auth';
 
-// Get environment variable with Railway runtime support
+// Get environment variable with proper Railway runtime support
 function getEnvVar(key: string): string {
-  if (typeof window !== 'undefined' && (window as any).ENV) {
-    // Runtime environment (Railway production)
-    return (window as any).ENV[key] || '';
-  } else {
-    // Build-time environment (local development)
-    return (process.env as any)[key] || '';
+  // PRIORITY 1: Railway production - check actual process.env at runtime
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key] || '';
   }
+  
+  // PRIORITY 2: Runtime window.ENV (for VITE_ variables)
+  if (typeof window !== 'undefined' && (window as any).ENV) {
+    return (window as any).ENV[key] || '';
+  }
+  
+  // PRIORITY 3: Development build-time fallback
+  return '';
 }
 
 const neonAuthUrl = getEnvVar('VITE_NEON_AUTH_URL');
@@ -20,7 +25,8 @@ console.log('[NeonAuth] Environment check:', {
   VITE_NEON_AUTH_URL: neonAuthUrl ? `SET (${neonAuthUrl.substring(0, 40)}...)` : 'NOT SET',
   NODE_ENV: getEnvVar('NODE_ENV'),
   VITE_MICROSOFT_CLIENT_ID: getEnvVar('VITE_MICROSOFT_CLIENT_ID') ? 'SET' : 'NOT SET',
-  runtimeMode: typeof window !== 'undefined' && (window as any).ENV ? 'RUNTIME' : 'BUILD-TIME'
+  accessMode: typeof process !== 'undefined' && process.env && process.env.VITE_NEON_AUTH_URL ? 'RAILWAY_PROCESS_ENV' : 
+              typeof window !== 'undefined' && (window as any).ENV ? 'WINDOW_ENV' : 'BUILD_TIME'
 });
 
 if (!neonAuthUrl) {

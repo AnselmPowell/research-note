@@ -2,15 +2,20 @@
 import { authClient } from './neonAuth';
 import { dataMigrationService } from '../utils/dataMigrationService';
 
-// Runtime environment variable access function (same as neonAuth.ts)
+// Runtime environment variable access function (consistent with neonAuth.ts)
 function getEnvVar(key: string): string {
-  if (typeof window !== 'undefined' && (window as any).ENV) {
-    // Runtime environment (Railway production)
-    return (window as any).ENV[key] || '';
-  } else {
-    // Build-time environment (local development)  
-    return (import.meta.env as any)[key] || '';
+  // PRIORITY 1: Railway production - check actual process.env at runtime  
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key] || '';
   }
+  
+  // PRIORITY 2: Runtime window.ENV (for VITE_ variables)
+  if (typeof window !== 'undefined' && (window as any).ENV) {
+    return (window as any).ENV[key] || '';
+  }
+  
+  // PRIORITY 3: Development build-time fallback
+  return (import.meta.env as any)[key] || '';
 }
 
 interface MicrosoftUser {
