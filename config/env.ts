@@ -60,15 +60,20 @@ export function getConfig(): AppConfig {
   
   if (!geminiApiKey || geminiApiKey === 'undefined' || geminiApiKey === 'null') {
     console.error('🔥 CONFIGURATION ERROR: GEMINI_API_KEY is missing');
-    console.error('📋 Environment variable diagnostics:', {
-      'process.env.GEMINI_API_KEY': typeof process !== 'undefined' && process.env ? (process.env.GEMINI_API_KEY ? 'SET' : 'MISSING') : 'UNAVAILABLE',
-      'process.env.API_KEY': typeof process !== 'undefined' && process.env ? (process.env.API_KEY ? 'SET' : 'MISSING') : 'UNAVAILABLE',
-      'window.ENV.GEMINI_API_KEY': typeof window !== 'undefined' && (window as any).ENV ? ((window as any).ENV.GEMINI_API_KEY ? 'SET' : 'MISSING') : 'UNAVAILABLE',
-      'NODE_ENV': getEnvVar('NODE_ENV'),
-      'Runtime Context': typeof process !== 'undefined' ? 'NODE.JS' : 'BROWSER',
-      'Access Mode': typeof process !== 'undefined' && process.env && process.env.GEMINI_API_KEY ? 'RAILWAY_PROCESS_ENV' : 
-                     typeof window !== 'undefined' && (window as any).ENV ? 'WINDOW_ENV' : 'NONE'
-    });
+    
+    // SECURITY: Only show minimal diagnostics, never in production
+    const nodeEnv = getEnvVar('NODE_ENV') || 'production';
+    const isDev = nodeEnv === 'development' && window.location.hostname === 'localhost';
+    
+    if (isDev) {
+      console.error('📋 Environment variable status (dev only):', {
+        'hasGeminiKey': false,
+        'NODE_ENV': nodeEnv,
+        'hostname': window.location.hostname,
+        'note': 'Detailed diagnostics disabled for security'
+      });
+    }
+    
     throw new ConfigurationError(
       'GEMINI_API_KEY is required. Please set it in Railway environment variables.'
     );
