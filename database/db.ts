@@ -79,6 +79,17 @@ export const dbService = {
         );
       `;
 
+      // 5. Microsoft User Mappings Table
+      await sql`
+        CREATE TABLE IF NOT EXISTS microsoft_user_mappings (
+          id SERIAL PRIMARY KEY,
+          microsoft_id TEXT UNIQUE NOT NULL,
+          neon_user_id TEXT NOT NULL,
+          email TEXT NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+      `;
+
       console.log("[DB] Academic Library Schema Initialized & Migrated.");
     } catch (error) {
       console.error("[DB] Schema initialization failed:", error);
@@ -212,5 +223,22 @@ export const dbService = {
       return this.getUserFolders(userId);
     }
     return await sql`SELECT * FROM folders ORDER BY id ASC;`;
+  },
+
+  // Microsoft user mapping functions
+  async getMicrosoftMapping(microsoftId: string) {
+    const result = await sql`
+      SELECT * FROM microsoft_user_mappings 
+      WHERE microsoft_id = ${microsoftId} LIMIT 1;
+    `;
+    return result[0] || null;
+  },
+
+  async createMicrosoftMapping(microsoftId: string, neonUserId: string, email: string) {
+    return await sql`
+      INSERT INTO microsoft_user_mappings (microsoft_id, neon_user_id, email)
+      VALUES (${microsoftId}, ${neonUserId}, ${email})
+      RETURNING *;
+    `;
   }
 };

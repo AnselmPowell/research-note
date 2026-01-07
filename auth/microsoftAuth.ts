@@ -1,96 +1,7 @@
 // auth/microsoftAuth.ts - Popup-based Microsoft OAuth for frontend-only auth
 import { authClient } from './neonAuth';
 import { dataMigrationService } from '../utils/dataMigrationService';
-
-// Security helper functions for encrypted password storage
-async function encryptPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  
-  // Generate a random salt
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  
-  // Derive key from a browser-specific identifier (less secure but better than plaintext)
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(`${navigator.userAgent}_${window.location.origin}`),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveKey']
-  );
-  
-  const key = await crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: 10000, hash: 'SHA-256' },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt']
-  );
-  
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data);
-  
-  // Combine salt + iv + encrypted data
-  const result = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
-  result.set(salt);
-  result.set(iv, salt.length);
-  result.set(new Uint8Array(encrypted), salt.length + iv.length);
-  
-  return btoa(String.fromCharCode(...result));
-}
-
-async function decryptPassword(encryptedData: string): Promise<string> {
-  try {
-    const data = new Uint8Array(atob(encryptedData).split('').map(c => c.charCodeAt(0)));
-    
-    const salt = data.slice(0, 16);
-    const iv = data.slice(16, 28);
-    const encrypted = data.slice(28);
-    
-    const encoder = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(`${navigator.userAgent}_${window.location.origin}`),
-      { name: 'PBKDF2' },
-      false,
-      ['deriveKey']
-    );
-    
-    const key = await crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt, iterations: 10000, hash: 'SHA-256' },
-      keyMaterial,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['decrypt']
-    );
-    
-    const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, encrypted);
-    return new TextDecoder().decode(decrypted);
-  } catch (error) {
-    console.error('[MicrosoftAuth] Password decryption failed:', error);
-    return '';
-  }
-}
-
-async function storeEncryptedPassword(key: string, password: string): Promise<void> {
-  try {
-    const encrypted = await encryptPassword(password);
-    localStorage.setItem(key, encrypted);
-  } catch (error) {
-    console.error('[MicrosoftAuth] Password encryption failed:', error);
-  }
-}
-
-async function getEncryptedPassword(key: string): Promise<string> {
-  try {
-    const encrypted = localStorage.getItem(key);
-    if (!encrypted) return '';
-    return await decryptPassword(encrypted);
-  } catch (error) {
-    console.error('[MicrosoftAuth] Password retrieval failed:', error);
-    return '';
-  }
-}
+import { dbService } from '../database/db';
 
 // Runtime environment variable access function (consistent with neonAuth.ts)
 function getEnvVar(key: string): string {
@@ -255,152 +166,85 @@ async function exchangeCodeForUserInfo(code: string, codeVerifier: string): Prom
  * Create or sign in Neon Auth user from Microsoft user data
  */
 async function createNeonUserFromMicrosoft(microsoftUser: MicrosoftUser): Promise<MicrosoftAuthResult> {
-  console.log('[MicrosoftAuth] Creating/signing in Neon user...');
+  console.log('[MicrosoftAuth] Microsoft OAuth successful, checking user mapping...');
 
   try {
-    // Check if there's localStorage data to migrate
     const hasDataToMigrate = dataMigrationService.hasLocalDataToMigrate();
     
-    // Check if this Microsoft user exists in our local storage
-    // SECURITY: Use hashed key to prevent email enumeration
-    const emailHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(microsoftUser.email));
-    const emailHashHex = Array.from(new Uint8Array(emailHash)).map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
-    const storageKey = `ms_user_${emailHashHex}`;
+    // Step 1: Check for existing mapping
+    console.log('[MicrosoftAuth] Checking for existing Microsoft mapping...');
+    const mapping = await dbService.getMicrosoftMapping(microsoftUser.id);
     
-    // SECURITY: Passwords are encrypted before storage
-    const existingPassword = await getEncryptedPassword(storageKey);
-    
-    if (existingPassword) {
-      // User has signed in with Microsoft before, use stored password
-      console.log('[MicrosoftAuth] Existing Microsoft user, signing in...');
+    if (mapping) {
+      // We know this Microsoft user - use existing Neon user ID
+      console.log('[MicrosoftAuth] Found existing mapping, using Neon user:', mapping.neon_user_id);
+      const user = {
+        id: mapping.neon_user_id,
+        email: microsoftUser.email,
+        name: microsoftUser.name,
+        emailVerified: true,
+        image: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
       
-      try {
-        const signInResult = await authClient.signIn.email({
-          email: microsoftUser.email,
-          password: existingPassword
-        });
-
-        if (signInResult.error) {
-          console.error('[MicrosoftAuth] Sign in failed with stored password:', signInResult.error);
-          // Password might be invalid, try creating new user
-          throw new Error('Stored password invalid');
-        }
-
-        // Get the session after successful sign in
-        const sessionResult = await authClient.getSession();
-        if (!sessionResult.data?.user) {
-          throw new Error('Failed to get user session after Microsoft sign in');
-        }
-
-        const user = {
-          id: sessionResult.data.user.id,
-          email: sessionResult.data.user.email,
-          name: sessionResult.data.user.name,
-          emailVerified: sessionResult.data.user.emailVerified || true,
-          image: null,
-          createdAt: sessionResult.data.user.createdAt || new Date().toISOString(),
-          updatedAt: sessionResult.data.user.updatedAt || new Date().toISOString()
-        };
-
-        // Migrate data if available
-        if (hasDataToMigrate) {
-          console.log('[MicrosoftAuth] Migrating anonymous data...');
-          const migrationResult = await dataMigrationService.migrateAnonymousDataToUser(user.id);
-          if (migrationResult.success) {
-            console.log('[MicrosoftAuth] Data migration successful');
-          } else {
-            console.warn('[MicrosoftAuth] Data migration failed:', migrationResult.error);
-          }
-        }
-
-        console.log('[MicrosoftAuth] Existing Microsoft user successfully signed in');
-        return { user, success: true };
-
-      } catch (signInError) {
-        console.log('[MicrosoftAuth] Authentication attempt failed, clearing stored credentials');
-        localStorage.removeItem(storageKey);
-        // Continue to create new user below
-      }
+      return await handleSuccessfulAuth(user, hasDataToMigrate);
     }
     
-    // New Microsoft user or stored password failed - create new account
-    console.log('[MicrosoftAuth] Creating new Microsoft user...');
-    
-    // Generate a deterministic password that can be recovered later
-    // This solves the "cache cleared" problem
-    const password = await generateDeterministicPassword(microsoftUser.email, microsoftUser.id);
+    // Step 2: No mapping - this is existing user case or new user
+    console.log('[MicrosoftAuth] No mapping found, checking if user exists in Neon...');
     
     try {
-      const signUpResult = await authClient.signUp.email({
-        email: microsoftUser.email,
-        password: password,
-        name: microsoftUser.name
-      });
-
-      if (signUpResult.error) {
-        console.log('[MicrosoftAuth] User exists but credentials unknown (cache cleared?), attempting recovery...');
-        
-        // User exists but we don't have password - this happens when:
-        // 1. User cleared browser cache/localStorage
-        // 2. User is on a different device  
-        // 3. User previously signed up with email/password
-        
-        return await handlePasswordRecoveryFlow(microsoftUser, password, hasDataToMigrate);
-      }
-
-      // Store the password for future Microsoft sign-ins (encrypted)
-      await storeEncryptedPassword(storageKey, password);
-      console.log('[MicrosoftAuth] Authentication credentials stored securely for future sign-ins');
-
-      // Get the session after successful sign up
-      const sessionResult = await authClient.getSession();
-      if (!sessionResult.data?.user) {
-        throw new Error('Failed to get user session after Microsoft sign up');
-      }
-
-      const user = {
-        id: sessionResult.data.user.id,
-        email: sessionResult.data.user.email,
-        name: sessionResult.data.user.name,
-        emailVerified: sessionResult.data.user.emailVerified || true,
-        image: null,
-        createdAt: sessionResult.data.user.createdAt || new Date().toISOString(),
-        updatedAt: sessionResult.data.user.updatedAt || new Date().toISOString()
-      };
-
-      // Migrate data if available
-      if (hasDataToMigrate) {
-        console.log('[MicrosoftAuth] Migrating anonymous data...');
-        const migrationResult = await dataMigrationService.migrateAnonymousDataToUser(user.id);
-        if (migrationResult.success) {
-          console.log('[MicrosoftAuth] Data migration successful');
-        } else {
-          console.warn('[MicrosoftAuth] Data migration failed:', migrationResult.error);
-        }
-      }
-
-      console.log('[MicrosoftAuth] New Microsoft user successfully created and signed in');
-      return { user, success: true };
-
-    } catch (signUpError) {
-      console.error('[MicrosoftAuth] Error in sign up process:', signUpError);
+      // Try password reset to detect existing user
+      await authClient.resetPassword({ email: microsoftUser.email });
+      
+      // Store mapping info for after password reset
+      localStorage.setItem('pending_microsoft_mapping', JSON.stringify({
+        microsoftId: microsoftUser.id,
+        email: microsoftUser.email
+      }));
+      
+      console.log('[MicrosoftAuth] Existing user detected, password reset email sent');
+      
       return {
         user: {
           id: '',
           email: microsoftUser.email,
           name: microsoftUser.name,
-          emailVerified: false,
+          emailVerified: true,
           image: null,
           createdAt: '',
           updatedAt: ''
         },
         success: false,
-        error: signUpError instanceof Error ? signUpError.message : 'Microsoft user creation failed'
+        error: `Account found! We've sent a password reset email to ${microsoftUser.email}. After you reset your password and sign in once with email/password, Microsoft auth will work seamlessly.`
       };
+    } catch (resetError) {
+      // User doesn't exist in Neon - create new user
+      console.log('[MicrosoftAuth] User does not exist, creating new user...');
+      
+      const tempPassword = `temp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      const signUpResult = await authClient.signUp.email({
+        email: microsoftUser.email,
+        password: tempPassword,
+        name: microsoftUser.name
+      });
+      
+      if (!signUpResult.error) {
+        const sessionResult = await authClient.getSession();
+        if (sessionResult.data?.user) {
+          // Create mapping for new user
+          console.log('[MicrosoftAuth] Creating Microsoft mapping for new user...');
+          await dbService.createMicrosoftMapping(microsoftUser.id, sessionResult.data.user.id, microsoftUser.email);
+          return await handleSuccessfulAuth(sessionResult.data.user, hasDataToMigrate);
+        }
+      }
+      
+      throw new Error('Failed to create new user');
     }
-
+    
   } catch (error) {
-    console.error('[MicrosoftAuth] Error creating/signing in Neon user:', error);
+    console.error('[MicrosoftAuth] Error:', error);
     return {
       user: {
         id: '',
@@ -412,9 +256,38 @@ async function createNeonUserFromMicrosoft(microsoftUser: MicrosoftUser): Promis
         updatedAt: ''
       },
       success: false,
-      error: error instanceof Error ? error.message : 'Microsoft authentication failed'
+      error: error instanceof Error ? error.message : 'Authentication failed'
     };
   }
+}
+
+/**
+ * Handle successful authentication and data migration
+ */
+async function handleSuccessfulAuth(neonUser: any, hasDataToMigrate: boolean): Promise<MicrosoftAuthResult> {
+  const user = {
+    id: neonUser.id,
+    email: neonUser.email,
+    name: neonUser.name,
+    emailVerified: neonUser.emailVerified || true,
+    image: null,
+    createdAt: neonUser.createdAt || new Date().toISOString(),
+    updatedAt: neonUser.updatedAt || new Date().toISOString()
+  };
+
+  // Migrate data if available
+  if (hasDataToMigrate) {
+    console.log('[MicrosoftAuth] Migrating anonymous data...');
+    const migrationResult = await dataMigrationService.migrateAnonymousDataToUser(user.id);
+    if (migrationResult.success) {
+      console.log('[MicrosoftAuth] Data migration successful');
+    } else {
+      console.warn('[MicrosoftAuth] Data migration failed:', migrationResult.error);
+    }
+  }
+
+  console.log('[MicrosoftAuth] Microsoft user successfully authenticated');
+  return { user, success: true };
 }
 
 /**
@@ -521,171 +394,6 @@ export async function signInWithMicrosoftPopup(): Promise<MicrosoftAuthResult> {
       reject(error);
     }
   });
-}
-
-/**
- * Handle password recovery flow for existing Microsoft users
- * This handles cases where localStorage was cleared or user is on new device
- */
-async function handlePasswordRecoveryFlow(microsoftUser: MicrosoftUser, newPassword: string, hasDataToMigrate: boolean): Promise<MicrosoftAuthResult> {
-  console.log('[MicrosoftAuth] Starting credential recovery flow...');
-  
-  try {
-    // Strategy 1: Try to identify if this is a Microsoft user vs email/password user
-    // We'll store a marker in the user's name or use a specific pattern
-    
-    console.log('[MicrosoftAuth] Attempting to determine user type...');
-    
-    // Strategy A: Try signing in with a deterministic password based on Microsoft ID
-    // This creates a "recoverable" password that we can regenerate
-    const deterministicPassword = await generateDeterministicPassword(microsoftUser.email, microsoftUser.id);
-    
-    try {
-      console.log('[MicrosoftAuth] Attempting sign-in with stored credentials...');
-      const signInResult = await authClient.signIn.email({
-        email: microsoftUser.email,
-        password: deterministicPassword
-      });
-
-      if (!signInResult.error) {
-        console.log('[MicrosoftAuth] Successfully authenticated with stored credentials!');
-        
-        // Store the password for future use
-        // SECURITY: Store password with encryption
-        const emailHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(microsoftUser.email));
-        const emailHashHex = Array.from(new Uint8Array(emailHash)).map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
-        const storageKey = `ms_user_${emailHashHex}`;
-        await storeEncryptedPassword(storageKey, deterministicPassword);
-        
-        // Get the session after successful sign in
-        const sessionResult = await authClient.getSession();
-        if (!sessionResult.data?.user) {
-          throw new Error('Failed to get user session after recovery sign in');
-        }
-
-        const user = {
-          id: sessionResult.data.user.id,
-          email: sessionResult.data.user.email,
-          name: sessionResult.data.user.name,
-          emailVerified: sessionResult.data.user.emailVerified || true,
-          image: null,
-          createdAt: sessionResult.data.user.createdAt || new Date().toISOString(),
-          updatedAt: sessionResult.data.user.updatedAt || new Date().toISOString()
-        };
-
-        // Migrate data if available
-        if (hasDataToMigrate) {
-          console.log('[MicrosoftAuth] Migrating anonymous data...');
-          const migrationResult = await dataMigrationService.migrateAnonymousDataToUser(user.id);
-          if (migrationResult.success) {
-            console.log('[MicrosoftAuth] Data migration successful');
-          } else {
-            console.warn('[MicrosoftAuth] Data migration failed:', migrationResult.error);
-          }
-        }
-
-        console.log('[MicrosoftAuth] Microsoft user successfully recovered and signed in');
-        return { user, success: true };
-      }
-    } catch (signInError) {
-      console.log('[MicrosoftAuth] Stored credential authentication failed');
-    }
-    
-    // Strategy B: If deterministic password failed, this might be an email/password user
-    // Try password reset to differentiate
-    
-    try {
-      const resetResult = await authClient.resetPassword({ email: microsoftUser.email });
-      
-      if (!resetResult.error) {
-        // Password reset email sent successfully - this is an email/password user
-        console.log('[MicrosoftAuth] User is email/password user, sending reset email');
-        return {
-          user: {
-            id: '',
-            email: microsoftUser.email,
-            name: microsoftUser.name,
-            emailVerified: false,
-            image: null,
-            createdAt: '',
-            updatedAt: ''
-          },
-          success: false,
-          error: 'This email was registered with a password. A password reset email has been sent to your email address. Please check your email and reset your password.'
-        };
-      }
-    } catch (resetError) {
-      console.log('[MicrosoftAuth] Credential reset not available');
-    }
-    
-    // Strategy C: Last resort - user is Microsoft user but we can't recover
-    console.log('[MicrosoftAuth] Cannot recover Microsoft user automatically');
-    
-    return {
-      user: {
-        id: '',
-        email: microsoftUser.email,
-        name: microsoftUser.name,
-        emailVerified: false,
-        image: null,
-        createdAt: '',
-        updatedAt: ''
-      },
-      success: false,
-      error: 'Microsoft account recovery failed. This can happen when browser data is cleared. Please try signing in with email/password or contact support for assistance.'
-    };
-    
-  } catch (error) {
-    console.error('[MicrosoftAuth] Error in password recovery flow:', error);
-    return {
-      user: {
-        id: '',
-        email: microsoftUser.email,
-        name: microsoftUser.name,
-        emailVerified: false,
-        image: null,
-        createdAt: '',
-        updatedAt: ''
-      },
-      success: false,
-      error: 'Account recovery failed. Please contact support.'
-    };
-  }
-}
-
-/**
- * Generate a deterministic password that can be recreated from Microsoft user data
- * Uses cryptographic hashing for security
- * This allows password recovery even if localStorage is cleared
- */
-async function generateDeterministicPassword(email: string, microsoftId: string): Promise<string> {
-  // SECURITY: Use a strong, app-specific salt to prevent rainbow table attacks
-  const appSalt = 'ResearchNotes_MSAuth_2024_Secure_Salt_v2';
-  const baseString = `${appSalt}_${email.toLowerCase()}_${microsoftId}_microsoft_oauth`;
-  
-  const encoder = new TextEncoder();
-  const data = encoder.encode(baseString);
-  
-  // Multiple hash rounds for increased security (PBKDF2-like approach)
-  let hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  for (let i = 0; i < 10000; i++) { // 10,000 rounds
-    const roundData = new Uint8Array(hashBuffer.byteLength + 4);
-    roundData.set(new Uint8Array(hashBuffer));
-    roundData.set(new Uint8Array(new Uint32Array([i]).buffer), hashBuffer.byteLength);
-    hashBuffer = await crypto.subtle.digest('SHA-256', roundData);
-  }
-  
-  const hashArray = new Uint8Array(hashBuffer);
-  const base64Hash = btoa(String.fromCharCode(...hashArray));
-  
-  // Create a secure password with mixed character types (32 chars total)
-  const chars = base64Hash.replace(/[^A-Za-z0-9]/g, ''); // Remove non-alphanumeric
-  const password = chars.substring(0, 28); // 28 chars from hash
-  
-  // Add secure suffix with guaranteed complexity
-  const complexSuffix = `${password.charCodeAt(0) % 10}${password.charCodeAt(1) % 26 + 10}!`;
-  
-  return `${password}${complexSuffix}`;
 }
 
 // Export the main function

@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { authClient } from '../auth/neonAuth';
 import { dataMigrationService } from '../utils/dataMigrationService';
 import { signInWithMicrosoft as customMicrosoftSignIn } from '../auth/microsoftAuth';
+import { dbService } from '../database/db';
 
 interface User {
   id: string;
@@ -81,6 +82,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const sessionResult = await authClient.getSession();
       if (sessionResult.data?.user) {
         console.log('[Auth] Sign in successful');
+        
+        // Check if this was a password reset from Microsoft auth
+        const pendingMicrosoftMapping = localStorage.getItem('pending_microsoft_mapping');
+        if (pendingMicrosoftMapping) {
+          try {
+            const { microsoftId, email } = JSON.parse(pendingMicrosoftMapping);
+            if (email === sessionResult.data.user.email) {
+              await dbService.createMicrosoftMapping(microsoftId, sessionResult.data.user.id, email);
+              localStorage.removeItem('pending_microsoft_mapping');
+              console.log('[Auth] Microsoft mapping created successfully');
+            }
+          } catch (error) {
+            console.error('[Auth] Failed to create Microsoft mapping:', error);
+          }
+        }
+        
         setUser(sessionResult.data.user);
         
         // Offer to migrate localStorage data if exists
