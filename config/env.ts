@@ -53,7 +53,7 @@ function getEnvVar(key: string, fallback: string = ''): string {
  * Validates and returns the application configuration
  * Supports both build-time (Vite) and runtime (Railway) environment injection
  */
-export function getConfig(): AppConfig {
+export function getConfig(throwOnMissing: boolean = true): AppConfig {
   // Core validation - Gemini API Key is required
   // Try both API_KEY and GEMINI_API_KEY for flexibility
   const geminiApiKey = (getEnvVar('GEMINI_API_KEY') || getEnvVar('API_KEY')).trim();
@@ -63,20 +63,34 @@ export function getConfig(): AppConfig {
     
     // SECURITY: Only show minimal diagnostics, never in production
     const nodeEnv = getEnvVar('NODE_ENV') || 'production';
-    const isDev = nodeEnv === 'development' && window.location.hostname === 'localhost';
+    const isDev = nodeEnv === 'development' && typeof window !== 'undefined' && window.location.hostname === 'localhost';
     
     if (isDev) {
       console.error('📋 Environment variable status (dev only):', {
         'hasGeminiKey': false,
         'NODE_ENV': nodeEnv,
-        'hostname': window.location.hostname,
+        'hostname': typeof window !== 'undefined' ? window.location.hostname : 'unknown',
         'note': 'Detailed diagnostics disabled for security'
       });
     }
     
-    throw new ConfigurationError(
-      'GEMINI_API_KEY is required. Please set it in Railway environment variables.'
-    );
+    if (throwOnMissing) {
+      throw new ConfigurationError(
+        'GEMINI_API_KEY is required. Please set it in Railway environment variables.'
+      );
+    }
+    
+    // Return default config with empty API key for error handling
+    return {
+      geminiApiKey: '',
+      googleSearchKey: getEnvVar('GOOGLE_SEARCH_KEY').trim(),
+      googleSearchCx: getEnvVar('GOOGLE_SEARCH_CX').trim(),
+      openaiApiKey: getEnvVar('OPENAI_API_KEY').trim(),
+      databaseUrl: getEnvVar('DATABASE_URL').trim(),
+      nodeEnv: (getEnvVar('NODE_ENV') || 'production').trim(),
+      isDevelopment: (getEnvVar('NODE_ENV') || 'production') === 'development',
+      isProduction: (getEnvVar('NODE_ENV') || 'production') === 'production'
+    };
   }
 
   // Get environment variables with fallbacks and clean them
@@ -93,12 +107,15 @@ export function getConfig(): AppConfig {
 
   // Debug logging for production (only show if environment variable is set vs missing)
   if (config.isProduction) {
-    console.log('[Config] Production configuration loaded:', {
-      hasGeminiKey: !!config.geminiApiKey,
-      hasGoogleSearch: !!(config.googleSearchKey && config.googleSearchCx),
-      hasOpenAI: !!config.openaiApiKey,
-      hasDatabase: !!config.databaseUrl,
-      environment: config.nodeEnv
+    console.log('🔒 Runtime environment loaded:', {
+      authConfigured: !!(getEnvVar('VITE_NEON_AUTH_URL')),
+      microsoftConfigured: !!(getEnvVar('VITE_MICROSOFT_CLIENT_ID')),
+      serverCapabilities: {
+        hasDatabase: !!config.databaseUrl,
+        hasGeminiKey: !!config.geminiApiKey,
+        hasGoogleSearch: !!(config.googleSearchKey && config.googleSearchCx),
+        hasOpenAI: !!config.openaiApiKey
+      }
     });
   }
 
@@ -122,8 +139,9 @@ export function getConfig(): AppConfig {
 
 /**
  * Export individual configuration values for backward compatibility
+ * Use safe config that doesn't throw on missing values for module loading
  */
-export const config = getConfig();
+export const config = getConfig(false); // Don't throw on missing config during module load
 
 // Export commonly used values
 export const {

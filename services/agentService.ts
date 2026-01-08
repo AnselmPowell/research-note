@@ -63,7 +63,7 @@ export interface AgentResponse {
 }
 
 class AgentService {
-    private ai: GoogleGenAI;
+    private ai: GoogleGenAI | null = null;
     // Fix: Upgrade to gemini-3-pro-preview for complex research assistant tasks
     private modelName: string = "gemini-3-pro-preview";
     private chat: Chat | null = null;
@@ -73,8 +73,12 @@ class AgentService {
     private conversationHistory: { role: 'user' | 'system' | 'assistant', content: string }[] = [];
 
     constructor() {
-        // Initialize Gemini using centralized configuration
-        this.ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+        // Initialize Gemini using centralized configuration - handle missing API key gracefully
+        if (config.geminiApiKey) {
+            this.ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+        } else {
+            console.warn('[Agent] Gemini API not available (missing API key)');
+        }
     }
     
     /**
@@ -82,6 +86,12 @@ class AgentService {
      * Uses uniqueId (PDF URI) as key to prevent filename collisions.
      */
     async uploadFile(file: File, uniqueId: string, metadata?: { title: string; author: string }): Promise<string | null> {
+        // Return null if no AI available
+        if (!this.ai) {
+            console.warn('[Agent] Cannot upload file - Gemini API not available');
+            return null;
+        }
+
         // 1. Check if already uploaded using uniqueId
         if (this.uploadedFiles[uniqueId]?.state === 'ACTIVE') {
             console.log(`[Agent] ⏭️ File already active: ${metadata?.title || file.name}`);
@@ -152,7 +162,12 @@ class AgentService {
     /**
      * Initializes or updates the chat session with the latest files.
      */
-    private async getChatSession(): Promise<Chat> {
+    private async getChatSession(): Promise<Chat | null> {
+        // Return null if no AI available
+        if (!this.ai) {
+            return null;
+        }
+
         if (!this.chat) {
             // Define Tool: Read Context Notes
             const readNotesTool: FunctionDeclaration = {
@@ -238,6 +253,39 @@ class AgentService {
 
         try {
             const session = await this.getChatSession();
+
+            // If no Gemini AI available, use OpenAI fallback immediately
+            if (!session) {
+                console.log('[Agent] No Gemini AI available, using OpenAI fallback');
+                
+                const notesContext = currentContextNotes.length > 0 
+                    ? `\n\n[CONTEXT NOTES FROM USER]\n${JSON.stringify(currentContextNotes.map(n => ({ quote: n.quote, justification: n.justification })), null, 2)}`
+                    : "";
+
+                const fallbackMessages = [
+                    { 
+                        role: 'system', 
+                        content: `You are a Research Assistant. The primary AI service is currently unavailable due to configuration issues. 
+                        
+                        [CURRENT SITUATION]
+                        The user has the following documents loaded in their library:
+                        ${documentManifest || "No documents loaded."}
+                        
+                        You CANNOT see the full text of these files right now (configuration limitation).
+                        However, you CAN see the "Context Notes" provided below if the user has selected any.
+                        
+                        [INSTRUCTION]
+                        Answer the user's question based on the provided notes or your general knowledge.
+                        If asked about a specific paper from the list above, explain that you can see it's loaded but cannot access its full content at the moment due to a configuration issue.
+
+                        ${notesContext}`
+                    },
+                    { role: 'user', content: userMessage }
+                ];
+
+                const fallbackResponse = await callOpenAI(fallbackMessages);
+                return { text: fallbackResponse, citations: [] };
+            }
 
             // 1. Prepare Content for Gemini
             

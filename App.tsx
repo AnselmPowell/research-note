@@ -39,7 +39,7 @@ const App: React.FC = () => {
   // Validate configuration on app startup
   useEffect(() => {
     try {
-      getConfig(); // This will throw if required config is missing
+      getConfig(true); // This will throw if required config is missing
       setIsConfigLoading(false);
     } catch (error) {
       setConfigError(error instanceof Error ? error.message : 'Configuration error');

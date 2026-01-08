@@ -10,8 +10,11 @@ const GOOGLE_SEARCH_CX = config.googleSearchCx;
 // OpenAI Fallback Configuration
 const OPENAI_API_KEY = config.openaiApiKey;
 
-// Initialize Gemini AI
-const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+// Initialize Gemini AI - handle missing API key gracefully
+let ai: GoogleGenAI | null = null;
+if (config.geminiApiKey) {
+  ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+}
 
 // Helper for delays
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -96,6 +99,12 @@ async function callOpenAI(prompt: string): Promise<any> {
  * Uses Gemini to generate 5 distinct, effective search queries for finding PDFs
  */ 
 export const generateSearchVariations = async (originalQuery: string): Promise<string[]> => {
+  // Return fallback if no AI available
+  if (!ai) {
+    console.warn('[Search Vars] Gemini API not available (missing API key)');
+    return [];
+  }
+
   const model = "gemini-3-flash-preview";
   const prompt = `You are a research assistant. The user is looking for PDF documents/papers about: "${originalQuery}".
   Generate 5 additional, distinct, simple keyword-based search queries to find relevant research PDFs.
@@ -137,6 +146,12 @@ export const generateArxivSearchTerms = async (topics: string[], questions: stri
     abstract_terms: [],
     general_terms: topics.slice(0, 3)
   };
+
+  // Return fallback if no AI available
+  if (!ai) {
+    console.warn('[ArXiv Gen] Gemini API not available (missing API key)');
+    return fallback;
+  }
 
   const context = `
     RESEARCH TOPICS: ${topics.join(", ")}
@@ -206,6 +221,12 @@ function validateArxivResult(result: any, fallback: ArxivSearchStructured): Arxi
 }
 
 export const generateInsightQueries = async (userQuestions: string, contextQuery: string): Promise<string[]> => {
+  // Return fallback if no AI available
+  if (!ai) {
+    console.warn('[Insight Gen] Gemini API not available (missing API key)');
+    return [userQuestions];
+  }
+
   const prompt = `Context: The user has gathered several academic PDF papers regarding "${contextQuery}".
   User Goal: They want to answer the following specific questions from these papers: "${userQuestions}".
   Task: Generate 5 semantic search phrases or short questions.
@@ -244,6 +265,11 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
 }
 
 async function getEmbedding(text: string, taskType: string = "RETRIEVAL_DOCUMENT", retries = 3): Promise<number[]> {
+  // Return empty array if no AI available
+  if (!ai) {
+    return [];
+  }
+
   const cacheKey = `${taskType}:${text.trim()}`;
   if (embeddingCache.has(cacheKey)) {
     return embeddingCache.get(cacheKey)!;
@@ -280,6 +306,11 @@ async function getEmbedding(text: string, taskType: string = "RETRIEVAL_DOCUMENT
 async function getBatchEmbeddings(texts: string[], taskType: string = "RETRIEVAL_DOCUMENT"): Promise<number[][]> {
   if (texts.length === 0) return [];
   
+  // Return empty arrays if no AI available
+  if (!ai || !config.geminiApiKey) {
+    return texts.map(() => []);
+  }
+
   const results: number[][] = new Array(texts.length).fill([]);
   const uncachedIndices: number[] = [];
   const uncachedTexts: string[] = [];
@@ -482,6 +513,12 @@ export const extractNotesFromPages = async (
   referenceList?: string[], 
   onStreamUpdate?: (notes: DeepResearchNote[]) => void
 ): Promise<DeepResearchNote[]> => {
+  // Return empty array if no AI available
+  if (!ai) {
+    console.warn('[Extract Notes] Gemini API not available (missing API key)');
+    return [];
+  }
+
   const BATCH_SIZE = 8; 
   const CONCURRENCY = 3;
 
