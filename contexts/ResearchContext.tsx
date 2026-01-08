@@ -172,6 +172,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setGatheringStatus('');
     setArxivKeywords([]);
     setContextNotes([]);
+    
   }, [resetSearch, clearSearchBar]);
 
   const performWebSearch = async (query: string) => {

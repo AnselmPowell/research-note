@@ -31,19 +31,22 @@ class ConfigurationError extends Error {
 }
 
 /**
- * Gets environment variable with runtime support (Railway) and build-time fallback
+ * Gets environment variable with proper Railway runtime support
  */
 function getEnvVar(key: string, fallback: string = ''): string {
-  // In production (Railway), environment variables are loaded from window.ENV
-  // In development, they come from process.env via Vite
-  
-  if (typeof window !== 'undefined' && (window as any).ENV) {
-    // Runtime environment (Railway production)
-    return (window as any).ENV[key] || fallback;
-  } else {
-    // Build-time environment (local development)  
-    return (process.env as any)[key] || fallback;
+  // PRIORITY 1: Railway production - check actual process.env at runtime
+  // Railway injects environment variables as process.env in the Node.js runtime
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key] || fallback;
   }
+  
+  // PRIORITY 2: Runtime window.ENV (for VITE_ client-side variables)
+  if (typeof window !== 'undefined' && (window as any).ENV) {
+    return (window as any).ENV[key] || fallback;
+  }
+  
+  // PRIORITY 3: Development build-time fallback (Vite injects these at build time)
+  return fallback;
 }
 
 /**
@@ -52,17 +55,25 @@ function getEnvVar(key: string, fallback: string = ''): string {
  */
 export function getConfig(): AppConfig {
   // Core validation - Gemini API Key is required
-  const geminiApiKey = (getEnvVar('API_KEY') || getEnvVar('GEMINI_API_KEY')).trim();
+  // Try both API_KEY and GEMINI_API_KEY for flexibility
+  const geminiApiKey = (getEnvVar('GEMINI_API_KEY') || getEnvVar('API_KEY')).trim();
   
   if (!geminiApiKey || geminiApiKey === 'undefined' || geminiApiKey === 'null') {
     console.error('🔥 CONFIGURATION ERROR: GEMINI_API_KEY is missing');
-    console.error('📋 Available environment values:', {
-      API_KEY: getEnvVar('API_KEY') ? 'SET' : 'MISSING',
-      GEMINI_API_KEY: getEnvVar('GEMINI_API_KEY') ? 'SET' : 'MISSING', 
-      VITE_NEON_AUTH_URL: getEnvVar('VITE_NEON_AUTH_URL') ? 'SET' : 'MISSING',
-      NODE_ENV: getEnvVar('NODE_ENV'),
-      runtimeMode: typeof window !== 'undefined' && (window as any).ENV ? 'RUNTIME' : 'BUILD-TIME'
-    });
+    
+    // SECURITY: Only show minimal diagnostics, never in production
+    const nodeEnv = getEnvVar('NODE_ENV') || 'production';
+    const isDev = nodeEnv === 'development' && window.location.hostname === 'localhost';
+    
+    if (isDev) {
+      console.error('📋 Environment variable status (dev only):', {
+        'hasGeminiKey': false,
+        'NODE_ENV': nodeEnv,
+        'hostname': window.location.hostname,
+        'note': 'Detailed diagnostics disabled for security'
+      });
+    }
+    
     throw new ConfigurationError(
       'GEMINI_API_KEY is required. Please set it in Railway environment variables.'
     );
