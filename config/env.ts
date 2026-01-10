@@ -45,7 +45,25 @@ function getEnvVar(key: string, fallback: string = ''): string {
     return (window as any).ENV[key] || fallback;
   }
   
-  // PRIORITY 3: Development build-time fallback (Vite injects these at build time)
+  // PRIORITY 3: Server capabilities check (for production frontend)
+  if (typeof window !== 'undefined' && (window as any).SERVER_CONFIG) {
+    const serverConfig = (window as any).SERVER_CONFIG;
+    // Return placeholder if server has the key (actual key stays on server)
+    if (key === 'GEMINI_API_KEY' && serverConfig.hasGeminiKey) {
+      return 'SERVER_SIDE_KEY_AVAILABLE';
+    }
+    if (key === 'GOOGLE_SEARCH_KEY' && serverConfig.hasGoogleSearch) {
+      return 'SERVER_SIDE_KEY_AVAILABLE';
+    }
+    if (key === 'OPENAI_API_KEY' && serverConfig.hasOpenAI) {
+      return 'SERVER_SIDE_KEY_AVAILABLE';
+    }
+    if (key === 'DATABASE_URL' && serverConfig.hasDatabase) {
+      return 'SERVER_SIDE_KEY_AVAILABLE';
+    }
+  }
+  
+  // PRIORITY 4: Development build-time fallback (Vite injects these at build time)
   return fallback;
 }
 
@@ -53,74 +71,71 @@ function getEnvVar(key: string, fallback: string = ''): string {
  * Validates and returns the application configuration
  * Supports both build-time (Vite) and runtime (Railway) environment injection
  */
-export function getConfig(throwOnMissing: boolean = true): AppConfig {
-  // Core validation - Gemini API Key is required
+export function getConfig(): AppConfig {
+  const nodeEnv = (getEnvVar('NODE_ENV') || 'production').trim();
+  const isDevelopment = nodeEnv === 'development';
+  const isProduction = nodeEnv === 'production';
+  
+  // Core validation - Gemini API Key is preferred but not fatal
   // Try both API_KEY and GEMINI_API_KEY for flexibility
   const geminiApiKey = (getEnvVar('GEMINI_API_KEY') || getEnvVar('API_KEY')).trim();
   
-  if (!geminiApiKey || geminiApiKey === 'undefined' || geminiApiKey === 'null') {
-    console.error('🔥 CONFIGURATION ERROR: GEMINI_API_KEY is missing');
+  // In production, accept server-side placeholder as valid
+  const hasValidGeminiKey = geminiApiKey && 
+    geminiApiKey !== 'undefined' && 
+    geminiApiKey !== 'null' && 
+    (isDevelopment || geminiApiKey === 'SERVER_SIDE_KEY_AVAILABLE');
+  
+  if (!hasValidGeminiKey) {
+    console.warn('⚠️  GEMINI_API_KEY is missing - AI features will be limited');
     
-    // SECURITY: Only show minimal diagnostics, never in production
-    const nodeEnv = getEnvVar('NODE_ENV') || 'production';
-    const isDev = nodeEnv === 'development' && typeof window !== 'undefined' && window.location.hostname === 'localhost';
-    
-    if (isDev) {
+    // SECURITY: Only show minimal diagnostics in development
+    if (isDevelopment && typeof window !== 'undefined' && window.location.hostname === 'localhost') {
       console.error('📋 Environment variable status (dev only):', {
         'hasGeminiKey': false,
         'NODE_ENV': nodeEnv,
-        'hostname': typeof window !== 'undefined' ? window.location.hostname : 'unknown',
+        'hostname': window.location.hostname,
         'note': 'Detailed diagnostics disabled for security'
       });
     }
     
-    if (throwOnMissing) {
+    // In development, still throw error to encourage proper setup
+    if (isDevelopment) {
       throw new ConfigurationError(
-        'GEMINI_API_KEY is required. Please set it in Railway environment variables.'
+        'GEMINI_API_KEY is required for development. Please set it in your .env.local file.'
       );
     }
     
-    // Return default config with empty API key for error handling
-    return {
-      geminiApiKey: '',
-      googleSearchKey: getEnvVar('GOOGLE_SEARCH_KEY').trim(),
-      googleSearchCx: getEnvVar('GOOGLE_SEARCH_CX').trim(),
-      openaiApiKey: getEnvVar('OPENAI_API_KEY').trim(),
-      databaseUrl: getEnvVar('DATABASE_URL').trim(),
-      nodeEnv: (getEnvVar('NODE_ENV') || 'production').trim(),
-      isDevelopment: (getEnvVar('NODE_ENV') || 'production') === 'development',
-      isProduction: (getEnvVar('NODE_ENV') || 'production') === 'production'
-    };
+    // In production, continue with limited functionality instead of crashing
+    console.warn('🚀 App will continue with limited AI functionality');
   }
 
   // Get environment variables with fallbacks and clean them
   const config: AppConfig = {
-    geminiApiKey,
+    geminiApiKey: hasValidGeminiKey ? geminiApiKey : '', // Allow empty API key
     googleSearchKey: getEnvVar('GOOGLE_SEARCH_KEY').trim(),
     googleSearchCx: getEnvVar('GOOGLE_SEARCH_CX').trim(),
     openaiApiKey: getEnvVar('OPENAI_API_KEY').trim(),
     databaseUrl: getEnvVar('DATABASE_URL').trim(),
-    nodeEnv: (getEnvVar('NODE_ENV') || 'production').trim(),
-    isDevelopment: (getEnvVar('NODE_ENV') || 'production') === 'development',
-    isProduction: (getEnvVar('NODE_ENV') || 'production') === 'production'
+    nodeEnv,
+    isDevelopment,
+    isProduction
   };
 
-  // Debug logging for production (only show if environment variable is set vs missing)
-  if (config.isProduction) {
-    console.log('🔒 Runtime environment loaded:', {
-      authConfigured: !!(getEnvVar('VITE_NEON_AUTH_URL')),
-      microsoftConfigured: !!(getEnvVar('VITE_MICROSOFT_CLIENT_ID')),
-      serverCapabilities: {
-        hasDatabase: !!config.databaseUrl,
-        hasGeminiKey: !!config.geminiApiKey,
-        hasGoogleSearch: !!(config.googleSearchKey && config.googleSearchCx),
-        hasOpenAI: !!config.openaiApiKey
-      }
+  // Debug logging (safe for production)
+  if (isProduction) {
+    console.log('[Config] Production configuration loaded:', {
+      hasGeminiKey: hasValidGeminiKey,
+      hasGoogleSearch: !!(config.googleSearchKey && config.googleSearchCx) || 
+                      (config.googleSearchKey === 'SERVER_SIDE_KEY_AVAILABLE'),
+      hasOpenAI: !!config.openaiApiKey || (config.openaiApiKey === 'SERVER_SIDE_KEY_AVAILABLE'),
+      hasDatabase: !!config.databaseUrl || (config.databaseUrl === 'SERVER_SIDE_KEY_AVAILABLE'),
+      environment: config.nodeEnv
     });
   }
 
   // Warn about missing optional configurations (only in development)
-  if (config.isDevelopment) {
+  if (isDevelopment) {
     if (!config.googleSearchKey || !config.googleSearchCx) {
       console.warn('[Config] Web Search will be disabled: Missing Google Search API configuration');
     }
@@ -139,9 +154,8 @@ export function getConfig(throwOnMissing: boolean = true): AppConfig {
 
 /**
  * Export individual configuration values for backward compatibility
- * Use safe config that doesn't throw on missing values for module loading
  */
-export const config = getConfig(false); // Don't throw on missing config during module load
+export const config = getConfig();
 
 // Export commonly used values
 export const {

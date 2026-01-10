@@ -39,7 +39,7 @@ const App: React.FC = () => {
   // Validate configuration on app startup
   useEffect(() => {
     try {
-      getConfig(true); // This will throw if required config is missing
+      getConfig(); // This will throw if required config is missing
       setIsConfigLoading(false);
     } catch (error) {
       setConfigError(error instanceof Error ? error.message : 'Configuration error');
@@ -253,36 +253,6 @@ const App: React.FC = () => {
   // MODIFIED: Show DeepResearchView if phase is active OR if user has uploaded papers
   const showDeepResearch = researchPhase !== 'idle' || loadedPdfs.length > 0;
   const showHeaderSearch = !allColumnsClosed;
-
-  // Show configuration error screen if config is invalid
-  if (configError) {
-    return (
-      <div className="h-screen flex flex-col items-center justify-center bg-cream dark:bg-dark-bg font-sans px-4">
-        <div className="max-w-2xl text-center">
-          <div className="mb-8">
-            <AlertTriangle size={64} className="mx-auto mb-4 text-error-500" />
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-2">Configuration Error</h1>
-            <p className="text-gray-600 dark:text-gray-400">Research Note could not start due to missing configuration.</p>
-          </div>
-          
-          <div className="bg-error-50 dark:bg-error-900/20 border border-error-200 dark:border-error-800 rounded-lg p-6 mb-8 text-left">
-            <h3 className="font-bold text-error-800 dark:text-error-200 mb-2">Error Details:</h3>
-            <p className="text-error-700 dark:text-error-300 font-mono text-sm">{configError}</p>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-left">
-            <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-4">How to Fix:</h3>
-            <ol className="list-decimal list-inside space-y-2 text-gray-700 dark:text-gray-300">
-              <li>Check that your <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">.env.local</code> file exists in the project root</li>
-              <li>Ensure <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">GEMINI_API_KEY</code> is set with a valid Google AI API key</li>
-              <li>Get your API key from <a href="https://aistudio.google.com/apikey" className="text-scholar-600 underline" target="_blank">Google AI Studio</a></li>
-              <li>Restart the development server: <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">npm run dev</code></li>
-            </ol>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // User menu component
   const UserMenu: React.FC = () => {

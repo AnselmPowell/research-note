@@ -10,10 +10,18 @@ const GOOGLE_SEARCH_CX = config.googleSearchCx;
 // OpenAI Fallback Configuration
 const OPENAI_API_KEY = config.openaiApiKey;
 
-// Initialize Gemini AI - handle missing API key gracefully
+// Initialize Gemini AI with graceful degradation
 let ai: GoogleGenAI | null = null;
-if (config.geminiApiKey) {
-  ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+
+try {
+  if (config.geminiApiKey && config.geminiApiKey !== '') {
+    ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+  } else {
+    console.warn('[GeminiService] API key missing - AI features will be limited');
+  }
+} catch (error) {
+  console.error('[GeminiService] Failed to initialize Gemini AI:', error);
+  ai = null;
 }
 
 // Helper for delays
@@ -99,12 +107,6 @@ async function callOpenAI(prompt: string): Promise<any> {
  * Uses Gemini to generate 5 distinct, effective search queries for finding PDFs
  */ 
 export const generateSearchVariations = async (originalQuery: string): Promise<string[]> => {
-  // Return fallback if no AI available
-  if (!ai) {
-    console.warn('[Search Vars] Gemini API not available (missing API key)');
-    return [];
-  }
-
   const model = "gemini-3-flash-preview";
   const prompt = `You are a research assistant. The user is looking for PDF documents/papers about: "${originalQuery}".
   Generate 5 additional, distinct, simple keyword-based search queries to find relevant research PDFs.
@@ -112,6 +114,11 @@ export const generateSearchVariations = async (originalQuery: string): Promise<s
   Return ONLY the queries as a JSON array of strings.`;
 
   try {
+    if (!ai) {
+      console.warn('[GeminiService] Gemini AI not available - using fallback OpenAI');
+      throw new Error('Gemini AI not initialized');
+    }
+    
     const response = await ai.models.generateContent({
       model: model,
       contents: prompt,
@@ -126,14 +133,26 @@ export const generateSearchVariations = async (originalQuery: string): Promise<s
     console.warn(`[Search Vars] Gemini failed. Switching to OpenAI.`);
   }
 
+  // Fallback to OpenAI or simple variations if both fail
   try {
-     const result = await callOpenAI(prompt);
-     if (Array.isArray(result)) return result;
-     if (result.queries && Array.isArray(result.queries)) return result.queries;
-     return [];
+     if (OPENAI_API_KEY) {
+       const result = await callOpenAI(prompt);
+       if (Array.isArray(result)) return result;
+       if (result.queries && Array.isArray(result.queries)) return result.queries;
+     }
   } catch (err) {
-     return [];
+     // If both AI services fail, return simple variations
+     console.warn('[Search Vars] Both AI services failed - using simple fallback');
   }
+
+  // Simple fallback - return variations of the original query
+  return [
+    `${originalQuery} research`,
+    `${originalQuery} study`,
+    `${originalQuery} analysis`,
+    `${originalQuery} paper`,
+    `${originalQuery} academic`
+  ];
 };
 
 /**
@@ -146,12 +165,6 @@ export const generateArxivSearchTerms = async (topics: string[], questions: stri
     abstract_terms: [],
     general_terms: topics.slice(0, 3)
   };
-
-  // Return fallback if no AI available
-  if (!ai) {
-    console.warn('[ArXiv Gen] Gemini API not available (missing API key)');
-    return fallback;
-  }
 
   const context = `
     RESEARCH TOPICS: ${topics.join(", ")}
@@ -186,6 +199,11 @@ export const generateArxivSearchTerms = async (topics: string[], questions: stri
   `;
 
   try {
+    if (!ai) {
+      console.warn('[ArXiv Gen] Gemini AI not available - using fallback');
+      throw new Error('Gemini AI not initialized');
+    }
+    
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
@@ -201,11 +219,15 @@ export const generateArxivSearchTerms = async (topics: string[], questions: stri
   }
 
   try {
-    const result = await callOpenAI(prompt);
-    return validateArxivResult(result, fallback);
+    if (OPENAI_API_KEY) {
+      const result = await callOpenAI(prompt);
+      return validateArxivResult(result, fallback);
+    }
   } catch (error) {
-    return fallback;
+    console.warn('[ArXiv Gen] OpenAI also failed - using fallback terms');
   }
+
+  return fallback;
 };
 
 function validateArxivResult(result: any, fallback: ArxivSearchStructured): ArxivSearchStructured {
@@ -221,18 +243,17 @@ function validateArxivResult(result: any, fallback: ArxivSearchStructured): Arxi
 }
 
 export const generateInsightQueries = async (userQuestions: string, contextQuery: string): Promise<string[]> => {
-  // Return fallback if no AI available
-  if (!ai) {
-    console.warn('[Insight Gen] Gemini API not available (missing API key)');
-    return [userQuestions];
-  }
-
   const prompt = `Context: The user has gathered several academic PDF papers regarding "${contextQuery}".
   User Goal: They want to answer the following specific questions from these papers: "${userQuestions}".
   Task: Generate 5 semantic search phrases or short questions.
   Return ONLY the 5 phrases as a JSON array of strings.`;
 
   try {
+    if (!ai) {
+      console.warn('[Insight Gen] Gemini AI not available - using fallback');
+      throw new Error('Gemini AI not initialized');
+    }
+    
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
@@ -247,13 +268,17 @@ export const generateInsightQueries = async (userQuestions: string, contextQuery
   }
 
   try {
-     const result = await callOpenAI(prompt);
-     if (Array.isArray(result)) return result;
-     if (result.queries && Array.isArray(result.queries)) return result.queries;
-     return [userQuestions];
+     if (OPENAI_API_KEY) {
+       const result = await callOpenAI(prompt);
+       if (Array.isArray(result)) return result;
+       if (result.queries && Array.isArray(result.queries)) return result.queries;
+     }
   } catch (e) {
-     return [userQuestions];
+     console.warn('[Insight Gen] OpenAI also failed - using simple fallback');
   }
+
+  // Simple fallback if both AI services fail
+  return [userQuestions];
 };
 
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
@@ -265,8 +290,8 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
 }
 
 async function getEmbedding(text: string, taskType: string = "RETRIEVAL_DOCUMENT", retries = 3): Promise<number[]> {
-  // Return empty array if no AI available
-  if (!ai) {
+  if (!ai || !config.geminiApiKey) {
+    console.warn('[Embeddings] Gemini AI not available - returning empty vector');
     return [];
   }
 
@@ -306,11 +331,11 @@ async function getEmbedding(text: string, taskType: string = "RETRIEVAL_DOCUMENT
 async function getBatchEmbeddings(texts: string[], taskType: string = "RETRIEVAL_DOCUMENT"): Promise<number[][]> {
   if (texts.length === 0) return [];
   
-  // Return empty arrays if no AI available
   if (!ai || !config.geminiApiKey) {
+    console.warn('[Batch Embeddings] Gemini AI not available - returning empty vectors');
     return texts.map(() => []);
   }
-
+  
   const results: number[][] = new Array(texts.length).fill([]);
   const uncachedIndices: number[] = [];
   const uncachedTexts: string[] = [];
@@ -513,9 +538,8 @@ export const extractNotesFromPages = async (
   referenceList?: string[], 
   onStreamUpdate?: (notes: DeepResearchNote[]) => void
 ): Promise<DeepResearchNote[]> => {
-  // Return empty array if no AI available
-  if (!ai) {
-    console.warn('[Extract Notes] Gemini API not available (missing API key)');
+  if (!ai && !OPENAI_API_KEY) {
+    console.warn('[Note Extraction] No AI services available - cannot extract notes');
     return [];
   }
 
@@ -616,6 +640,11 @@ Abstract: ${paperAbstract || "Not available"}\n\n ############`
 
     for(let attempt = 0; attempt < 3; attempt++) {
         try {
+            if (!ai) {
+              console.warn('[Note Extraction] Gemini AI not available - using fallback OpenAI');
+              throw new Error('Gemini AI not initialized');
+            }
+            
             const response = await ai.models.generateContent({
                 model: "gemini-3-flash-preview",
                 contents: prompt,
