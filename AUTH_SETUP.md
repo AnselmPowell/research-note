@@ -376,13 +376,4 @@ This allows password recovery even without localStorage.
 - **OAuth tokens**: Handled by authentication providers, not stored locally
 - **User sessions**: Managed by Neon Auth with secure JWTs
 
----
-
-## **🎯 Why This Architecture Works**
-
-**✅ Security**: API keys never exposed to client browsers  
-**✅ Scalability**: Supports multiple OAuth providers easily  
-**✅ User Experience**: Seamless anonymous → authenticated transition  
-**✅ Development**: Environment variables work locally and in production  
-**✅ Deployment**: Single Docker container with runtime configuration  
-**✅ Flexibility**: Easy to add new authentication providers  
+ 
