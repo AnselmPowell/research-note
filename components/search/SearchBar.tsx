@@ -5,6 +5,7 @@ import { DeepResearchQuery, TagData, SearchMode } from '../../types';
 import { useResearch } from '../../contexts/ResearchContext';
 import { useUI } from '../../contexts/UIContext';
 import { useLibrary } from '../../contexts/LibraryContext';
+import { validatePdfUrl } from '../../services/pdfService';
 
 // We optionally keep props for flexibility, but default to context actions
 interface SearchBarProps {
@@ -32,11 +33,17 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     researchPhase,
     searchHistory, // New
     removeFromHistory, // New
-    clearHistory // New
+    clearHistory, // New
+    processedPdfs, // New: for navigation
+    setShowUploadedTab, // New: for tab switching
+    shouldOpenPdfViewer, // New: navigation intent
+    navigationHandled, // New: track if navigation done
+    setNavigationHandled, // New: mark navigation as handled
+    setProcessedPdfs // New: clear processed PDFs after handling
   } = useResearch();
   
   const { setColumnVisibility, openColumn } = useUI();
-  const { addPdfFile, loadPdfFromUrl } = useLibrary();
+  const { addPdfFile, loadPdfFromUrl, isPdfLoaded, addLoadedPdf } = useLibrary();
   
   const [mode, setMode] = useState<SearchMode>(initialMode || activeSearchMode);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -78,12 +85,61 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   // Determine if deep research is currently active/loading
   const isDeepLoading = ['initializing', 'searching', 'filtering', 'extracting'].includes(researchPhase);
 
+  // Close search bar when deep research begins
+  useEffect(() => {
+    if (isDeepLoading && mode === 'deep' && isExpanded) {
+      setIsExpanded(false);
+    }
+  }, [isDeepLoading, mode, isExpanded]);
+
+  // Handle PDF loading and navigation when PDFs are processed
+  useEffect(() => {
+    const handleProcessedPdfs = async () => {
+      if (processedPdfs.length > 0) {
+        // Add already-processed PDFs to LibraryContext (avoid re-downloading)
+        for (const pdf of processedPdfs) {
+          // Check if PDF is already loaded to avoid duplicates
+          if (!isPdfLoaded(pdf.uri)) {
+            addLoadedPdf(pdf); // Use direct add instead of loadPdfFromUrl
+          }
+        }
+        
+        // Signal to switch to uploaded tab in deep research view
+        setShowUploadedTab(true);
+        
+        // Only handle navigation once per deep search
+        if (!navigationHandled) {
+          if (shouldOpenPdfViewer) {
+            // Single PDF URL = open PDF viewer + middle column  
+            setColumnVisibility(prev => ({ ...prev, right: true, middle: true }));
+          } else {
+            // Multiple PDFs or mixed search = only middle column
+            setColumnVisibility(prev => ({ ...prev, middle: true }));
+          }
+          // Mark navigation as handled to prevent future column opening
+          setNavigationHandled(true);
+        }
+        
+        // Clear processed PDFs to prevent re-adding deleted PDFs
+        setProcessedPdfs([]);
+      }
+    };
+    
+    handleProcessedPdfs();
+  }, [processedPdfs, isPdfLoaded, addLoadedPdf, setColumnVisibility, setShowUploadedTab, shouldOpenPdfViewer, navigationHandled, setNavigationHandled, setProcessedPdfs]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
 
       // Existing Menu Logic
-      if (menuRef.current && !menuRef.current.contains(target)) setIsMenuOpen(false);
+      if (menuRef.current && !menuRef.current.contains(target)) {
+        setIsMenuOpen(false);
+      } else if (menuRef.current && menuRef.current.contains(target)) {
+        // If clicking inside mode menu, also close history dropdown
+        setShowHistory(false);
+      }
+      
       if (mode === 'deep' && containerRef.current && !containerRef.current.contains(target)) setIsExpanded(false);
       
       // HISTORY STRICT CLOSE LOGIC
@@ -102,10 +158,20 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [mode, showHistory]);
 
+  // Handle mode button click - close expanded deep search when mode selector is clicked
+  const handleModeButtonClick = () => {
+    setIsMenuOpen(!isMenuOpen);
+    if (isExpanded) {
+      setIsExpanded(false);
+    }
+  };
+
   const handleModeChange = (newMode: SearchMode) => {
     setMode(newMode);
     setActiveSearchMode(newMode);
     setIsMenuOpen(false);
+    setShowHistory(false); // Hide history dropdown when mode changes
+    setIsExpanded(false); // Close expanded deep search when mode changes
     
     if (newMode === 'deep') {
         setIsExpanded(true);
@@ -175,7 +241,35 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     }
   };
 
-  const handleMainInputKeyDown = (e: React.KeyboardEvent) => {
+  // Handle input change with history dropdown logic
+  const handleInputChange = (value: string) => {
+    updateSearchBar({ mainInput: value });
+    
+    // Show history when user starts typing and there are matching results
+    if (value.trim() && searchHistory.length > 0) {
+      const hasMatches = searchHistory.some(item => 
+        item.toLowerCase().includes(value.toLowerCase())
+      );
+      setShowHistory(hasMatches);
+    } else {
+      setShowHistory(false);
+    }
+  };
+
+  // Handle input click with toggle behavior
+  const handleInputClick = () => {
+    // Only show/toggle history if there's text and search history exists
+    if (searchBarState.mainInput.trim() && searchHistory.length > 0) {
+      const hasMatches = searchHistory.some(item => 
+        item.toLowerCase().includes(searchBarState.mainInput.toLowerCase())
+      );
+      if (hasMatches) {
+        setShowHistory(prev => !prev); // Toggle behavior
+      }
+    }
+  };
+
+  const handleMainInputKeyDown = async (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       setShowHistory(false); // Close history on enter
@@ -186,17 +280,28 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       } else if (mode === 'deep') {
         if (searchBarState.mainInput.trim()) {
           const val = searchBarState.mainInput.trim();
-          // Check duplicate
-          if (searchBarState.additionalTopics.includes(val)) {
-             flashError("Topic already exists!");
-             updateSearchBar({ mainInput: '' });
-             return;
-          }
           
-          updateSearchBar({ 
-              additionalTopics: [...searchBarState.additionalTopics, val],
-              mainInput: '' 
-          });
+          // Check if the input looks like a URL
+          const isLikelyUrl = URL.canParse(val);
+          
+          if (isLikelyUrl) {
+            // Add as URL tag and validate
+            await addUrlFromValue(val);
+            updateSearchBar({ mainInput: '' });
+          } else {
+            // Add as topic tag (existing behavior)
+            // Check duplicate
+            if (searchBarState.additionalTopics.includes(val)) {
+               flashError("Topic already exists!");
+               updateSearchBar({ mainInput: '' });
+               return;
+            }
+            
+            updateSearchBar({ 
+                additionalTopics: [...searchBarState.additionalTopics, val],
+                mainInput: '' 
+            });
+          }
           setIsExpanded(true);
         } else {
           setIsExpanded(true);
@@ -206,10 +311,15 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     }
   };
 
-  const addUrl = () => {
+  const addUrl = async () => {
     const val = searchBarState.urlInput.trim();
     if (!val) return;
     
+    await addUrlFromValue(val);
+    updateSearchBar({ urlInput: '' });
+  };
+
+  const addUrlFromValue = async (val: string) => {
     // Check duplicate URL
     const isDuplicate = searchBarState.urls.some(u => {
         const uVal = typeof u === 'string' ? u : u.value;
@@ -218,7 +328,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
     if (isDuplicate) {
         flashError("URL already added!");
-        updateSearchBar({ urlInput: '' });
         return;
     }
 
@@ -226,16 +335,38 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     
     // Optimistic update
     const newUrls = [...searchBarState.urls, newTag];
-    updateSearchBar({ urls: newUrls, urlInput: '' });
+    updateSearchBar({ urls: newUrls });
 
     try {
-      const isValid = URL.canParse(val);
+      // First check if it's a valid URL
+      const isValidUrl = URL.canParse(val);
+      if (!isValidUrl) {
+        updateSearchBar({ 
+          urls: newUrls.map(u => 
+            (typeof u === 'object' && u.value === val) 
+              ? { ...u, status: 'invalid' } 
+              : u
+          )
+        });
+        return;
+      }
+
+      // Then validate if it's a PDF
+      const isPdf = await validatePdfUrl(val);
       updateSearchBar({ 
-          urls: newUrls.map(u => (typeof u === 'object' && u.value === val) ? { ...u, status: isValid ? 'valid' : 'invalid' } : u)
+        urls: newUrls.map(u => 
+          (typeof u === 'object' && u.value === val) 
+            ? { ...u, status: isPdf ? 'valid' : 'invalid' } 
+            : u
+        )
       });
-    } catch {
+    } catch (error) {
       updateSearchBar({ 
-          urls: newUrls.map(u => (typeof u === 'object' && u.value === val) ? { ...u, status: 'invalid' } : u)
+        urls: newUrls.map(u => 
+          (typeof u === 'object' && u.value === val) 
+            ? { ...u, status: 'invalid' } 
+            : u
+        )
       });
     }
   };
@@ -255,11 +386,22 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     }
   };
 
-  const startDeepResearch = () => {
+  const startDeepResearch = async () => {
     // If loading, do nothing (user should use Stop button which is rendered instead)
     if (isDeepLoading) return;
 
-    const allTopics = searchBarState.mainInput.trim() ? [searchBarState.mainInput.trim(), ...searchBarState.additionalTopics] : [...searchBarState.additionalTopics];
+    // Handle URL in main input - move it to URLs array
+    let mainInputValue = searchBarState.mainInput.trim();
+    let updatedUrls = [...searchBarState.urls];
+    
+    if (mainInputValue && URL.canParse(mainInputValue)) {
+      // Main input contains a URL - add it to URLs and clear main input
+      await addUrlFromValue(mainInputValue);
+      updateSearchBar({ mainInput: '' });
+      mainInputValue = ''; // Clear for topic calculation
+    }
+
+    const allTopics = mainInputValue ? [mainInputValue, ...searchBarState.additionalTopics] : [...searchBarState.additionalTopics];
     const finalQuestions = [...searchBarState.questions];
     if (searchBarState.questionInput.trim()) finalQuestions.push(searchBarState.questionInput.trim());
 
@@ -330,7 +472,15 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       // User can press Enter to search.
   };
 
-  const canStartDeep = (searchBarState.mainInput.trim() || searchBarState.additionalTopics.length > 0 || searchBarState.urls.length > 0) && (searchBarState.questions.length > 0 || searchBarState.questionInput.trim());
+  const hasValidUrls = searchBarState.urls.length === 0 || searchBarState.urls.every(u => {
+    return typeof u === 'string' || u.status === 'valid';
+  });
+
+  const canStartDeep = (
+    (searchBarState.mainInput.trim() || searchBarState.additionalTopics.length > 0 || searchBarState.urls.length > 0) && 
+    (searchBarState.questions.length > 0 || searchBarState.questionInput.trim()) &&
+    hasValidUrls
+  );
 
   const getPlaceholder = () => {
       switch(mode) {
@@ -378,7 +528,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         <div className={`flex-1 relative flex items-center bg-white dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-600 shadow-sm hover:shadow-md transition-all h-14 pl-2 pr-2 z-40 ${mode === 'deep' ? 'ring-2 ring-scholar-600 dark:ring-scholar-900 border-scholar-600 dark:border-scholar-800' : ''}`}>
             
             <div className="relative h-full flex items-center" ref={menuRef}>
-            <button type="button" onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center gap-2 px-3 h-10 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none select-none">
+            <button type="button" onClick={handleModeButtonClick} className="flex items-center gap-2 px-3 h-10 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus:outline-none select-none">
                 <span className={`text-sm font-semibold flex items-center gap-2 ${mode === 'web' ? 'text-gray-700 dark:text-gray-200' : 'text-scholar-600 dark:text-gray-200'}`}>
                 {mode === 'web' && <Globe size={18} />}
                 {mode === 'deep' && <BookOpenText size={18} />}
@@ -454,15 +604,12 @@ export const SearchBar: React.FC<SearchBarProps> = ({
                 ref={mainInputRef}
                 type="text"
                 value={searchBarState.mainInput}
-                onChange={(e) => updateSearchBar({ mainInput: e.target.value })}
+                onChange={(e) => handleInputChange(e.target.value)}
                 onKeyDown={handleMainInputKeyDown}
                 onFocus={() => { 
                     if (mode === 'deep') setIsExpanded(true);
-                    if (searchHistory.length > 0) setShowHistory(true);
                 }}
-                onClick={() => {
-                    if (searchHistory.length > 0) setShowHistory(true);
-                }}
+                onClick={handleInputClick}
                 className="flex-1 min-w-0 h-full bg-transparent text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none text-base truncate"
                 placeholder={searchBarState.additionalTopics.length > 0 && mode === 'deep' && !isExpanded ? "Add more..." : getPlaceholder()}
             />
@@ -475,6 +622,14 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             ) : mode === 'upload' ? (
                 <button onClick={handleUrlUpload} disabled={!searchBarState.mainInput.trim()} className="ml-2 p-2.5 rounded-full bg-scholar-600 hover:bg-scholar-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white shadow-sm transition-colors flex-shrink-0">
                     <ArrowUpRight size={20} />
+                </button>
+            ) : mode === 'deep' && isDeepLoading ? (
+                <button 
+                    onClick={handleStopResearch} 
+                    className="ml-2 p-2 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-sm transition-all flex-shrink-0 animate-pulse"
+                    title="Stop Research"
+                >
+                    <Square size={16} fill="currentColor" />
                 </button>
             ) : (
                 <div className="flex items-center gap-3 pr-2 text-xs text-gray-400 font-medium select-none flex-shrink-0">
@@ -490,7 +645,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             ref={historyRef}
             className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-50 animate-fade-in"
           >
-              <div className="py-1 max-h-60 overflow-y-auto custom-scrollbar">
+              <div className="py-1 max-h-[135px] overflow-y-auto custom-scrollbar">
                   {filteredHistory.map((item, idx) => (
                       <div 
                         key={idx} 
@@ -534,7 +689,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       )}
 
       {mode === 'deep' && isExpanded && (
-        <div className="absolute top-full left-0 right-0 mt-3 bg-white dark:bg-dark-card rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-5 animate-slide-up z-20 origin-top">
+        <div className="absolute top-full left-0 right-0 mt-3 bg-white dark:bg-dark-card rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-5 animate-slide-up z-40 origin-top">
           {(searchBarState.additionalTopics.length > 0 || searchBarState.urls.length > 0) && (
             <div className="flex flex-wrap gap-2 mb-4 w-full animate-fade-in border-b border-gray-50 dark:border-gray-800 pb-4">
               {searchBarState.additionalTopics.map((t, i) => (

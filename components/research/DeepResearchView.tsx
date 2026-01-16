@@ -84,7 +84,10 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     isDeepResearching,
     deepResearchResults,
     searchBarState,
-    analyzeLoadedPdfs
+    analyzeLoadedPdfs,
+    showUploadedTab,
+    setShowUploadedTab,
+    uploadedPaperStatuses
   } = useResearch();
 
   // State Management
@@ -108,6 +111,15 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     }
   }, [loadedPdfs.length, researchPhase, isDeepResearching, candidates.length]);
 
+  // Switch to uploaded tab when PDFs are processed during deep research
+  useEffect(() => {
+    if (showUploadedTab && loadedPdfs.length > 0) {
+      setActiveTab('uploaded');
+      // Reset the signal after switching
+      setShowUploadedTab(false);
+    }
+  }, [showUploadedTab, loadedPdfs.length, setShowUploadedTab]);
+
   const handleSelectNote = (id: string) => {
     setSelectedNoteIds(prev => 
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -128,11 +140,11 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
         pdfUri: pdf.uri,
         publishedDate: new Date().toISOString(),
         notes: deepResearchResults.filter(n => n.pdfUri === pdf.uri),
-        analysisStatus: isDeepResearching ? 'processing' : 'completed'
+        analysisStatus: uploadedPaperStatuses[pdf.uri] || 'completed'
       };
       return paper;
     });
-  }, [loadedPdfs, deepResearchResults, isDeepResearching]);
+  }, [loadedPdfs, deepResearchResults, uploadedPaperStatuses]);
 
   const currentTabCandidates = activeTab === 'results' ? candidates : mappedUploadedPapers;
 
@@ -152,13 +164,28 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
       return [...currentTabCandidates].sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
     } else {
       return [...currentTabCandidates].sort((a, b) => {
-          const activeStatuses = ['downloading', 'processing', 'completed', 'failed', 'stopped'];
+          // First priority: Papers currently being processed move to top
+          const aIsProcessing = ['downloading', 'processing', 'extracting'].includes(a.analysisStatus || '');
+          const bIsProcessing = ['downloading', 'processing', 'extracting'].includes(b.analysisStatus || '');
+          if (aIsProcessing !== bIsProcessing) return bIsProcessing ? 1 : -1;
+          
+          // Second priority: Selected papers during research (with any analysis status) come first
+          const aIsSelected = selectedArxivIds.has(a.id);
+          const bIsSelected = selectedArxivIds.has(b.id);
+          if (aIsSelected !== bIsSelected) return bIsSelected ? 1 : -1;
+          
+          // Third priority: Papers with active analysis status
+          const activeStatuses = ['downloading', 'processing', 'extracting', 'completed', 'failed', 'stopped'];
           const aActive = a.analysisStatus && activeStatuses.includes(a.analysisStatus) ? 1 : 0;
           const bActive = b.analysisStatus && activeStatuses.includes(b.analysisStatus) ? 1 : 0;
           if (aActive !== bActive) return bActive - aActive;
+          
+          // Fourth priority: Papers with notes
           const aHasNotes = (a.notes && a.notes.length > 0) ? 1 : 0;
           const bHasNotes = (b.notes && b.notes.length > 0) ? 1 : 0;
           if (aHasNotes !== bHasNotes) return bHasNotes - aHasNotes;
+          
+          // Fifth priority: Relevance score
           return (b.relevanceScore || 0) - (a.relevanceScore || 0);
       });
     }
@@ -395,9 +422,18 @@ const PaperCard: React.FC<PaperCardProps> = ({ paper, selectedNoteIds, onSelectN
   
   const isDownloading = paper.analysisStatus === 'downloading';
   const isProcessing = paper.analysisStatus === 'processing';
+  const isExtracting = paper.analysisStatus === 'extracting';
   const isFailed = paper.analysisStatus === 'failed';
   const isCompleted = paper.analysisStatus === 'completed';
   const isStopped = paper.analysisStatus === 'stopped';
+
+  // Get dynamic status text with animation
+  const getStatusText = () => {
+    if (isDownloading) return "Downloading document...";
+    if (isProcessing) return "Reading pages...";
+    if (isExtracting) return "Extracting notes...";
+    return "Analysis Paper...";
+  };
 
   const notes = paper.notes || [];
 
@@ -477,10 +513,10 @@ const PaperCard: React.FC<PaperCardProps> = ({ paper, selectedNoteIds, onSelectN
 
             <div className="flex items-center justify-between mt-2">
                 <div className="flex items-center gap-3">
-                   {(isDownloading || isProcessing) ? (
+                   {(isDownloading || isProcessing || isExtracting) ? (
                       <div className="flex items-center gap-1.5 text-xs font-medium text-scholar-600">
                         <Loader2 size={12} className="animate-spin" />
-                        <span>Analysis in progress...</span>
+                        <span className="animate-pulse">{getStatusText()}</span>
                       </div>
                    ) : notes.length > 0 ? (
                       <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-1.5 text-md font-medium text-bold text-scholar-600 hover:text-scholar-800 transition-colors">

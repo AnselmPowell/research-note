@@ -31,7 +31,7 @@ const TabBar = ({ internalPdfs, activePdfUri, onTabChange, onClosePdf, onAddClic
     onAddClick: (e: React.MouseEvent) => void,
     isVisible: boolean
 }) => (
-    <div className={`w-full max-w-5xl px-4 pt-2 transition-all duration-300 transform origin-top z-[60] bg-cream dark:bg-dark-bg ${isVisible ? 'translate-y-0 opacity-100 relative' : '-translate-y-full opacity-0 pointer-events-none absolute top-0'}`}>
+    <div className={`w-full max-w-5xl px-4 pt-2 transition-all duration-300 transform origin-top z-30 bg-cream dark:bg-dark-bg ${isVisible ? 'translate-y-0 opacity-100 relative' : '-translate-y-full opacity-0 pointer-events-none absolute top-0'}`}>
         <div className="flex items-center border-b border-gray-300 dark:border-gray-700 overflow-x-auto no-scrollbar">
             {internalPdfs.map(pdf => (
                 <div key={pdf.id} onClick={() => onTabChange(pdf.id)} className={`flex items-center cursor-pointer px-4 py-2 border-b-2 -mb-px whitespace-nowrap ${activePdfUri === pdf.id ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400 dark:border-scholar-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>

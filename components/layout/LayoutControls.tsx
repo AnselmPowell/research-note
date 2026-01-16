@@ -82,19 +82,6 @@ export const LayoutControls: React.FC = () => {
             <DesktopButton col="left" icon={PanelLeft} label="Web Search" tooltipIcon={Globe} isActive={columnVisibility.left} onToggle={handleToggle} />
             <DesktopButton col="middle" icon={Columns} label="Deep Research" tooltipIcon={BookOpenText} isActive={columnVisibility.middle} onToggle={handleToggle} />
             <DesktopButton col="right" icon={PanelRight} label="Paper View" tooltipIcon={FileText} isActive={columnVisibility.right} onToggle={handleToggle} />
-            
-            <div className="w-px h-6 bg-gray-300 dark:bg-gray-700 mx-1"></div>
-            
-            <button 
-                onClick={toggleDarkMode} 
-                className="group relative p-2.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
-            >
-                {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-                    {darkMode ? 'Light Mode' : 'Dark Mode'}
-                     <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
-                </div>
-            </button>
         </div>
 
         {/* Mobile View: Burger Menu */}

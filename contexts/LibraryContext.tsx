@@ -15,6 +15,7 @@ interface LibraryContextType {
   setSearchHighlight: (text: string | null) => void;
   loadPdfFromUrl: (uri: string, title?: string, author?: string) => Promise<boolean>;
   addPdfFile: (file: File) => Promise<void>;
+  addLoadedPdf: (pdf: LoadedPdf) => void; // New: directly add processed PDF
   removePdf: (uri: string) => void;
   setActivePdf: (uri: string | null) => void;
   
@@ -125,6 +126,18 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setActivePdfUri(uri);
   };
 
+  // Add already processed PDF to library (avoid re-downloading)
+  const addLoadedPdf = (pdf: LoadedPdf) => {
+    // Check if already loaded to avoid duplicates
+    if (loadedPdfs.some(p => p.uri === pdf.uri)) {
+      setActivePdfUri(pdf.uri);
+      return;
+    }
+    
+    setLoadedPdfs(prev => [...prev, pdf]);
+    setActivePdfUri(pdf.uri);
+  };
+
   const removePdf = (uri: string) => {
     setLoadedPdfs(prev => prev.filter(p => p.uri !== uri));
     if (contextUris.has(uri)) {
@@ -180,6 +193,7 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setSearchHighlight,
       loadPdfFromUrl,
       addPdfFile,
+      addLoadedPdf,
       removePdf,
       setActivePdf: setActivePdfUri,
       togglePdfContext,

@@ -19,6 +19,49 @@ interface ExtractedData {
 /**
  * Shared utility to fetch a PDF buffer, handling CORS proxies automatically.
  */
+/**
+ * Lightweight PDF validation using PDF.js getDocument with timeout
+ * More reliable than Range requests and works with existing proxy system
+ */
+export const validatePdfUrl = async (uri: string): Promise<boolean> => {
+  try {
+    // Use same fetch pattern as fetchPdfBuffer but with smaller timeout
+    let response;
+    try {
+      response = await fetch(uri, { signal: AbortSignal.timeout(5000) });
+      if (!response.ok) throw new Error('Direct fetch failed');
+    } catch (directError) {
+      // Use same proxy fallback as existing code
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(uri)}`;
+      response = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+      if (!response.ok) throw new Error('Proxy fetch failed');
+    }
+
+    // Get buffer to test PDF validity
+    const arrayBuffer = await response.arrayBuffer();
+    
+    // Use PDF.js to validate - same as existing extractPdfData pattern
+    const loadingTask = pdfjsLib.getDocument({ 
+      data: arrayBuffer.slice(0),
+      verbosity: 0 // Suppress PDF.js console logs
+    });
+    
+    // Quick validation - just try to load, don't process
+    const doc = await Promise.race([
+      loadingTask.promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('PDF validation timeout')), 3000))
+    ]);
+    
+    // Clean up
+    doc.destroy();
+    return true;
+    
+  } catch (error: any) {
+    console.log(`[PDF Validation] URL ${uri} is not a valid PDF:`, error.message);
+    return false;
+  }
+};
+
 export const fetchPdfBuffer = async (uri: string): Promise<ArrayBuffer> => {
   try {
       // 1. Try Direct Fetch
