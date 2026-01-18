@@ -103,8 +103,6 @@ export const dbService = {
     const authors = paper.authors || [];
     const numPages = paper.num_pages || paper.numPages || null;
     
-    // Use EXCLUDED.is_explicitly_saved OR papers.is_explicitly_saved
-    // If it was already true, it stays true. If it's becoming true now, we update it.
     return await sql`
       INSERT INTO papers (uri, title, abstract, authors, num_pages, is_explicitly_saved, user_id)
       VALUES (${uri}, ${title}, ${abstract}, ${JSON.stringify(authors)}, ${numPages}, ${isExplicit}, ${userId})
@@ -112,7 +110,10 @@ export const dbService = {
         title = EXCLUDED.title,
         abstract = EXCLUDED.abstract,
         num_pages = COALESCE(EXCLUDED.num_pages, papers.num_pages),
-        is_explicitly_saved = papers.is_explicitly_saved OR EXCLUDED.is_explicitly_saved,
+        is_explicitly_saved = CASE
+          WHEN EXCLUDED.is_explicitly_saved = true THEN true
+          ELSE papers.is_explicitly_saved
+        END,
         user_id = COALESCE(papers.user_id, EXCLUDED.user_id)
       RETURNING *;
     `;
@@ -194,7 +195,14 @@ export const dbService = {
   },
 
   async deletePaper(uri: string) {
-    return await sql`DELETE FROM papers WHERE uri = ${uri};`;
+    // Only set is_explicitly_saved to false instead of deleting the record
+    // This preserves the paper record for any notes that reference it
+    return await sql`
+      UPDATE papers 
+      SET is_explicitly_saved = false 
+      WHERE uri = ${uri} 
+      RETURNING *;
+    `;
   },
 
   async deleteNotePermanently(id: number) {

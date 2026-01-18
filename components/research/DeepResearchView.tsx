@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { ArxivPaper, DeepResearchNote, ResearchPhase, LoadedPdf } from '../../types';
 import { useResearch } from '../../contexts/ResearchContext';
@@ -115,7 +114,6 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   useEffect(() => {
     if (showUploadedTab && loadedPdfs.length > 0) {
       setActiveTab('uploaded');
-      // Reset the signal after switching
       setShowUploadedTab(false);
     }
   }, [showUploadedTab, loadedPdfs.length, setShowUploadedTab]);
@@ -209,14 +207,6 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     }
   };
 
-  const handleStartLocalResearch = () => {
-      const checkedPdfs = loadedPdfs.filter(p => isPdfInContext(p.uri));
-      const questions = searchBarState.questions.join('\n') || searchBarState.questionInput;
-      if (checkedPdfs.length > 0 && questions) {
-          analyzeLoadedPdfs(checkedPdfs, questions);
-      }
-  };
-
   if (isSearching) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[500px] p-8 space-y-6 animate-fade-in">
@@ -228,7 +218,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
         </div>
         <div className="text-center space-y-3 max-w-md mx-auto">
           <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Deep Research in Progress</h3>
-          <p className="text-gray-500 dark:text-gray-400 leading-relaxed animate-pulse">{status || "Analyzing topics..."}</p>
+          <p className="text-gray-500 dark:text-gray-400 leading-relaxed animate-pulse">{status || "Analysing topics..."}</p>
         </div>
       </div>
     );
@@ -237,10 +227,15 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   return (
     <div className="p-3 sm:p-6 font-sans max-w-4xl mx-auto min-h-[500px] relative" style={{ containerType: 'inline-size' }}>
       <style>{`
-        @container (max-width: 500px) {
-          .deep-actions-row { flex-direction: column !important; align-items: stretch !important; gap: 0.75rem !important; }
+        @container (max-width: 600px) {
+          .deep-header-row { flex-direction: column !important; gap: 0.75rem !important; align-items: flex-start !important; }
           .deep-tab-label { font-size: 12px !important; }
-          .deep-tab-button { padding-left: 1rem !important; padding-right: 1rem !important; }
+          .deep-tab-button { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+          .deep-actions-right { justify-content: flex-start !important; }
+        }
+        @container (max-width: 400px) {
+          .deep-tab-label { display: none !important; }
+          .deep-sort-text { display: none !important; }
         }
       `}</style>
 
@@ -259,90 +254,98 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
       {!isBlurred && (
         <div className="sticky top-0 z-30 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-0 mb-3 -pt-3 -mt-3 -mx-3 sm:-mx-6 px-3 sm:px-6 shadow-sm">
            
-           {/* TABS ROW */}
-           <div className="flex mb-1">
-              <div className="flex -mb-px">
+           {/* SINGLE ROW - TABS LEFT, ACTIONS RIGHT */}
+           <div className="flex items-center justify-between py-3 gap-4 deep-header-row">
+              
+              {/* LEFT SIDE - TABS */}
+              <div className="flex items-center -mb-px">
                  <button 
                     onClick={() => { setActiveTab('results'); }}
-                    className={`deep-tab-button px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'results' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
+                    className={`deep-tab-button px-4 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'results' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
                   >
-                    <Search size={18} className="flex-shrink-0" />
+                    <Search size={16} className="flex-shrink-0" />
                     <span className="tab-label deep-tab-label">Search Results</span>
                   </button>
-                  {loadedPdfs.length > 0 && (
-                    <button 
-                      onClick={() => { setActiveTab('uploaded'); }}
-                      className={`deep-tab-button px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'uploaded' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
-                    >
-                      <span className="tab-label deep-tab-label">My Uploads({loadedPdfs.length})</span>
-                    </button>
-                  )}
+                  
+                  <button 
+                    onClick={() => { setActiveTab('uploaded'); }}
+                    className={`deep-tab-button px-4 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'uploaded' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
+                  >
+                    <Upload size={16} className="flex-shrink-0" />
+                    <span className="tab-label deep-tab-label">
+                      My Uploads{loadedPdfs.length > 0 && ` (${loadedPdfs.length})`}
+                    </span>
+                  </button>
               </div>
-           </div>
 
-           {/* ACTIONS ROW (Responsive) */}
-           <div className="flex flex-wrap items-center justify-between gap-3 pb-4 deep-actions-row">
-              <div className="flex flex-wrap items-center gap-2">
+              {/* RIGHT SIDE - ACTIONS */}
+              <div className="flex items-center gap-2 deep-actions-right">
+                 {/* Select All Papers - Icon Only */}
                  {sortBy !== 'most-relevant-notes' && currentTabCandidates.length > 0 && (
                     <button 
                       onClick={handleSelectAllPapers}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-all flex-shrink-0"
+                      className="p-2.5 text-gray-500 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                      title={`Select all papers (${activeTab === 'results' ? (selectedArxivIds.size > 0 ? `${selectedArxivIds.size}/` : '') + candidates.length : (mappedUploadedPapers.filter(p => isPdfInContext(p.id)).length > 0 ? `${mappedUploadedPapers.filter(p => isPdfInContext(p.id)).length}/` : '') + loadedPdfs.length})`}
                     >
-                      <div className={`w-3.5 h-3.5 rounded border transition-colors flex items-center justify-center ${
+                      <div className={`w-4 h-4 rounded border-2 transition-colors flex items-center justify-center ${
                           activeTab === 'results' 
                             ? selectedArxivIds.size === candidates.length ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
                             : mappedUploadedPapers.every(p => isPdfInContext(p.id)) ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
                       }`}>
-                        {(activeTab === 'results' ? selectedArxivIds.size === candidates.length : mappedUploadedPapers.every(p => isPdfInContext(p.id))) && <Check size={10} className="text-white" />}
+                        {(activeTab === 'results' ? selectedArxivIds.size === candidates.length : mappedUploadedPapers.every(p => isPdfInContext(p.id))) && <Check size={12} className="text-white" />}
                       </div>
-                      <span>Select all papers ({activeTab === 'results' ? (selectedArxivIds.size > 0 ? `${selectedArxivIds.size}/` : '') + candidates.length : (mappedUploadedPapers.filter(p => isPdfInContext(p.id)).length > 0 ? `${mappedUploadedPapers.filter(p => isPdfInContext(p.id)).length}/` : '') + loadedPdfs.length})</span>
                     </button>
                  )}
 
+                 {/* Collapse/Expand All Notes - Icon Only */}
                  {sortBy !== 'most-relevant-notes' && currentTabCandidates.some(p => p.notes && p.notes.length > 0) && (
                     <button 
                       onClick={() => setAllNotesExpanded(!allNotesExpanded)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-[10px] font-bold uppercase text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-all"
+                      className="p-2.5 text-gray-500 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                      title={allNotesExpanded ? 'Collapse all notes' : 'Expand all notes'}
                     >
-                       {allNotesExpanded ? <ChevronsUp size={14} /> : <ChevronsDown size={14} />}
-                       {allNotesExpanded ? 'Collapse all notes' : 'Expand all notes'}
+                       {allNotesExpanded ? <ChevronsUp size={18} /> : <ChevronsDown size={18} />}
                     </button>
                  )}
-              </div>
 
-              <div className="relative">
-                 <button onClick={() => setIsSortOpen(!isSortOpen)} className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-all">
-                    <div className="flex items-center gap-2">
-                        <ArrowUpDown size={14} className="text-gray-400" />
-                        <span className="truncate">
+                 {/* Sort Dropdown */}
+                 <div className="relative">
+                    <button 
+                      onClick={() => setIsSortOpen(!isSortOpen)} 
+                      className="flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                      title="Sort options"
+                    >
+                      <ArrowUpDown size={16} className="text-gray-400" />
+                      <span className="deep-sort-text truncate">
                         {sortBy === 'most-relevant-notes' && 'Most Relevant Notes'}
                         {sortBy === 'relevant-papers' && 'Most Relevant Papers'}
                         {sortBy === 'newest-papers' && 'Newest Papers'}
-                        </span>
-                    </div>
-                    <ChevronDown size={14} className={`text-gray-400 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
-                 </button>
-                 {isSortOpen && (
-                   <>
-                   <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
-                   <div className="absolute right-0 top-[110%] w-full sm:w-56 bg-white dark:bg-dark-card rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 overflow-hidden z-50 animate-fade-in flex flex-col">
-                      <button onClick={() => { setSortBy('most-relevant-notes'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                         <Star size={16} className={sortBy === 'most-relevant-notes' ? "text-scholar-600" : "text-gray-400"} />
-                         <span className="text-sm font-medium">Most Relevant Notes</span>
-                      </button>
-                      <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1"></div>
-                      <button onClick={() => { setSortBy('relevant-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                         <Layers size={16} className={sortBy === 'relevant-papers' ? "text-scholar-600" : "text-gray-400"} />
-                         <span className="text-sm font-medium">Relevant Papers</span>
-                      </button>
-                      <button onClick={() => { setSortBy('newest-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                         <Calendar size={16} className={sortBy === 'newest-papers' ? "text-scholar-600" : "text-gray-400"} />
-                         <span className="text-sm font-medium">Newest Papers</span>
-                      </button>
-                   </div>
-                   </>
-                 )}
-               </div>
+                      </span>
+                      <ChevronDown size={14} className={`text-gray-400 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {isSortOpen && (
+                      <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
+                      <div className="absolute right-0 top-[110%] w-full sm:w-56 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 overflow-hidden z-50 animate-fade-in flex flex-col">
+                         <button onClick={() => { setSortBy('most-relevant-notes'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <Star size={16} className={sortBy === 'most-relevant-notes' ? "text-scholar-600" : "text-gray-400"} />
+                            <span className="text-sm font-medium">Most Relevant Notes</span>
+                         </button>
+                         <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1"></div>
+                         <button onClick={() => { setSortBy('relevant-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <Layers size={16} className={sortBy === 'relevant-papers' ? "text-scholar-600" : "text-gray-400"} />
+                            <span className="text-sm font-medium">Relevant Papers</span>
+                         </button>
+                         <button onClick={() => { setSortBy('newest-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <Calendar size={16} className={sortBy === 'newest-papers' ? "text-scholar-600" : "text-gray-400"} />
+                            <span className="text-sm font-medium">Newest Papers</span>
+                         </button>
+                      </div>
+                      </>
+                    )}
+                 </div>
+              </div>
            </div>
         </div>
       )}
@@ -413,12 +416,13 @@ interface PaperCardProps {
 const PaperCard: React.FC<PaperCardProps> = ({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const { toggleArxivSelection, selectedArxivIds } = useResearch();
-  const { isPaperSaved, savePaper, deletePaper } = useDatabase();
+  const { isPaperSaved, savePaper, deletePaper, canDeletePaper } = useDatabase();
   const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf } = useLibrary();
   const { setColumnVisibility } = useUI();
   
   const isSelected = isLocal ? isPdfInContext(paper.id) : selectedArxivIds.has(paper.id);
   const isSaved = isPaperSaved(paper.pdfUri);
+  const canDelete = canDeletePaper(paper.pdfUri);
   
   const isDownloading = paper.analysisStatus === 'downloading';
   const isProcessing = paper.analysisStatus === 'processing';
@@ -427,7 +431,6 @@ const PaperCard: React.FC<PaperCardProps> = ({ paper, selectedNoteIds, onSelectN
   const isCompleted = paper.analysisStatus === 'completed';
   const isStopped = paper.analysisStatus === 'stopped';
 
-  // Get dynamic status text with animation
   const getStatusText = () => {
     if (isDownloading) return "Downloading document...";
     if (isProcessing) return "Reading pages...";
@@ -437,7 +440,6 @@ const PaperCard: React.FC<PaperCardProps> = ({ paper, selectedNoteIds, onSelectN
 
   const notes = paper.notes || [];
 
-  // Sync with global toggle
   useEffect(() => {
     if (notes.length > 0) {
       setIsExpanded(forceExpanded);
@@ -446,11 +448,34 @@ const PaperCard: React.FC<PaperCardProps> = ({ paper, selectedNoteIds, onSelectN
 
   const handleSaveToggle = (e: React.MouseEvent) => {
       e.stopPropagation();
+      
+      console.log('[Paper Card] Save toggle clicked:', {
+        paperUri: paper.pdfUri,
+        isSaved,
+        canDelete,
+        paperTitle: paper.title
+      });
+      
+      if (isSaved && !canDelete) {
+          // Cannot delete paper - it has saved notes
+          console.warn('[Paper Card] Cannot unsave paper - it has saved notes. Remove all notes first.');
+          alert('Cannot unsave this paper because it has saved notes. Please remove all saved notes from this paper first.');
+          return;
+      }
+      
       if (isSaved) {
+          console.log('[Paper Card] Deleting paper...');
           deletePaper(paper.pdfUri);
       } else {
+          console.log('[Paper Card] Saving paper...');
           const loaded = loadedPdfs.find(p => p.uri === paper.pdfUri);
-          savePaper({ ...paper, numPages: loaded ? loaded.numPages : undefined });
+          const paperData = {
+            ...paper,
+            uri: paper.pdfUri, // Ensure URI consistency
+            pdfUri: paper.pdfUri, // Keep both for compatibility
+            numPages: loaded ? loaded.numPages : undefined
+          };
+          savePaper(paperData);
       }
   };
 
@@ -492,13 +517,24 @@ const PaperCard: React.FC<PaperCardProps> = ({ paper, selectedNoteIds, onSelectN
                   <span className="truncate max-w-[200px] opacity-70">{paper.authors.slice(0, 2).join(', ')}{paper.authors.length > 2 ? ' et al.' : ''}</span>
 
                   <div className="flex items-center gap-2 ml-4 opacity-100 sm:opacity-0 sm:group-hover/paper:opacity-100 transition-opacity">
-                    <button onClick={handleOpenPdf} className="flex items-center gap-1 text-xs font-medium text-scholar-700 bg-scholar-50 hover:bg-scholar-100 dark:bg-scholar-900/30 dark:text-scholar-300 px-2 py-1 rounded-md transition-colors">
-                        {isLocal ? <Upload size={12} /> : <BookText size={12} />} {isLocal ? 'Open' : 'View'}
+                    <button onClick={handleOpenPdf} className="text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 ">
+                        <BookText size={12} /> View
                     </button>
                     {!isLocal && (
-                        <button onClick={handleSaveToggle} className={`text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm ${isSaved ? 'bg-scholar-600 text-white hover:bg-scholar-700' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
-                            {isSaved ? <Check size={12} /> : <Library size={12} />}
-                            {isSaved ? 'Saved' : 'Save Paper'}
+                         <button  
+                           onClick={handleSaveToggle}
+                           disabled={isSaved && !canDelete}
+                           className={`text-xs font-medium px-2 py-0.5 rounded border transition-colors flex items-center gap-1 shadow-sm
+                          ${isSaved && !canDelete 
+                            ? 'bg-gray-300 border-gray-300 text-gray-500 cursor-not-allowed' 
+                            : isSaved 
+                              ? 'bg-scholar-600 border-scholar-600 text-white hover:bg-scholar-700'  
+                              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700' 
+                           }`}
+                           title={isSaved && !canDelete ? 'Cannot unsave - paper has saved notes. Remove notes first.' : ''}
+                              >
+                                 {isSaved ? <Check size={12} /> : <Library size={12} />}
+                                 {isSaved ? (canDelete ? 'Saved' : 'Saved*') : 'Save paper'}
                         </button>
                     )}
                   </div>
@@ -552,7 +588,6 @@ const PaperCard: React.FC<PaperCardProps> = ({ paper, selectedNoteIds, onSelectN
   );
 };
 
-// Sub-component for individual research notes within DeepResearchView
 const ResearchCardNote: React.FC<{
   id: string;
   note: DeepResearchNote;
@@ -586,11 +621,30 @@ const ResearchCardNote: React.FC<{
 
   const handleSaveToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
+    console.log('[Note Card] Save toggle clicked:', {
+      noteUri: note.pdfUri,
+      isSaved,
+      sourceTitle
+    });
+    
     if (isSaved) {
       const savedNote = savedNotes.find(n => n.paper_uri === note.pdfUri && n.content === note.quote);
-      if (savedNote && savedNote.id) deleteNote(savedNote.id);
+      if (savedNote && savedNote.id) {
+        console.log('[Note Card] Deleting note:', savedNote.id);
+        deleteNote(savedNote.id);
+      }
     } else {
-      saveNote(note, { uri: note.pdfUri, title: sourceTitle });
+      console.log('[Note Card] Saving note with paper metadata');
+      // Include more complete paper metadata when saving note
+      const paperMetadata = {
+        uri: note.pdfUri,
+        pdfUri: note.pdfUri, // Keep both for compatibility
+        title: sourceTitle || 'Untitled Paper',
+        summary: '', // We don't have summary in this context
+        authors: [], // We don't have authors in this context
+        publishedDate: new Date().toISOString(),
+      };
+      saveNote(note, paperMetadata);
     }
   };
 
@@ -624,6 +678,12 @@ const ResearchCardNote: React.FC<{
           </div>
 
           <div className="flex-grow min-w-0">
+             {/* Updated Note Header with faded paper title for "Most Relevant Notes" view */}
+             {sourceTitle && showScore && (
+                <div className="mb-1 text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-tight truncate">
+                  {sourceTitle}
+                </div>
+             )}
              <p className={`text-sm sm:text-base text-gray-800 dark:text-gray-200 leading-relaxed font-serif ${!isExpanded ? 'line-clamp-3' : ''}`}>
                "{note.quote}"
              </p>
@@ -653,7 +713,6 @@ const ResearchCardNote: React.FC<{
           </div>
         </div>
 
-        {/* Actions Menu */}
         <div 
            className={`
              absolute top-2 right-2 flex items-center gap-1
@@ -680,15 +739,14 @@ const ResearchCardNote: React.FC<{
         {isExpanded && (
            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in">
                {showScore && note.relevanceScore && (
-                  <div className="absolute top-10 right-4 text-right">
-                     <div className="text-lg font-bold text-scholar-600">{Math.round(note.relevanceScore * 100)}%</div>
-                     <div className="text-[10px] text-gray-400 font-bold uppercase">Match</div>
+                  <div className="absolute top-6 right-4 text-right">
+                     <div className="text-lg font-bold text-scholar-600 dark:text-scholar-400">{Math.round(note.relevanceScore * 100)}%</div>
                   </div>
                )}
                {note.justification && (
                   <div className="bg-scholar-50 dark:bg-scholar-900/20 rounded-xl p-4 border border-scholar-100 dark:border-scholar-800/30 mb-4">
-                     <h4 className="text-scholar-800 dark:text-scholar-400 text-[10px] font-black uppercase mb-2 flex items-center gap-2">
-                        <Lightbulb size={12} className="text-scholar-500" /> Insight
+                     <h4 className="text-scholar-800 dark:text-scholar-400 text-md font-black uppercase mb-2 flex items-center gap-2">
+                        Justification/Context
                      </h4>
                      <p className="text-gray-700 dark:text-gray-300 text-xs sm:text-sm leading-relaxed">{note.justification}</p>
                   </div>

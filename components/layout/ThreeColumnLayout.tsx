@@ -25,14 +25,36 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
   const showLibrary = columnVisibility.library;
   const showRight = columnVisibility.right;
 
-  const [leftWidth, setLeftWidth] = useState(25);
-  const [middleWidth, setMiddleWidth] = useState(25);
-  const [libraryWidth, setLibraryWidth] = useState(25);
+  const [leftWidth, setLeftWidth] = useState(45);
+  const [middleWidth, setMiddleWidth] = useState(30);
+  const [libraryWidth, setLibraryWidth] = useState(30);
+  const [rightWidth, setRightWidth] = useState(40); // Will be calculated dynamically
   
   const containerRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef<ColumnKey | null>(null);
 
   const activeColumnCount = (showLeft ? 1 : 0) + (showMiddle ? 1 : 0) + (showLibrary ? 1 : 0) + (showRight ? 1 : 0);
+
+  // Calculate optimal widths based on active columns
+  const getColumnWidth = (column: 'left' | 'middle' | 'library' | 'right') => {
+    if (activeColumnCount === 1) return '100%';
+    
+    // Special case: 2 columns with PDF viewer - PDF gets 55%, other gets 45%
+    if (activeColumnCount === 2 && showRight) {
+      if (column === 'right') return '55%';
+      return '45%';
+    }
+    
+    // 3+ columns: use stored percentages
+    if (column === 'left') return `${leftWidth}%`;
+    if (column === 'middle') return `${middleWidth}%`;
+    if (column === 'library') return `${libraryWidth}%`;
+    if (column === 'right') {
+      return `calc(100% - ${(showLeft ? leftWidth : 0) + (showMiddle ? middleWidth : 0) + (showLibrary ? libraryWidth : 0)}%)`;
+    }
+    
+    return 'auto';
+  };
 
   // Mouse move handler for resizing
   useEffect(() => {
@@ -53,6 +75,11 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         const leftOffset = showLeft ? leftWidth : 0;
         const middleOffset = showMiddle ? middleWidth : 0;
         setLibraryWidth(Math.min(Math.max(mousePercent - leftOffset - middleOffset, 10), 80));
+      } else if (isResizing.current === 'right' && showRight) {
+        const leftOffset = showLeft ? leftWidth : 0;
+        const middleOffset = showMiddle ? middleWidth : 0;
+        const libraryOffset = showLibrary ? libraryWidth : 0;
+        setRightWidth(Math.min(Math.max(mousePercent - leftOffset - middleOffset - libraryOffset, 10), 80));
       }
     };
 
@@ -68,7 +95,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [showLeft, showMiddle, showLibrary, showRight, leftWidth, middleWidth, libraryWidth]);
+  }, [showLeft, showMiddle, showLibrary, showRight, leftWidth, middleWidth, libraryWidth, rightWidth]);
 
   const startResize = (col: ColumnKey) => {
     isResizing.current = col;
@@ -157,7 +184,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         {/* Web Search */}
         {showLeft && (
           <div 
-            style={{ width: (showMiddle || showLibrary || showRight) ? `${leftWidth}%` : '100%' }} 
+            style={{ width: getColumnWidth('left') }} 
             className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-75 ease-out shadow-sm min-w-[320px]`}
           >
             <RenderHeader title="Web Search" icon={Globe} colKey="left" onClose={() => toggleColumn('left')} isLocked={columnLocks.left} />
@@ -170,11 +197,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         {/* Deep Research */}
         {showMiddle && (
           <div 
-            style={{ 
-              width: (!showLeft && !showLibrary && !showRight) ? '100%' : 
-                     (showLibrary || showRight) ? `${middleWidth}%` : 
-                     `calc(100% - ${showLeft ? leftWidth : 0}%)` 
-            }} 
+            style={{ width: getColumnWidth('middle') }} 
             className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-75 ease-out shadow-sm min-w-[320px]`}
           >
             <RenderHeader title="Deep Research" icon={BookOpenText} colKey="middle" onClose={() => toggleColumn('middle')} isLocked={columnLocks.middle} />
@@ -187,11 +210,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         {/* Library / Notes Manager */}
         {showLibrary && (
           <div 
-            style={{ 
-              width: (!showLeft && !showMiddle && !showRight) ? '100%' : 
-                     showRight ? `${libraryWidth}%` : 
-                     `calc(100% - ${(showLeft ? leftWidth : 0) + (showMiddle ? middleWidth : 0)}%)` 
-            }} 
+            style={{ width: getColumnWidth('library') }} 
             className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-75 ease-out shadow-sm min-w-[320px]`}
           >
             <RenderHeader title="Research Library" icon={Library} colKey="library" onClose={() => toggleColumn('library')} isLocked={columnLocks.library} />
@@ -204,7 +223,8 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         {/* Paper View */}
         {showRight && (
            <div 
-             className={`flex-1 flex flex-col h-full bg-cream dark:bg-dark-card border rounded-xl dark:border-gray-700 overflow-hidden shadow-sm min-w-[320px]`}
+             style={{ width: getColumnWidth('right') }}
+             className={`flex flex-col h-full bg-cream dark:bg-dark-card border rounded-xl dark:border-gray-700 overflow-hidden shadow-sm min-w-[320px] transition-[width] duration-75 ease-out`}
            >
             <RenderHeader title="Paper View" icon={FileText} colKey="right" onClose={() => toggleColumn('right')} isLocked={columnLocks.right} />
             <div className="flex-1 overflow-y-auto custom-scrollbar relative">{rightContent}</div>

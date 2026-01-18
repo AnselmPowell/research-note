@@ -11,10 +11,17 @@ import {
   LayoutList,
   ChevronRight,
   X,
-  FileText
+  FileText,
+  User,
+  LogOut,
+  Settings,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useDatabase } from '../../database/DatabaseContext';
 import { useUI, LibraryView } from '../../contexts/UIContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { dataMigrationService } from '../../utils/dataMigrationService';
 import { NotesManager } from './NotesManager';
 
 // --- SUBCOMPONENTS ---
@@ -49,11 +56,176 @@ const NavItem: React.FC<{
   </div>
 );
 
+// --- SIDEBAR USER PROFILE COMPONENT ---
+
+const SidebarUserProfile: React.FC<{
+  onShowAuthModal?: () => void;
+  resetCallbacks?: (() => void)[];
+}> = ({ onShowAuthModal, resetCallbacks = [] }) => {
+  const { isAuthenticated, user, signOut } = useAuth();
+  const { toggleDarkMode, darkMode } = useUI();
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Generate user initials from name
+  const getUserInitials = (name: string): string => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
+  };
+
+  const handleLogout = () => {
+    // Call signOut with all reset functions to clear app state
+    signOut(resetCallbacks);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center gap-3 px-3 md:px-4 py-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+      >
+        <div className="w-10 h-10 rounded-full bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-800 flex items-center justify-center font-semibold text-sm">
+          {isAuthenticated ? (
+            getUserInitials(user?.name || 'U')
+          ) : (
+            <User size={18} />
+          )}
+        </div>
+        <div className="flex-1 text-left">
+          {isAuthenticated ? (
+            <>
+              <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                {user?.name}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Pro plan</div>
+            </>
+          ) : (
+            <>
+              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">Anonymous</div>
+              <div className="text-xs text-scholar-600 dark:text-scholar-400">Tap to sign in</div>
+            </>
+          )}
+        </div>
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div className="absolute left-2 md:left-4 bottom-full mb-2 w-[calc(100vw-1rem)] md:w-64 max-w-[280px] bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 z-50">
+            {/* User info section */}
+            {isAuthenticated ? (
+              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user?.name}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email}</p>
+              </div>
+            ) : (
+              <button 
+                onClick={() => {
+                  if (onShowAuthModal) onShowAuthModal();
+                  setIsOpen(false);
+                }} 
+                className="w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                <p className="text-sm font-medium text-scholar-600 hover:text-scholar-700 dark:text-scholar-400">Sign In</p>
+                {dataMigrationService.hasLocalDataToMigrate() && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Save your research data</p>
+                )}
+              </button>
+            )}
+            
+            {/* Settings */}
+            <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              <Settings size={16} className="text-gray-500" />
+              <span className="text-sm text-gray-600 dark:text-gray-300">Settings</span>
+              <span className="text-xs text-gray-400 ml-auto">Ctrl+,</span>
+            </button>
+
+            {/* Language */}
+            <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="m8 12 8-8-8 8 8 8"/>
+              </svg>
+              <span className="text-sm text-gray-600 dark:text-gray-300">Language</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 ml-auto">
+                <polyline points="9,18 15,12 9,6"/>
+              </svg>
+            </button>
+
+            {/* Get help */}
+            <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <span className="text-sm text-gray-600 dark:text-gray-300">Get help</span>
+            </button>
+
+            <div className="h-px bg-gray-100 dark:bg-gray-700 my-2"></div>
+
+            {/* Upgrade plan */}
+            <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <span className="text-sm text-gray-600 dark:text-gray-300">Upgrade plan</span>
+            </button>
+
+            {/* Gift Claude */}
+            <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+                <polyline points="20,6 9,17 4,12"/>
+              </svg>
+              <span className="text-sm text-gray-600 dark:text-gray-300">Gift Claude</span>
+            </button>
+
+            {/* Learn more */}
+            <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <span className="text-sm text-gray-600 dark:text-gray-300">Learn more</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 ml-auto">
+                <polyline points="9,18 15,12 9,6"/>
+              </svg>
+            </button>
+
+            <div className="h-px bg-gray-100 dark:bg-gray-700 my-2"></div>
+
+            {/* Sign out for authenticated users */}
+            {isAuthenticated && (
+              <button 
+                onClick={handleLogout} 
+                className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-red-600"
+              >
+                <LogOut size={16} />
+                <span className="text-sm">Log out</span>
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 // --- REUSABLE SIDEBAR NAV COMPONENT ---
 
 export const SidebarNav: React.FC<{
   onClose?: () => void;
-}> = ({ onClose }) => {
+  onShowAuthModal?: () => void;
+  resetCallbacks?: (() => void)[];
+}> = ({ onClose, onShowAuthModal, resetCallbacks }) => {
   const { savedNotes, savedPapers } = useDatabase();
   const { libraryActiveView, setLibraryActiveView, openColumn } = useUI();
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,7 +238,7 @@ export const SidebarNav: React.FC<{
 
   return (
     <div className="w-full flex flex-col bg-white dark:bg-dark-card h-full">
-      <div className="px-4 pt-6">
+      <div className="px-3 md:px-4 pt-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl px-4 py-2.5 shadow-sm">
             <Search size={18} className="text-gray-400 mr-2" />
@@ -86,7 +258,7 @@ export const SidebarNav: React.FC<{
         
       </div>
       
-      <div className="flex-1 overflow-y-auto custom-scrollbar px-1">
+      <div className="flex-1 overflow-y-auto custom-scrollbar px-0.5 md:px-1">
         <div className="mb-1">
           <NavItem icon={LayoutList} label="All Notes" count={savedNotes.length} isActive={libraryActiveView === 'all'} onClick={() => handleSelect('all')} iconColor="text-gray-700" />
           <NavItem icon={FileText} label="Papers" count={savedPapers.length} isActive={libraryActiveView === 'papers'} onClick={() => handleSelect('papers')} iconColor="text-scholar-500" />
@@ -98,7 +270,7 @@ export const SidebarNav: React.FC<{
           <NavItem icon={Star} label="Favorites" count={savedNotes.filter(n => n.is_starred).length} isActive={libraryActiveView === 'starred'} onClick={() => handleSelect('starred')} iconColor="text-orange-500" />
         </div>
 
-        <div className="mt-4 px-4">
+        <div className="mt-4 px-3 md:px-4">
            <button 
              onClick={() => { openColumn('library'); if (onClose) onClose(); }}
              className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shadow-sm"
@@ -116,6 +288,11 @@ export const SidebarNav: React.FC<{
            </button>
         </div>
       </div>
+      
+      {/* Profile section at bottom - outside scrollable area */}
+      <div className="border-t border-gray-100 dark:border-gray-800">
+        <SidebarUserProfile onShowAuthModal={onShowAuthModal} resetCallbacks={resetCallbacks} />
+      </div>
     </div>
   );
 };
@@ -124,7 +301,10 @@ export const SidebarNav: React.FC<{
 
 // --- NOTES MANAGER SIDEBAR (STANDALONE DRAWER) ---
 
-export const NotesManagerSidebar: React.FC = () => {
+export const NotesManagerSidebar: React.FC<{
+  onShowAuthModal?: () => void;
+  resetCallbacks?: (() => void)[];
+}> = ({ onShowAuthModal, resetCallbacks }) => {
   const { isLibraryOpen, setLibraryOpen } = useUI();
   const sidebarRef = useRef<HTMLDivElement>(null);
   const hoverTimer = useRef<number | null>(null);
@@ -199,11 +379,11 @@ export const NotesManagerSidebar: React.FC = () => {
       {/* 3. Sidebar Drawer - gliding animation */}
       <div 
         ref={sidebarRef}
-        className={`fixed left-0 top-0 bottom-0 w-85 z-[70] bg-white dark:bg-dark-card border-r-2 border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl transition-transform ${TRANSITION_DURATION} ${TRANSITION_EASING} font-sans overflow-hidden transform ${
+        className={`fixed left-0 top-0 bottom-0 w-85 sm:w-85 z-[70] bg-white dark:bg-dark-card border-r-2 border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl transition-transform ${TRANSITION_DURATION} ${TRANSITION_EASING} font-sans overflow-hidden transform ${
           isLibraryOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <SidebarNav onClose={() => setLibraryOpen(false)} />
+        <SidebarNav onClose={() => setLibraryOpen(false)} onShowAuthModal={onShowAuthModal} resetCallbacks={resetCallbacks} />
       </div>
     </>
   );

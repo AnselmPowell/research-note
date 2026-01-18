@@ -79,9 +79,9 @@ export const LayoutControls: React.FC = () => {
     <div className="relative z-50" ref={menuRef}>
         {/* Desktop View: Row of buttons */}
         <div className="hidden md:flex items-center gap-1 bg-white/60 dark:bg-dark-card/60 backdrop-blur-md rounded-xl p-1 shadow-sm border border-gray-200/50 dark:border-gray-700/50">
-            <DesktopButton col="left" icon={PanelLeft} label="Web Search" tooltipIcon={Globe} isActive={columnVisibility.left} onToggle={handleToggle} />
-            <DesktopButton col="middle" icon={Columns} label="Deep Research" tooltipIcon={BookOpenText} isActive={columnVisibility.middle} onToggle={handleToggle} />
-            <DesktopButton col="right" icon={PanelRight} label="Paper View" tooltipIcon={FileText} isActive={columnVisibility.right} onToggle={handleToggle} />
+            <DesktopButton col="left" icon={Globe} label="Web Search" tooltipIcon={Globe} isActive={columnVisibility.left} onToggle={handleToggle} />
+            <DesktopButton col="middle" icon={BookOpenText} label="Deep Research" tooltipIcon={BookOpenText} isActive={columnVisibility.middle} onToggle={handleToggle} />
+            <DesktopButton col="right" icon={FileText} label="Paper View" tooltipIcon={FileText} isActive={columnVisibility.right} onToggle={handleToggle} />
         </div>
 
         {/* Mobile View: Burger Menu */}

@@ -12,15 +12,23 @@ export const localStorageService = {
   savePaper: (paper: any): void => {
     try {
       const papers = localStorageService.getLocalPapers();
-      const existingIndex = papers.findIndex(p => p.uri === paper.uri);
+      const uri = paper.uri || paper.pdfUri; // Handle both uri and pdfUri
+      const existingIndex = papers.findIndex(p => p.uri === uri);
+      
+      const paperData = {
+        ...paper,
+        uri: uri, // Ensure consistent URI field
+        is_explicitly_saved: true
+      };
       
       if (existingIndex >= 0) {
-        papers[existingIndex] = { ...papers[existingIndex], ...paper, is_explicitly_saved: true };
+        papers[existingIndex] = { ...papers[existingIndex], ...paperData };
       } else {
-        papers.unshift({ ...paper, is_explicitly_saved: true });
+        papers.unshift(paperData);
       }
       
       localStorage.setItem('anonymous_papers', JSON.stringify(papers));
+      console.log('[LocalStorage] Paper saved:', uri);
     } catch (error) {
       console.error('[LocalStorage] Failed to save paper:', error);
     }
@@ -39,8 +47,14 @@ export const localStorageService = {
   deletePaper: (uri: string): void => {
     try {
       const papers = localStorageService.getLocalPapers();
-      const filtered = papers.filter(p => p.uri !== uri);
-      localStorage.setItem('anonymous_papers', JSON.stringify(filtered));
+      const paperIndex = papers.findIndex(p => p.uri === uri);
+      
+      if (paperIndex >= 0) {
+        // Set is_explicitly_saved to false instead of removing the paper
+        // This preserves the paper record for any notes that reference it
+        papers[paperIndex].is_explicitly_saved = false;
+        localStorage.setItem('anonymous_papers', JSON.stringify(papers));
+      }
     } catch (error) {
       console.error('[LocalStorage] Failed to delete paper:', error);
     }
@@ -91,15 +105,25 @@ export const localStorageService = {
   savePaperMetadata: (paper: any): void => {
     try {
       const papers = localStorageService.getLocalPapers();
-      const existingIndex = papers.findIndex(p => p.uri === paper.uri || p.uri === paper.pdfUri);
+      const uri = paper.uri || paper.pdfUri; // Handle both uri and pdfUri
+      const existingIndex = papers.findIndex(p => p.uri === uri);
+      
+      const paperData = {
+        ...paper,
+        uri: uri, // Ensure consistent URI field
+        is_explicitly_saved: true
+      };
       
       if (existingIndex >= 0) {
-        papers[existingIndex] = { ...papers[existingIndex], ...paper };
+        // Update existing paper and mark as explicitly saved
+        papers[existingIndex] = { ...papers[existingIndex], ...paperData };
       } else {
-        papers.push({ ...paper, is_explicitly_saved: false });
+        // Add new paper and mark as explicitly saved
+        papers.push(paperData);
       }
       
       localStorage.setItem('anonymous_papers', JSON.stringify(papers));
+      console.log('[LocalStorage] Paper metadata saved:', uri);
     } catch (error) {
       console.error('[LocalStorage] Failed to save paper metadata:', error);
     }

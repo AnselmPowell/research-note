@@ -24,6 +24,7 @@ interface DatabaseContextType {
   
   isPaperSaved: (uri: string) => boolean;
   isNoteSaved: (paperUri: string, content: string) => boolean;
+  canDeletePaper: (uri: string) => boolean;
 }
 
 const DatabaseContext = createContext<DatabaseContextType | undefined>(undefined);
@@ -90,6 +91,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [user, isAuthenticated]); // Re-run when auth state changes
 
   const savePaper = async (paper: any) => {
+    console.log('[DB Context] Saving paper:', paper.pdfUri || paper.uri);
     if (user && isAuthenticated) {
       // Save to database for authenticated users
       await dbService.savePaper(paper, true, user.id);
@@ -98,30 +100,51 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       localStorageService.savePaper(paper);
     }
     await refreshData();
+    console.log('[DB Context] Paper saved successfully');
   };
 
   const deletePaper = async (uri: string) => {
+    // Check if there are any saved notes for this paper
+    const hasNotesForPaper = savedNotes.some(n => n.paper_uri === uri);
+    
+    if (hasNotesForPaper) {
+      console.warn('[DB Context] Cannot delete paper - it has saved notes. Delete all notes first.');
+      return; // Don't delete if notes exist
+    }
+
+    console.log('[DB Context] Deleting paper:', uri);
     if (user && isAuthenticated) {
       await dbService.deletePaper(uri);
     } else {
       localStorageService.deletePaper(uri);
     }
     await refreshData();
+    console.log('[DB Context] Paper deleted successfully');
   };
 
   const saveNote = async (note: DeepResearchNote, paperMetadata?: any) => {
+    console.log('[DB Context] Saving note for paper:', note.pdfUri);
     let result;
     
     if (user && isAuthenticated) {
-      // Save to database for authenticated users
-      if (paperMetadata) await dbService.savePaper(paperMetadata, false, user.id);
+      // Auto-save paper when saving note (ensure paper exists and is marked as explicitly saved)
+      if (paperMetadata) {
+        console.log('[DB Context] Auto-saving paper metadata:', paperMetadata);
+        await dbService.savePaper(paperMetadata, true, user.id); // Set explicitly saved to true
+      }
       result = await dbService.saveNote(note, user.id);
     } else {
       // Save to localStorage for anonymous users
       result = localStorageService.saveNote(note, paperMetadata);
+      // For localStorage, also auto-save the paper
+      if (paperMetadata) {
+        console.log('[DB Context] Auto-saving paper metadata to localStorage:', paperMetadata);
+        localStorageService.savePaper(paperMetadata);
+      }
     }
     
     await refreshData();
+    console.log('[DB Context] Note saved successfully');
     return result;
   };
 
@@ -153,12 +176,37 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const deleteNote = async (noteId: number) => {
+    // Get the note before deleting to check paper dependencies
+    const noteToDelete = savedNotes.find(n => n.id === noteId);
+    
     if (user && isAuthenticated) {
       await dbService.deleteNotePermanently(noteId);
     } else {
       localStorageService.deleteNote(noteId);
     }
+    
     await refreshData();
+    
+    // Check if paper should be auto-unsaved after note deletion
+    if (noteToDelete) {
+      const remainingNotesForPaper = savedNotes.filter(n => 
+        n.paper_uri === noteToDelete.paper_uri && n.id !== noteId
+      );
+      
+      // If no more notes exist for this paper, auto-unsave the paper
+      if (remainingNotesForPaper.length === 0) {
+        const paper = savedPapers.find(p => p.uri === noteToDelete.paper_uri);
+        if (paper && paper.is_explicitly_saved) {
+          // Auto-unsave the paper (set is_explicitly_saved = false)
+          if (user && isAuthenticated) {
+            await dbService.deletePaper(noteToDelete.paper_uri);
+          } else {
+            localStorageService.deletePaper(noteToDelete.paper_uri);
+          }
+          await refreshData();
+        }
+      }
+    }
   };
 
   const createFolder = async (name: string, type: FolderType, parentId?: number | null, description?: string) => {
@@ -185,12 +233,15 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const isNoteSaved = useCallback((paperUri: string, content: string) => 
     savedNotes.some(n => n.paper_uri === paperUri && n.content === content), [savedNotes]);
 
+  const canDeletePaper = useCallback((uri: string) => 
+    !savedNotes.some(n => n.paper_uri === uri), [savedNotes]);
+
   return (
     <DatabaseContext.Provider value={{
       savedPapers, savedNotes, isDbLoading, projectStructure,
       savePaper, deletePaper, saveNote, updateNote, deleteNote, toggleStar, toggleFlag,
       createFolder, assignNote,
-      isPaperSaved, isNoteSaved
+      isPaperSaved, isNoteSaved, canDeletePaper
     }}>
       {children}
     </DatabaseContext.Provider>
