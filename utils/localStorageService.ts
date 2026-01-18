@@ -270,6 +270,79 @@ export const localStorageService = {
     }
   },
 
+  // Web Search Results Persistence
+  saveWebSearchResults: (query: string, results: any): void => {
+    try {
+      const data = {
+        query,
+        results,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('web_search_results', JSON.stringify(data));
+      console.log('[LocalStorage] Web search results saved');
+    } catch (error) {
+      console.error('[LocalStorage] Failed to save web search results:', error);
+    }
+  },
+
+  getWebSearchResults: (): { query: string; results: any; timestamp: string } | null => {
+    try {
+      const data = localStorage.getItem('web_search_results');
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('[LocalStorage] Failed to load web search results:', error);
+      return null;
+    }
+  },
+
+  clearWebSearchResults: (): void => {
+    try {
+      localStorage.removeItem('web_search_results');
+      console.log('[LocalStorage] Web search results cleared');
+    } catch (error) {
+      console.error('[LocalStorage] Failed to clear web search results:', error);
+    }
+  },
+
+  // Deep Research Results Persistence
+  saveDeepResearchResults: (data: {
+    arxivKeywords: string[];
+    arxivCandidates: any[];
+    filteredCandidates: any[];
+    deepResearchResults: any[];
+    searchBarState: any;
+  }): void => {
+    try {
+      const saveData = {
+        ...data,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('deep_research_results', JSON.stringify(saveData));
+      console.log('[LocalStorage] Deep research results saved');
+    } catch (error) {
+      console.error('[LocalStorage] Failed to save deep research results:', error);
+    }
+  },
+
+  getDeepResearchResults: (): any | null => {
+    try {
+      const data = localStorage.getItem('deep_research_results');
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('[LocalStorage] Failed to load deep research results:', error);
+      return null;
+    }
+  },
+
+  clearDeepResearchResults: (): void => {
+    try {
+      localStorage.removeItem('deep_research_results');
+      console.log('[LocalStorage] Deep research results cleared');
+    } catch (error) {
+      console.error('[LocalStorage] Failed to clear deep research results:', error);
+    }
+  },
+
   // Migration helper for when user signs up
   exportDataForMigration: (): LocalStorageData => {
     return localStorageService.getAllLibraryData();

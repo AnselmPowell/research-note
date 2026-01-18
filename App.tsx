@@ -14,7 +14,7 @@ import { useResearch } from './contexts/ResearchContext';
 import { useLibrary } from './contexts/LibraryContext';
 import { useAuth } from './contexts/AuthContext';
 import { AuthModal } from './components/auth/AuthModal';
-import { Globe, Check, Library, ChevronsDown, ChevronsUp, AlertTriangle, User, LogOut, Settings, Sun, Moon } from 'lucide-react';
+import { Globe, Check, Library, ChevronsDown, ChevronsUp, AlertTriangle, User, LogOut, Settings, Sun, Moon, X } from 'lucide-react';
 
 // Import configuration to validate on app start
 import { getConfig } from './config/env';
@@ -48,11 +48,11 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const { 
-    columnVisibility, 
-    openColumn, 
-    isHomeExiting, 
-    setIsHomeExiting, 
+  const {
+    columnVisibility,
+    openColumn,
+    isHomeExiting,
+    setIsHomeExiting,
     setColumnVisibility,
     isLibraryOpen,
     isLibraryExpanded,
@@ -61,22 +61,24 @@ const App: React.FC = () => {
     libraryActiveView,
     resetUI
   } = useUI();
-  
-  const { 
-    searchState, 
-    performWebSearch, 
+
+  const {
+    searchState,
+    performWebSearch,
     performDeepResearch,
-    researchPhase, 
-    gatheringStatus, 
-    arxivKeywords, 
-    arxivCandidates, 
-    filteredCandidates, 
+    researchPhase,
+    gatheringStatus,
+    arxivKeywords,
+    arxivCandidates,
+    filteredCandidates,
     isDeepResearching,
     deepResearchResults,
     updateSearchBar,
-    resetAllResearchData
+    resetAllResearchData,
+    clearWebSearchResults,
+    setPendingDeepResearchQuery
   } = useResearch();
-  
+
   const { loadedPdfs, downloadingUris, loadPdfFromUrl, setActivePdf, isPdfInContext, togglePdfContext, failedUris, resetLibrary } = useLibrary();
 
   const [allWebNotesExpanded, setAllWebNotesExpanded] = useState(false);
@@ -120,27 +122,31 @@ const App: React.FC = () => {
   // Remove the unauthenticated landing page barrier - let everyone use the app
 
   const handleSearchTrigger = (query: any, mode: 'web' | 'deep') => {
-      if (isLibraryOpen) {
-          setLibraryOpen(false);
-      }
+    if (isLibraryOpen) {
+      setLibraryOpen(false);
+    }
 
-      if (!searchState.hasSearched && researchPhase === 'idle' && arxivCandidates.length === 0) {
-          setIsHomeExiting(true);
+    if (!searchState.hasSearched && researchPhase === 'idle' && arxivCandidates.length === 0) {
+      setIsHomeExiting(true);
+    }
+
+    setTimeout(() => {
+      if (mode === 'web' && typeof query === 'string') {
+        performWebSearch(query);
+        openColumn('left');
+      } else if (mode === 'deep') {
+        if (deepResearchResults.length > 0 || arxivCandidates.length > 0) {
+          setPendingDeepResearchQuery(query);
+        } else {
+          performDeepResearch(query);
+        }
+        openColumn('middle');
       }
 
       setTimeout(() => {
-        if (mode === 'web' && typeof query === 'string') {
-            performWebSearch(query);
-            openColumn('left');
-        } else if (mode === 'deep') {
-            performDeepResearch(query);
-            openColumn('middle');
-        }
-        
-        setTimeout(() => {
-            setIsHomeExiting(false);
-        }, 500);
-      }, 50);
+        setIsHomeExiting(false);
+      }, 500);
+    }, 50);
   };
 
   const renderLeftColumn = () => {
@@ -149,13 +155,13 @@ const App: React.FC = () => {
     const isAllSelected = sources.length > 0 && selectedCount === sources.length;
 
     const sortedSources = [...sources].sort((a, b) => {
-        const isProcessing = isDeepResearching;
-        const aHasNotes = deepResearchResults.some(n => n.pdfUri === a.uri);
-        const bHasNotes = deepResearchResults.some(n => n.pdfUri === b.uri);
-        const aActive = (isProcessing && isPdfInContext(a.uri)) || aHasNotes;
-        const bActive = (isProcessing && isPdfInContext(b.uri)) || bHasNotes;
-        if (aActive !== bActive) return bActive ? 1 : -1;
-        return 0;
+      const isProcessing = isDeepResearching;
+      const aHasNotes = deepResearchResults.some(n => n.pdfUri === a.uri);
+      const bHasNotes = deepResearchResults.some(n => n.pdfUri === b.uri);
+      const aActive = (isProcessing && isPdfInContext(a.uri)) || aHasNotes;
+      const bActive = (isProcessing && isPdfInContext(b.uri)) || bHasNotes;
+      if (aActive !== bActive) return bActive ? 1 : -1;
+      return 0;
     });
 
     const handleToggleAll = () => {
@@ -166,8 +172,8 @@ const App: React.FC = () => {
       } else {
         sources.forEach(s => {
           if (!isPdfInContext(s.uri)) {
-              togglePdfContext(s.uri, s.title);
-              loadPdfFromUrl(s.uri, s.title);
+            togglePdfContext(s.uri, s.title);
+            loadPdfFromUrl(s.uri, s.title);
           }
         });
       }
@@ -186,65 +192,77 @@ const App: React.FC = () => {
           <>
             <div className="sticky top-0 z-20 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-3 mb-2 -mx-3 px-4 shadow-sm">
               <div className="flex items-center justify-between">
-                 <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                   {sources.length} Results
-                 </div>
-                 <div className="flex items-center gap-2">
-                    <button 
-                      onClick={() => setAllWebNotesExpanded(!allWebNotesExpanded)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md text-[10px] font-bold uppercase text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
-                      title={allWebNotesExpanded ? "Collapse all notes" : "Expand all notes"}
-                    >
-                       {allWebNotesExpanded ? <ChevronsUp size={14} /> : <ChevronsDown size={14} />}
-                       {allWebNotesExpanded ? 'Collapse' : 'Expand'}
-                    </button>
-                    <button 
-                      onClick={handleToggleAll}
-                      className="flex items-center gap-2 px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm group"
-                    >
-                       <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${isAllSelected ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500 group-hover:border-scholar-500'}`}>
-                          {isAllSelected && <Check size={10} className="text-white" />}
-                       </div>
-                       {isAllSelected ? 'Deselect All' : 'Select all documents'}
-                    </button>
-                 </div>
+                <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                  {sources.length} Results
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setAllWebNotesExpanded(!allWebNotesExpanded)}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md text-[10px] font-bold uppercase text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
+                    title={allWebNotesExpanded ? "Collapse all notes" : "Expand all notes"}
+                  >
+                    {allWebNotesExpanded ? <ChevronsUp size={14} /> : <ChevronsDown size={14} />}
+                    {allWebNotesExpanded ? 'Collapse' : 'Expand'}
+                  </button>
+                  <button
+                    onClick={handleToggleAll}
+                    className="flex items-center gap-2 px-2.5 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm group"
+                  >
+                    <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${isAllSelected ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500 group-hover:border-scholar-500'}`}>
+                      {isAllSelected && <Check size={10} className="text-white" />}
+                    </div>
+                    {isAllSelected ? 'Deselect All' : 'Select all documents'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm('Clear all web search results?')) {
+                        clearWebSearchResults();
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                    title="Clear all web search results"
+                  >
+                    <X size={14} />
+                    Clear All
+                  </button>
+                </div>
               </div>
             </div>
             <div className="space-y-6">
-                {sortedSources.map((source, idx) => (
-                  <WebSearchView 
-                    key={`${source.uri}-${idx}`} 
-                    source={source} 
-                    isSelected={isPdfInContext(source.uri)} 
-                    isDownloading={downloadingUris.has(source.uri)}
-                    isFailed={failedUris.has(source.uri)}
-                    isResearching={isPdfInContext(source.uri) && isDeepResearching} 
-                    researchNotes={deepResearchResults.filter(n => n.pdfUri === source.uri)}
-                    forceExpanded={allWebNotesExpanded}
-                    onToggle={async () => {
-                        const wasSelected = isPdfInContext(source.uri);
-                        togglePdfContext(source.uri, source.title);
-                        if (!wasSelected) {
-                            const success = await loadPdfFromUrl(source.uri, source.title); 
-                            if (success) {
-                                setActivePdf(source.uri); 
-                                openColumn('right');
-                            }
-                        }
-                    }}
-                    onView={async () => { 
-                        const success = await loadPdfFromUrl(source.uri, source.title); 
-                        if (success) {
-                            setActivePdf(source.uri); 
-                            openColumn('right');
-                        }
-                    }} 
-                  />
-                ))}
+              {sortedSources.map((source, idx) => (
+                <WebSearchView
+                  key={`${source.uri}-${idx}`}
+                  source={source}
+                  isSelected={isPdfInContext(source.uri)}
+                  isDownloading={downloadingUris.has(source.uri)}
+                  isFailed={failedUris.has(source.uri)}
+                  isResearching={isPdfInContext(source.uri) && isDeepResearching}
+                  researchNotes={deepResearchResults.filter(n => n.pdfUri === source.uri)}
+                  forceExpanded={allWebNotesExpanded}
+                  onToggle={async () => {
+                    const wasSelected = isPdfInContext(source.uri);
+                    togglePdfContext(source.uri, source.title);
+                    if (!wasSelected) {
+                      const success = await loadPdfFromUrl(source.uri, source.title);
+                      if (success) {
+                        setActivePdf(source.uri);
+                        openColumn('right');
+                      }
+                    }
+                  }}
+                  onView={async () => {
+                    const success = await loadPdfFromUrl(source.uri, source.title);
+                    if (success) {
+                      setActivePdf(source.uri);
+                      openColumn('right');
+                    }
+                  }}
+                />
+              ))}
             </div>
           </>
         ) : (
-            <div className="my-48 p-12 flex flex-col items-center justify-center text-center opacity-50 h-full"><Globe size={48} className="text-gray-300 dark:text-gray-600 mb-4" /><p className="text-gray-400 dark:text-gray-500">No results</p></div>
+          <div className="my-48 p-12 flex flex-col items-center justify-center text-center opacity-50 h-full"><Globe size={48} className="text-gray-300 dark:text-gray-600 mb-4" /><p className="text-gray-400 dark:text-gray-500">No results</p></div>
         )}
       </div>
     );
@@ -269,22 +287,22 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen flex flex-col bg-cream dark:bg-dark-bg font-sans transition-colors duration-300 overflow-hidden">
-      
-      <NotesManagerSidebar 
+
+      <NotesManagerSidebar
         onShowAuthModal={() => setShowAuthModal(true)}
         resetCallbacks={[resetUI, resetAllResearchData, resetLibrary]}
       />
       <AgentResearcher />
-      
+
       <div className="flex-none pt-4 pb-2 px-6 flex items-start justify-center relative z-40">
-          {showHeaderSearch && (
-            <div className="w-full max-w-3xl relative animate-fade-in">
-              <SearchBar centered={true} onSearch={handleSearchTrigger} />
-            </div>
-          )}
-          <div className="absolute right-2 top-4 flex items-center gap-3 pr-5">
-              <LayoutControls />
+        {showHeaderSearch && (
+          <div className="w-full max-w-3xl relative animate-fade-in">
+            <SearchBar centered={true} onSearch={handleSearchTrigger} />
           </div>
+        )}
+        <div className="absolute right-2 top-4 flex items-center gap-3 pr-5">
+          <LayoutControls />
+        </div>
       </div>
 
       {allColumnsClosed ? (
@@ -301,9 +319,9 @@ const App: React.FC = () => {
           </div>
           <div className="flex flex-wrap justify-center gap-3 relative max-w-4xl px-4 z-1">
             {suggestions.map((tag) => (
-              <button 
-                key={tag} 
-                onClick={() => updateSearchBar({ mainInput: tag })} 
+              <button
+                key={tag}
+                onClick={() => updateSearchBar({ mainInput: tag })}
                 className="px-4 py-2 bg-white/50 dark:bg-gray-800/50 hover:bg-white dark:hover:bg-gray-700 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-full text-sm text-gray-600 dark:text-gray-300 transition-all hover:scale-105 hover:shadow-sm hover:border-scholar-200 dark:hover:border-scholar-800"
               >
                 {tag}
@@ -315,36 +333,36 @@ const App: React.FC = () => {
         <ThreeColumnLayout
           leftContent={renderLeftColumn()}
           middleContent={
-              showDeepResearch ? (
-                  <DeepResearchView 
-                    researchPhase={researchPhase}
-                    status={gatheringStatus} 
-                    candidates={researchPhase === 'extracting' || researchPhase === 'completed' ? filteredCandidates : arxivCandidates} 
-                    generatedKeywords={arxivKeywords}
-                    onViewPdf={async (paper) => { 
-                        const success = await loadPdfFromUrl(paper.pdfUri, paper.title, paper.authors.join(', '));
-                        if (success) {
-                            setActivePdf(paper.pdfUri);
-                            openColumn('right');
-                        }
-                    }}
-                  />
-              ) : (
-                  <div className="p-12 flex flex-col items-center justify-center text-center opacity-50 h-full">
-                    <Library size={48} className="text-gray-300 dark:text-gray-600 mb-4" />
-                    <p className="text-gray-400">Deep Research Inactive</p>
-                  </div>
-              )
+            showDeepResearch ? (
+              <DeepResearchView
+                researchPhase={researchPhase}
+                status={gatheringStatus}
+                candidates={researchPhase === 'extracting' || researchPhase === 'completed' ? filteredCandidates : arxivCandidates}
+                generatedKeywords={arxivKeywords}
+                onViewPdf={async (paper) => {
+                  const success = await loadPdfFromUrl(paper.pdfUri, paper.title, paper.authors.join(', '));
+                  if (success) {
+                    setActivePdf(paper.pdfUri);
+                    openColumn('right');
+                  }
+                }}
+              />
+            ) : (
+              <div className="p-12 flex flex-col items-center justify-center text-center opacity-50 h-full">
+                <Library size={48} className="text-gray-300 dark:text-gray-600 mb-4" />
+                <p className="text-gray-400">Deep Research Inactive</p>
+              </div>
+            )
           }
           libraryContent={<NotesManager activeView={libraryActiveView} />}
           rightContent={<PdfWorkspace />}
         />
       )}
-      
+
       {/* Auth Modal for anonymous users to sign up */}
-      <AuthModal 
-        isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)} 
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
       />
     </div>
   );
