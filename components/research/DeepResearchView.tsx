@@ -259,25 +259,42 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
       {!isBlurred && (
         <div className="sticky top-0 z-30 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-0 mb-3 -pt-3 -mt-3 -mx-3 sm:-mx-6 px-3 sm:px-6 shadow-sm">
-
+         
           {/* SINGLE ROW - TABS LEFT, ACTIONS RIGHT */}
           <div className="flex items-center justify-between py-3 gap-4 deep-header-row">
 
+
             {/* LEFT SIDE - TABS */}
             <div className="flex items-center -mb-px">
+                          {/* Select All Papers - Icon Only */}
+              {sortBy !== 'most-relevant-notes' && currentTabCandidates.length > 0 && (
+                <button
+                  onClick={handleSelectAllPapers}
+                  className="p-2.5 text-gray-500 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  title={`Select all papers (${activeTab === 'results' ? (selectedArxivIds.size > 0 ? `${selectedArxivIds.size}/` : '') + candidates.length : (mappedUploadedPapers.filter(p => isPdfInContext(p.id)).length > 0 ? `${mappedUploadedPapers.filter(p => isPdfInContext(p.id)).length}/` : '') + loadedPdfs.length})`}
+                >
+                  <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${activeTab === 'results'
+                    ? selectedArxivIds.size === candidates.length ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
+                    : mappedUploadedPapers.every(p => isPdfInContext(p.id)) ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
+                    }`}>
+                    {(activeTab === 'results' ? selectedArxivIds.size === candidates.length : mappedUploadedPapers.every(p => isPdfInContext(p.id))) && <Check size={16} className="text-white" />}
+                  </div>
+                </button>
+              )}
+
               <button
                 onClick={() => { setActiveTab('results'); }}
-                className={`deep-tab-button px-4 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'results' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
+                className={`deep-tab-button px-4 py-1  text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'results' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
               >
-                <Search size={16} className="flex-shrink-0" />
+                <Search size={20} className="flex-shrink-0" />
                 <span className="tab-label deep-tab-label">Search Results</span>
               </button>
 
               <button
                 onClick={() => { setActiveTab('uploaded'); }}
-                className={`deep-tab-button px-4 py-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'uploaded' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
+                className={`deep-tab-button px-4 py-1 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'uploaded' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
               >
-                <Upload size={16} className="flex-shrink-0" />
+                <Upload size={20} className="flex-shrink-0" />
                 <span className="tab-label deep-tab-label">
                   My Uploads{loadedPdfs.length > 0 && ` (${loadedPdfs.length})`}
                 </span>
@@ -286,47 +303,21 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
             {/* RIGHT SIDE - ACTIONS */}
             <div className="flex items-center gap-2 deep-actions-right">
-              {/* Select All Papers - Icon Only */}
-              {sortBy !== 'most-relevant-notes' && currentTabCandidates.length > 0 && (
-                <button
-                  onClick={handleSelectAllPapers}
-                  className="p-2.5 text-gray-500 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
-                  title={`Select all papers (${activeTab === 'results' ? (selectedArxivIds.size > 0 ? `${selectedArxivIds.size}/` : '') + candidates.length : (mappedUploadedPapers.filter(p => isPdfInContext(p.id)).length > 0 ? `${mappedUploadedPapers.filter(p => isPdfInContext(p.id)).length}/` : '') + loadedPdfs.length})`}
-                >
-                  <div className={`w-4 h-4 rounded border-2 transition-colors flex items-center justify-center ${activeTab === 'results'
-                    ? selectedArxivIds.size === candidates.length ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
-                    : mappedUploadedPapers.every(p => isPdfInContext(p.id)) ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
-                    }`}>
-                    {(activeTab === 'results' ? selectedArxivIds.size === candidates.length : mappedUploadedPapers.every(p => isPdfInContext(p.id))) && <Check size={12} className="text-white" />}
-                  </div>
-                </button>
-              )}
-
-              {/* Collapse/Expand All Notes - Icon Only */}
-              {sortBy !== 'most-relevant-notes' && currentTabCandidates.some(p => p.notes && p.notes.length > 0) && (
-                <button
-                  onClick={() => setAllNotesExpanded(!allNotesExpanded)}
-                  className="p-2.5 text-gray-500 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
-                  title={allNotesExpanded ? 'Collapse all notes' : 'Expand all notes'}
-                >
-                  {allNotesExpanded ? <ChevronsUp size={18} /> : <ChevronsDown size={18} />}
-                </button>
-              )}
-
+          
               {/* Sort Dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setIsSortOpen(!isSortOpen)}
-                  className="flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  className="flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
                   title="Sort options"
                 >
-                  <ArrowUpDown size={16} className="text-gray-400" />
+                  <ArrowUpDown size={20} className="text-gray-400" />
                   <span className="deep-sort-text truncate">
                     {sortBy === 'most-relevant-notes' && 'Most Relevant Notes'}
                     {sortBy === 'relevant-papers' && 'Most Relevant Papers'}
                     {sortBy === 'newest-papers' && 'Newest Papers'}
                   </span>
-                  <ChevronDown size={14} className={`text-gray-400 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown size={20} className={`text-gray-400 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {isSortOpen && (
@@ -362,10 +353,24 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                   className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                   title="Clear all results"
                 >
-                  <X size={14} />
-                  <span className="hidden sm:inline">Clear All</span>
+                  <X size={20} />
+                  <span className="hidden sm:inline">Clear All Results</span>
                 </button>
               )}
+
+              {/* Collapse/Expand All Notes - Icon Only */}
+              {sortBy !== 'most-relevant-notes' && currentTabCandidates.some(p => p.notes && p.notes.length > 0) && (
+                <button
+                  onClick={() => setAllNotesExpanded(!allNotesExpanded)}
+                  className="p-2.5 -pl-3 text-gray-500 font-bold hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  title={allNotesExpanded ? 'Collapse all notes' : 'Expand all notes'}
+                >
+                  {allNotesExpanded ? <ChevronsUp size={24} /> : <ChevronsDown size={24} />}
+                </button>
+              )}
+
+
+
             </div>
           </div>
         </div>
