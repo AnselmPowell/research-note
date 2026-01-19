@@ -39,23 +39,23 @@ export const validatePdfUrl = async (uri: string): Promise<boolean> => {
 
     // Get buffer to test PDF validity
     const arrayBuffer = await response.arrayBuffer();
-    
+
     // Use PDF.js to validate - same as existing extractPdfData pattern
-    const loadingTask = pdfjsLib.getDocument({ 
+    const loadingTask = pdfjsLib.getDocument({
       data: arrayBuffer.slice(0),
       verbosity: 0 // Suppress PDF.js console logs
     });
-    
+
     // Quick validation - just try to load, don't process
     const doc = await Promise.race([
       loadingTask.promise,
       new Promise((_, reject) => setTimeout(() => reject(new Error('PDF validation timeout')), 3000))
     ]);
-    
+
     // Clean up
     doc.destroy();
     return true;
-    
+
   } catch (error: any) {
     console.log(`[PDF Validation] URL ${uri} is not a valid PDF:`, error.message);
     return false;
@@ -64,26 +64,32 @@ export const validatePdfUrl = async (uri: string): Promise<boolean> => {
 
 export const fetchPdfBuffer = async (uri: string): Promise<ArrayBuffer> => {
   try {
-      // 1. Try Direct Fetch
-      const response = await fetch(uri);
-      if (response.ok) {
-        return await response.blob().then(b => b.arrayBuffer());
-      }
-      throw new Error('Direct fetch failed');
+    // 1. Try Direct Fetch
+    const response = await fetch(uri);
+    if (response.ok) {
+      return await response.blob().then(b => b.arrayBuffer());
+    }
+    throw new Error('Direct fetch failed');
   } catch (directError) {
-      // 2. Fallback to Proxy
-      console.log(`[PDF Service] Direct fetch failed for ${uri}, trying proxy...`);
-      try {
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(uri)}`;
-        const response = await fetch(proxyUrl);
-        if (!response.ok) {
-           throw new Error(`Failed to fetch PDF via proxy: ${response.statusText}`);
-        }
-        return await response.blob().then(b => b.arrayBuffer());
-      } catch (proxyError) {
-        console.error(`[PDF Service] All fetch attempts failed for ${uri}`);
+    // 2. Fallback to Proxy
+    console.log(`[PDF Service] Direct fetch failed for ${uri}, trying proxy...`);
+    try {
+      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(uri)}`;
+      const response = await fetch(proxyUrl);
+      if (!response.ok) {
+        // Throw specific error for proxy failures (likely protected site)
+        throw new Error(`ProxyError:Status=${response.status}`);
+      }
+      return await response.blob().then(b => b.arrayBuffer());
+    } catch (proxyError: any) {
+      console.error(`[PDF Service] All fetch attempts failed for ${uri}`);
+
+      // Preserve "ProxyError" if it was thrown above, otherwise generic
+      if (proxyError.message && proxyError.message.includes('ProxyError')) {
         throw proxyError;
       }
+      throw new Error('NetworkOrCORSError');
+    }
   }
 };
 
@@ -151,7 +157,7 @@ function generateMarkdownFromItems(items: any[]) {
     const h = Math.round(item.height);
     heightMap[h] = (heightMap[h] || 0) + 1;
   });
-  
+
   const sortedHeights = Object.keys(heightMap).sort((a, b) => heightMap[Number(b)] - heightMap[Number(a)]);
   const bodyHeight = Number(sortedHeights[0]) || 12;
 
@@ -176,7 +182,7 @@ function generateMarkdownFromItems(items: any[]) {
 
     // Vertical Gap (Positive means we moved DOWN the page)
     const verticalGap = lastY - currentY;
-    
+
     // Horizontal Gap
     const horizontalGap = currentX - lastXEnd;
 
@@ -188,13 +194,13 @@ function generateMarkdownFromItems(items: any[]) {
       markdown += '\n\n';
       // Is the new line a Header?
       if (item.height > bodyHeight * 1.2) markdown += '## ';
-    } 
+    }
     // Case 2: New Line (Small Vertical Gap)
     else if (verticalGap > lineHeight * 0.5) {
       markdown += '\n';
     }
     // Case 3: Same Line, Space between words
-    else if (horizontalGap > 2) { 
+    else if (horizontalGap > 2) {
       markdown += ' ';
     }
     // Case 4: No gap (e.g., partial word rendering), just append
@@ -213,75 +219,75 @@ function generateMarkdownFromItems(items: any[]) {
  * Starts from the end and looks backwards for the reference list header.
  */
 function extractReferences(pages: string[]): string[] {
-    const REF_HEADER_PATTERN = /(?:^|\n)(?:##\s*)?(?:References|Bibliography|Works Cited|Reference List|Endnotes)(?:\n|$)/i;
-    
-    // 1. Find the start page and index
-    let startIndex = -1;
-    let startPageIdx = -1;
+  const REF_HEADER_PATTERN = /(?:^|\n)(?:##\s*)?(?:References|Bibliography|Works Cited|Reference List|Endnotes)(?:\n|$)/i;
 
-    for (let i = pages.length - 1; i >= 0; i--) {
-        const text = pages[i];
-        const match = text.match(REF_HEADER_PATTERN);
-        
-        if (match && match.index !== undefined) {
-            // We found the header
-            startIndex = match.index + match[0].length;
-            startPageIdx = i;
-            break;
-        }
+  // 1. Find the start page and index
+  let startIndex = -1;
+  let startPageIdx = -1;
+
+  for (let i = pages.length - 1; i >= 0; i--) {
+    const text = pages[i];
+    const match = text.match(REF_HEADER_PATTERN);
+
+    if (match && match.index !== undefined) {
+      // We found the header
+      startIndex = match.index + match[0].length;
+      startPageIdx = i;
+      break;
     }
+  }
 
-    if (startPageIdx === -1) return [];
+  if (startPageIdx === -1) return [];
 
-    // 2. Aggregate text from the header to the end of document
-    let rawRefText = pages[startPageIdx].substring(startIndex);
-    for (let i = startPageIdx + 1; i < pages.length; i++) {
-        rawRefText += "\n" + pages[i];
-    }
+  // 2. Aggregate text from the header to the end of document
+  let rawRefText = pages[startPageIdx].substring(startIndex);
+  for (let i = startPageIdx + 1; i < pages.length; i++) {
+    rawRefText += "\n" + pages[i];
+  }
 
-    // 3. Split and Clean citations
-    // We split by double newline (Paragraphs) which generateMarkdownFromItems creates for vertical gaps
-    const potentialCitations = rawRefText.split(/\n\n+/);
-    
-    const references: string[] = [];
+  // 3. Split and Clean citations
+  // We split by double newline (Paragraphs) which generateMarkdownFromItems creates for vertical gaps
+  const potentialCitations = rawRefText.split(/\n\n+/);
 
-    // Heuristics for a valid citation line start
-    const numberedPattern = /^\[\d+\]|^\d+\.|^\d+\)/;
-    
-    potentialCitations.forEach(block => {
-        // Clean up the block: remove single newlines (wrapping) to make it one line
-        const cleanBlock = block.replace(/\n/g, ' ').trim();
-        
-        if (cleanBlock.length < 10) return; // Skip noise
+  const references: string[] = [];
 
-        // If the block contains multiple numbered items (e.g. tight spacing didn't trigger \n\n)
-        // We can try to split them further
-        // Look for [2], [3] inside the text that isn't at the start
-        // This is a basic split, handling [1] ... [2] ...
-        // Note: This is risky if citations contain brackets, but effective for standard IEEE styles
-        
-        // Check if we have multiple bracketed numbers
-        const splitByNumbers = cleanBlock.split(/(\[\d+\])/).filter(s => s.trim());
-        
-        // If we split into parts like ["[1]", " text...", "[2]", " text..."]
-        if (splitByNumbers.length > 2 && splitByNumbers[0].match(numberedPattern)) {
-             let currentRef = "";
-             for(const part of splitByNumbers) {
-                 if (part.match(/^\[\d+\]$/)) {
-                     if (currentRef) references.push(currentRef.trim());
-                     currentRef = part;
-                 } else {
-                     currentRef += part;
-                 }
-             }
-             if (currentRef) references.push(currentRef.trim());
+  // Heuristics for a valid citation line start
+  const numberedPattern = /^\[\d+\]|^\d+\.|^\d+\)/;
+
+  potentialCitations.forEach(block => {
+    // Clean up the block: remove single newlines (wrapping) to make it one line
+    const cleanBlock = block.replace(/\n/g, ' ').trim();
+
+    if (cleanBlock.length < 10) return; // Skip noise
+
+    // If the block contains multiple numbered items (e.g. tight spacing didn't trigger \n\n)
+    // We can try to split them further
+    // Look for [2], [3] inside the text that isn't at the start
+    // This is a basic split, handling [1] ... [2] ...
+    // Note: This is risky if citations contain brackets, but effective for standard IEEE styles
+
+    // Check if we have multiple bracketed numbers
+    const splitByNumbers = cleanBlock.split(/(\[\d+\])/).filter(s => s.trim());
+
+    // If we split into parts like ["[1]", " text...", "[2]", " text..."]
+    if (splitByNumbers.length > 2 && splitByNumbers[0].match(numberedPattern)) {
+      let currentRef = "";
+      for (const part of splitByNumbers) {
+        if (part.match(/^\[\d+\]$/)) {
+          if (currentRef) references.push(currentRef.trim());
+          currentRef = part;
         } else {
-             // Just one block
-             references.push(cleanBlock);
+          currentRef += part;
         }
-    });
+      }
+      if (currentRef) references.push(currentRef.trim());
+    } else {
+      // Just one block
+      references.push(cleanBlock);
+    }
+  });
 
-    return references;
+  return references;
 }
 
 
@@ -293,11 +299,11 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer): Promise<Extracte
     // By passing a copy, the original arrayBuffer remains valid for the UI/App to use.
     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
     const doc = await loadingTask.promise;
-    
+
     // 2. Get Metadata
     const metaData = await doc.getMetadata();
     const info = metaData.info as any;
-    
+
     const metadata = {
       title: info?.Title || "Untitled Document",
       author: info?.Author || "Unknown Author",
@@ -312,7 +318,7 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer): Promise<Extracte
     for (let i = 1; i <= numPages; i++) {
       const page = await doc.getPage(i);
       const textContent = await page.getTextContent();
-      
+
       const rawItems = textContent.items.map((item: any) => ({
         str: item.str,
         transform: item.transform, // [ScaleX, SkewY, SkewX, ScaleY, X, Y]
@@ -324,7 +330,7 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer): Promise<Extracte
       // Sort and Format
       const sortedItems = sortPageItems(rawItems);
       const pageText = generateMarkdownFromItems(sortedItems);
-      
+
       pages.push(pageText);
 
       // Collect first page text for abstract extraction
@@ -337,7 +343,7 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer): Promise<Extracte
     let abstract = "";
     const abstractRegex = /Abstract/i;
     const match = fullTextForAbstract.match(abstractRegex);
-    
+
     if (match && match.index !== undefined) {
       // Grab text starting after "Abstract"
       // We take a chunk and try to clean it up

@@ -259,14 +259,14 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
       {!isBlurred && (
         <div className="sticky top-0 z-30 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-0 mb-3 -pt-3 -mt-3 -mx-3 sm:-mx-6 px-3 sm:px-6 shadow-sm">
-         
+
           {/* SINGLE ROW - TABS LEFT, ACTIONS RIGHT */}
           <div className="flex items-center justify-between py-3 gap-4 deep-header-row">
 
 
             {/* LEFT SIDE - TABS */}
             <div className="flex items-center -mb-px">
-                          {/* Select All Papers - Icon Only */}
+              {/* Select All Papers - Icon Only */}
               {sortBy !== 'most-relevant-notes' && currentTabCandidates.length > 0 && (
                 <button
                   onClick={handleSelectAllPapers}
@@ -303,7 +303,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
             {/* RIGHT SIDE - ACTIONS */}
             <div className="flex items-center gap-2 deep-actions-right">
-          
+
               {/* Sort Dropdown */}
               <div className="relative">
                 <button
@@ -482,7 +482,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
   const [isExpanded, setIsExpanded] = useState(true);
   const { toggleArxivSelection, selectedArxivIds } = useResearch();
   const { isPaperSaved, savePaper, deletePaper, canDeletePaper } = useDatabase();
-  const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf } = useLibrary();
+  const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf, failedUrlErrors } = useLibrary();
   const { setColumnVisibility } = useUI();
 
   const isSelected = isLocal ? isPdfInContext(paper.id) : selectedArxivIds.has(paper.id);
@@ -628,7 +628,15 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                 ) : isStopped ? (
                   <span className="text-xs text-gray-400 italic flex items-center gap-1"><Square size={12} /> stopped</span>
                 ) : isFailed ? (
-                  <span className="text-xs text-red-400 italic">Analysis failed</span>
+                  // New Friendly Error Display
+                  <div className="bg-red-50/50 dark:bg-red-900/10 rounded-lg p-2.5 border border-red-100 dark:border-red-900/20 text-xs w-full max-w-sm">
+                    <span className="font-bold text-red-700 dark:text-red-400 block mb-0.5">
+                      {failedUrlErrors?.[paper.pdfUri]?.reason || "Load Failed"}
+                    </span>
+                    <span className="text-red-600/80 dark:text-red-400/80 leading-snug block">
+                      {failedUrlErrors?.[paper.pdfUri]?.actionableMsg || "Could not access file."}
+                    </span>
+                  </div>
                 ) : (
                   <div className="flex items-center gap-1.5 text-xs font-medium text-scholar-600">
                     <Check size={12} className="text-success-600" />
