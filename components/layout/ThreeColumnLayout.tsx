@@ -1,58 +1,116 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Globe, BookOpenText, Layout, Maximize2, X, Lock, Unlock, Library, FileText } from 'lucide-react';
+import { Globe, BookOpenText, Layout, Maximize2, X, Lock, Unlock, Library, FileText, FolderOpen } from 'lucide-react';
 import { useUI, ColumnKey } from '../../contexts/UIContext';
 import { useResearch } from '../../contexts/ResearchContext';
 
 interface ThreeColumnLayoutProps {
-  leftContent?: React.ReactNode;
+  sourcesContent?: React.ReactNode;  // Renamed from leftContent - displays Sources panel
   middleContent?: React.ReactNode;
   libraryContent?: React.ReactNode;
   rightContent?: React.ReactNode;
 }
 
 export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
-  leftContent,
+  sourcesContent,
   middleContent,
   libraryContent,
   rightContent
 }) => {
   const { columnVisibility, toggleColumn, setColumnVisibility, columnLocks, toggleLock } = useUI();
   const { setActiveSearchMode } = useResearch();
-  
+
   const showLeft = columnVisibility.left;
   const showMiddle = columnVisibility.middle;
   const showLibrary = columnVisibility.library;
   const showRight = columnVisibility.right;
 
-  const [leftWidth, setLeftWidth] = useState(45);
+  const [leftWidth, setLeftWidth] = useState(20);
   const [middleWidth, setMiddleWidth] = useState(30);
   const [libraryWidth, setLibraryWidth] = useState(30);
   const [rightWidth, setRightWidth] = useState(40); // Will be calculated dynamically
-  
+
   const containerRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef<ColumnKey | null>(null);
 
   const activeColumnCount = (showLeft ? 1 : 0) + (showMiddle ? 1 : 0) + (showLibrary ? 1 : 0) + (showRight ? 1 : 0);
 
+  // Auto-adjust widths when column configuration changes
+  useEffect(() => {
+    // Scenario A: Sources + PDF (Left + Right) -> Left 20, Right 80
+    if (showLeft && showRight && !showMiddle && !showLibrary) {
+      setLeftWidth(20);
+    }
+
+    // Scenario B: Research + PDF (Middle + Right) -> Middle 60, Right 40
+    if (showMiddle && showRight && !showLeft && !showLibrary) {
+      setMiddleWidth(60);
+      setRightWidth(40);
+    }
+
+    // Scenario C: Sources + Research + PDF -> Left 20, Middle 50, Right 30
+    if (showLeft && showMiddle && showRight && !showLibrary) {
+      setLeftWidth(20);
+      setMiddleWidth(50);
+    }
+  }, [showLeft, showMiddle, showRight, showLibrary]);
+
   // Calculate optimal widths based on active columns
   const getColumnWidth = (column: 'left' | 'middle' | 'library' | 'right') => {
-    if (activeColumnCount === 1) return '100%';
-    
-    // Special case: 2 columns with PDF viewer - PDF gets 55%, other gets 45%
-    if (activeColumnCount === 2 && showRight) {
-      if (column === 'right') return '55%';
-      return '45%';
+    // If only one column is visible, enforce max width for left column
+    if (activeColumnCount === 1) {
+      if (column === 'left') {
+        // Clamp to default 20% and max 30%
+        const clamped = Math.min(30, Math.max(20, leftWidth));
+        return `${clamped}%`;
+      }
+      return '100%';
     }
-    
-    // 3+ columns: use stored percentages
-    if (column === 'left') return `${leftWidth}%`;
-    if (column === 'middle') return `${middleWidth}%`;
-    if (column === 'library') return `${libraryWidth}%`;
+
+    // Left column (Sources): Use stored width with 20% default, 30% max
+    if (column === 'left') {
+      if (!showLeft) return '0%';
+      const clampedWidth = Math.min(30, Math.max(15, leftWidth));
+      return `${clampedWidth}%`;
+    }
+
+    // Library column
+    if (column === 'library') {
+      return showLibrary ? `${libraryWidth}%` : '0%';
+    }
+
+    // Calculate available space for Middle and Right
+    const leftSpace = showLeft ? Math.min(30, Math.max(15, leftWidth)) : 0;
+    const librarySpace = showLibrary ? libraryWidth : 0;
+    const remainingSpace = 100 - leftSpace - librarySpace;
+
+    // Middle column
+    if (column === 'middle') {
+      if (!showMiddle) return '0%';
+
+      if (showRight) {
+        // If Right is open, Middle uses its stored width
+        return `${middleWidth}%`;
+      }
+
+      // If Right is NOT open, Middle takes all remaining space
+      return `${remainingSpace}%`;
+    }
+
+    // Right column
     if (column === 'right') {
-      return `calc(100% - ${(showLeft ? leftWidth : 0) + (showMiddle ? middleWidth : 0) + (showLibrary ? libraryWidth : 0)}%)`;
+      if (!showRight) return '0%';
+
+      if (showMiddle) {
+        // If Middle is open, Right takes whatever is left after Middle
+        const middleSpace = middleWidth;
+        return `${remainingSpace - middleSpace}%`;
+      }
+
+      // If Middle is NOT open (e.g. Sources + PDF), Right takes all remaining space
+      return `${remainingSpace}%`;
     }
-    
+
     return 'auto';
   };
 
@@ -67,7 +125,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
       const mousePercent = (mouseX / containerWidth) * 100;
 
       if (isResizing.current === 'left' && showLeft) {
-        setLeftWidth(Math.min(Math.max(mousePercent, 10), 80));
+        setLeftWidth(Math.min(Math.max(mousePercent, 15), 30));
       } else if (isResizing.current === 'middle') {
         const leftOffset = showLeft ? leftWidth : 0;
         setMiddleWidth(Math.min(Math.max(mousePercent - leftOffset, 10), 80));
@@ -118,89 +176,88 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
     if (colKey === 'right') setActiveSearchMode('upload');
   };
 
-  const RenderHeader = ({ 
-      title, 
-      icon: Icon, 
-      colKey, 
-      onClose, 
-      isLocked 
-  }: { 
-      title: string, 
-      icon: any, 
-      colKey: ColumnKey, 
-      onClose: () => void,
-      isLocked: boolean
+  const RenderHeader = ({
+    title,
+    icon: Icon,
+    colKey,
+    onClose,
+    isLocked
+  }: {
+    title: string,
+    icon: any,
+    colKey: ColumnKey,
+    onClose: () => void,
+    isLocked: boolean
   }) => (
-      <div className="flex-none px-4 py-3 bg-cream dark:border-gray-700 dark:bg-gray-800/50 flex justify-between items-center border-b border-gray-100 dark:border-gray-700/50">
-        <span 
-            onClick={() => handleTitleClick(colKey)}
-            className="text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wide flex items-center gap-3 cursor-pointer hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors select-none"
+    <div className="flex-none px-4 py-3 bg-cream dark:border-gray-700 dark:bg-gray-800/50 flex justify-between items-center border-b border-gray-100 dark:border-gray-700/50">
+      <span
+        onClick={() => handleTitleClick(colKey)}
+        className="text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wide flex items-center gap-3 cursor-pointer hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors select-none"
+      >
+        <Icon size={20} className="flex-shrink-0" /> {title}
+      </span>
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={() => toggleLock(colKey)}
+          title={isLocked ? "Unlock column (it will close automatically when other columns open)" : "Lock column (it will stay open even if other columns are opened)"}
+          className={`transition-all p-1.5 rounded-md ${isLocked ? 'text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30' : 'text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400'}`}
         >
-          <Icon size={20} className="flex-shrink-0" /> {title}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => toggleLock(colKey)}
-            title={isLocked ? "Unlock column (it will close automatically when other columns open)" : "Lock column (it will stay open even if other columns are opened)"}
-            className={`transition-all p-1.5 rounded-md ${isLocked ? 'text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30' : 'text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400'}`}
-          >
-             {isLocked ? <Lock size={16} /> : <Unlock size={16} />}
-          </button>
-          
-          {activeColumnCount > 1 && (
-            <button 
-                onClick={() => handleExpand(colKey)} 
-                className="text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 transition-all p-1.5 rounded-md hover:bg-scholar-50 dark:hover:bg-scholar-900/30"
-            >
-                <Maximize2 size={18} />
-            </button>
-          )}
+          {isLocked ? <Lock size={16} /> : <Unlock size={16} />}
+        </button>
 
-          <button 
-            onClick={onClose} 
-            className="text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors p-1.5 rounded-md hover:bg-scholar-50 dark:hover:bg-scholar-900/30"
+        {activeColumnCount > 1 && (
+          <button
+            onClick={() => handleExpand(colKey)}
+            className="text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 transition-all p-1.5 rounded-md hover:bg-scholar-50 dark:hover:bg-scholar-900/30"
           >
-            <X size={20} />
+            <Maximize2 size={18} />
           </button>
-        </div>
+        )}
+
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors p-1.5 rounded-md hover:bg-scholar-50 dark:hover:bg-scholar-900/30"
+        >
+          <X size={20} />
+        </button>
       </div>
+    </div>
   );
 
   const ResizeHandle = ({ onMouseDown }: { onMouseDown: () => void }) => (
-    <div 
-      className="w-2 h-full cursor-col-resize flex-none flex items-center justify-center group hover:bg-black/5 dark:hover:bg-white/5 transition-colors z-20 rounded-lg" 
+    <div
+      className="w-2 h-full cursor-col-resize flex-none flex items-center justify-center group hover:bg-black/5 dark:hover:bg-white/5 transition-colors z-20 rounded-lg"
       onMouseDown={onMouseDown}
     >
-     <div className="w-1 h-8 bg-gray-200 dark:bg-gray-700 group-hover:bg-scholar-400 rounded-full transition-colors"></div>
+      <div className="w-1 h-8 bg-gray-200 dark:bg-gray-700 group-hover:bg-scholar-400 rounded-full transition-colors"></div>
     </div>
   );
 
   return (
     <div className="flex-1 bg-cream dark:bg-dark-bg p-1 h-full overflow-hidden transition-colors duration-300">
-      <div 
-        ref={containerRef} 
+      <div
+        ref={containerRef}
         className="flex h-full w-full"
       >
-        {/* Web Search */}
         {showLeft && (
-          <div 
-            style={{ width: getColumnWidth('left') }} 
+          <div
+            style={{ width: getColumnWidth('left') }}
             className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-75 ease-out shadow-sm min-w-[320px]`}
           >
-            <RenderHeader title="Web Search" icon={Globe} colKey="left" onClose={() => toggleColumn('left')} isLocked={columnLocks.left} />
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-3">{leftContent}</div>
+            <RenderHeader title="Sources" icon={FolderOpen} colKey="left" onClose={() => toggleColumn('left')} isLocked={columnLocks.left} />
+            <div className="flex-1 overflow-y-auto custom-scrollbar">{sourcesContent}</div>
           </div>
         )}
 
         {showLeft && (showMiddle || showLibrary || showRight) && <ResizeHandle onMouseDown={() => startResize('left')} />}
 
-        {/* Deep Research */}
+        {/* Research */}
         {showMiddle && (
-          <div 
-            style={{ width: getColumnWidth('middle') }} 
+          <div
+            style={{ width: getColumnWidth('middle') }}
             className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-75 ease-out shadow-sm min-w-[320px]`}
           >
-            <RenderHeader title="Deep Research" icon={BookOpenText} colKey="middle" onClose={() => toggleColumn('middle')} isLocked={columnLocks.middle} />
+            <RenderHeader title="Research" icon={BookOpenText} colKey="middle" onClose={() => toggleColumn('middle')} isLocked={columnLocks.middle} />
             <div className="flex-1 overflow-y-auto custom-scrollbar relative">{middleContent}</div>
           </div>
         )}
@@ -209,8 +266,8 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
 
         {/* Library / Notes Manager */}
         {showLibrary && (
-          <div 
-            style={{ width: getColumnWidth('library') }} 
+          <div
+            style={{ width: getColumnWidth('library') }}
             className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-75 ease-out shadow-sm min-w-[320px]`}
           >
             <RenderHeader title="Research Library" icon={Library} colKey="library" onClose={() => toggleColumn('library')} isLocked={columnLocks.library} />
@@ -222,10 +279,10 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
 
         {/* Paper View */}
         {showRight && (
-           <div 
-             style={{ width: getColumnWidth('right') }}
-             className={`flex flex-col h-full bg-cream dark:bg-dark-card border rounded-xl dark:border-gray-700 overflow-hidden shadow-sm min-w-[320px] transition-[width] duration-75 ease-out`}
-           >
+          <div
+            style={{ width: getColumnWidth('right') }}
+            className={`flex flex-col h-full bg-cream dark:bg-dark-card border rounded-xl dark:border-gray-700 overflow-hidden shadow-sm min-w-[320px] transition-[width] duration-75 ease-out`}
+          >
             <RenderHeader title="Paper View" icon={FileText} colKey="right" onClose={() => toggleColumn('right')} isLocked={columnLocks.right} />
             <div className="flex-1 overflow-y-auto custom-scrollbar relative">{rightContent}</div>
           </div>

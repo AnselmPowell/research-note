@@ -4,6 +4,7 @@ import { useResearch } from '../../contexts/ResearchContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
 import { useDatabase } from '../../database/DatabaseContext';
+import { WebSearchView } from '../websearch/WebSearchView';
 import {
   Loader2,
   FileText,
@@ -40,10 +41,14 @@ interface DeepResearchViewProps {
   candidates: ArxivPaper[];
   generatedKeywords: string[];
   onViewPdf?: (paper: ArxivPaper) => void;
+  // Web search data
+  webSearchSources?: any[];
+  webSearchLoading?: boolean;
+  webSearchError?: string | null;
 }
 
 type SortOption = 'most-relevant-notes' | 'relevant-papers' | 'newest-papers';
-type TabType = 'results' | 'uploaded';
+type TabType = 'web' | 'deep';
 
 const getNoteId = (paperId: string, page: number, index: number) => `${paperId}-p${page}-i${index}`;
 
@@ -75,9 +80,12 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   status,
   candidates,
   generatedKeywords,
-  onViewPdf
+  onViewPdf,
+  webSearchSources = [],
+  webSearchLoading = false,
+  webSearchError = null
 }) => {
-  const { loadedPdfs, isPdfInContext, togglePdfContext } = useLibrary();
+  const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, downloadingUris, failedUris } = useLibrary();
   const {
     selectedArxivIds,
     selectAllArxivPapers,
@@ -96,33 +104,25 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   } = useResearch();
 
   // State Management
-  const [activeTab, setActiveTab] = useState<TabType>('results');
+  const [activeTab, setActiveTab] = useState<TabType>('web');
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>('relevant-papers');
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [allNotesExpanded, setAllNotesExpanded] = useState(true);
 
-  // Sync: Reset to Results tab when a new search starts from the top search bar
+  // Sync: Reset to Web Search tab when a new web search starts
   useEffect(() => {
     if (researchPhase === 'initializing') {
-      setActiveTab('results');
+      setActiveTab('web');
     }
   }, [researchPhase]);
 
-  // Auto-switch to uploaded tab if files exist and we are idle with no results
+  // Auto-switch to deep research tab when ArXiv candidates are available
   useEffect(() => {
-    if (loadedPdfs.length > 0 && researchPhase === 'idle' && !isDeepResearching && candidates.length === 0) {
-      setActiveTab('uploaded');
+    if (candidates.length > 0 && researchPhase !== 'idle') {
+      setActiveTab('deep');
     }
-  }, [loadedPdfs.length, researchPhase, isDeepResearching, candidates.length]);
-
-  // Switch to uploaded tab when PDFs are processed during deep research
-  useEffect(() => {
-    if (showUploadedTab && loadedPdfs.length > 0) {
-      setActiveTab('uploaded');
-      setShowUploadedTab(false);
-    }
-  }, [showUploadedTab, loadedPdfs.length, setShowUploadedTab]);
+  }, [candidates.length, researchPhase]);
 
   const handleSelectNote = useCallback((id: string) => {
     setSelectedNoteIds(prev =>
@@ -133,24 +133,9 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   const isBlurred = researchPhase === 'filtering';
   const isSearching = researchPhase === 'searching' || researchPhase === 'initializing';
 
-  // Mapping LoadedPdf -> ArxivPaper shape for Component Reuse
-  const mappedUploadedPapers = useMemo(() => {
-    return loadedPdfs.map(pdf => {
-      const paper: ArxivPaper = {
-        id: pdf.uri,
-        title: pdf.metadata.title || pdf.file.name,
-        summary: pdf.text,
-        authors: [pdf.metadata.author || 'Uploaded Document'],
-        pdfUri: pdf.uri,
-        publishedDate: new Date().toISOString(),
-        notes: deepResearchResults.filter(n => n.pdfUri === pdf.uri),
-        analysisStatus: uploadedPaperStatuses[pdf.uri] || 'completed'
-      };
-      return paper;
-    });
-  }, [loadedPdfs, deepResearchResults, uploadedPaperStatuses]);
-
-  const currentTabCandidates = activeTab === 'results' ? candidates : mappedUploadedPapers;
+  // Tab-specific data: web search sources for 'web' tab, ArXiv candidates for 'deep' tab
+  const currentTabCandidates = activeTab === 'web' ? [] : candidates; // Web search uses different rendering
+  const currentWebSources = activeTab === 'web' ? webSearchSources : [];
 
   const totalNotes = useMemo(() => currentTabCandidates.reduce((acc, paper) => acc + (paper.notes?.length || 0), 0), [currentTabCandidates]);
 
@@ -196,22 +181,13 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   }, [currentTabCandidates, sortBy, selectedArxivIds]);
 
   const handleSelectAllPapers = useCallback(() => {
-    if (activeTab === 'results') {
-      if (selectedArxivIds.size === candidates.length) {
-        clearArxivSelection();
-      } else {
-        selectAllArxivPapers(candidates.map(p => p.id));
-      }
+    // Only handle ArXiv candidates selection
+    if (selectedArxivIds.size === candidates.length) {
+      clearArxivSelection();
     } else {
-      const allSelected = mappedUploadedPapers.every(p => isPdfInContext(p.id));
-      mappedUploadedPapers.forEach(p => {
-        const inContext = isPdfInContext(p.id);
-        if (allSelected || !inContext) {
-          togglePdfContext(p.id, p.title);
-        }
-      });
+      selectAllArxivPapers(candidates.map(p => p.id));
     }
-  }, [activeTab, selectedArxivIds.size, candidates, mappedUploadedPapers, clearArxivSelection, selectAllArxivPapers, isPdfInContext, togglePdfContext]);
+  }, [selectedArxivIds.size, candidates, clearArxivSelection, selectAllArxivPapers]);
 
   if (isSearching) {
     return (
@@ -271,33 +247,29 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                 <button
                   onClick={handleSelectAllPapers}
                   className="p-2.5 text-gray-500 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
-                  title={`Select all papers (${activeTab === 'results' ? (selectedArxivIds.size > 0 ? `${selectedArxivIds.size}/` : '') + candidates.length : (mappedUploadedPapers.filter(p => isPdfInContext(p.id)).length > 0 ? `${mappedUploadedPapers.filter(p => isPdfInContext(p.id)).length}/` : '') + loadedPdfs.length})`}
+                  title={`Select all papers (${selectedArxivIds.size > 0 ? `${selectedArxivIds.size}/` : ''}${candidates.length})`}
                 >
-                  <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${activeTab === 'results'
-                    ? selectedArxivIds.size === candidates.length ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
-                    : mappedUploadedPapers.every(p => isPdfInContext(p.id)) ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
+                  <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${selectedArxivIds.size === candidates.length ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
                     }`}>
-                    {(activeTab === 'results' ? selectedArxivIds.size === candidates.length : mappedUploadedPapers.every(p => isPdfInContext(p.id))) && <Check size={16} className="text-white" />}
+                    {selectedArxivIds.size === candidates.length && <Check size={16} className="text-white" />}
                   </div>
                 </button>
               )}
 
               <button
-                onClick={() => { setActiveTab('results'); }}
-                className={`deep-tab-button px-4 py-1  text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'results' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
+                onClick={() => { setActiveTab('web'); }}
+                className={`deep-tab-button px-4 py-1  text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'web' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
               >
                 <Search size={20} className="flex-shrink-0" />
-                <span className="tab-label deep-tab-label">Search Results</span>
+                <span className="tab-label deep-tab-label">Web Search</span>
               </button>
 
               <button
-                onClick={() => { setActiveTab('uploaded'); }}
-                className={`deep-tab-button px-4 py-1 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'uploaded' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
+                onClick={() => { setActiveTab('deep'); }}
+                className={`deep-tab-button px-4 py-1 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'deep' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
               >
-                <Upload size={20} className="flex-shrink-0" />
-                <span className="tab-label deep-tab-label">
-                  My Uploads{loadedPdfs.length > 0 && ` (${loadedPdfs.length})`}
-                </span>
+                <BookOpenText size={20} className="flex-shrink-0" />
+                <span className="tab-label deep-tab-label">Deep Research</span>
               </button>
             </div>
 
@@ -346,7 +318,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
               {(currentTabCandidates.length > 0 || totalNotes > 0) && researchPhase !== 'searching' && (
                 <button
                   onClick={() => {
-                    if (confirm(`Clear all ${activeTab === 'results' ? 'search' : 'uploaded'} results?`)) {
+                    if (confirm(`Clear all ${activeTab === 'web' ? 'web search' : 'deep research'} results?`)) {
                       clearDeepResearchResults();
                     }
                   }}
@@ -377,14 +349,85 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
       )}
 
       <div className={`space-y-6 transition-all duration-500 ${isBlurred ? 'blur-sm opacity-50 pointer-events-none select-none overflow-hidden h-screen' : 'blur-0 opacity-100'}`}>
-        {!isBlurred && currentTabCandidates.length > 0 && (
-          <div className="text-sm text-gray-500 dark:text-gray-400 font-medium px-1 flex items-center gap-2 mb-2 animate-fade-in">
-            {activeTab === 'results' ? <Search size={14} className="opacity-60" /> : <Upload size={14} className="opacity-60" />}
-            About {currentTabCandidates.length} source{currentTabCandidates.length !== 1 ? 's' : ''} with {totalNotes} note{totalNotes !== 1 ? 's' : ''} found
+        {/* Web Search Tab - Show loading state */}
+        {activeTab === 'web' && webSearchLoading && (
+          <div className="flex flex-col items-center justify-center h-full min-h-[500px] p-8 space-y-6 animate-fade-in">
+            <div className="relative">
+              <div className="w-20 h-20 border-4 border-scholar-100 dark:border-scholar-900 border-t-scholar-600 dark:border-t-scholar-500 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Search size={24} className="text-scholar-600 dark:text-scholar-500 animate-pulse" />
+              </div>
+            </div>
+            <div className="text-center space-y-3 max-w-md mx-auto">
+              <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Web Search in Progress</h3>
+              <p className="text-gray-500 dark:text-gray-400 leading-relaxed animate-pulse">Scanning the web...</p>
+            </div>
           </div>
         )}
 
-        {sortBy === 'most-relevant-notes' ? (
+        {/* Web Search Tab - Show error state */}
+        {activeTab === 'web' && webSearchError && !webSearchLoading && (
+          <div className="bg-error-50 text-error-600 p-4 rounded-lg text-sm">{webSearchError}</div>
+        )}
+
+        {/* Web Search Tab - Show results */}
+        {activeTab === 'web' && !webSearchLoading && !webSearchError && currentWebSources.length > 0 && (
+          <>
+            <div className="text-sm text-gray-500 dark:text-gray-400 font-medium px-1 flex items-center gap-2 mb-2 animate-fade-in">
+              <Search size={14} className="opacity-60" />
+              {currentWebSources.length} web result{currentWebSources.length !== 1 ? 's' : ''} found
+            </div>
+            <div className="space-y-6">
+              {currentWebSources.map((source: any, idx: number) => (
+                <WebSearchView
+                  key={`${source.uri}-${idx}`}
+                  source={source}
+                  isSelected={isPdfInContext(source.uri)}
+                  isDownloading={downloadingUris.has(source.uri)}
+                  isFailed={failedUris.has(source.uri)}
+                  isResearching={isPdfInContext(source.uri) && isDeepResearching}
+                  researchNotes={deepResearchResults.filter(n => n.pdfUri === source.uri)}
+                  forceExpanded={allNotesExpanded}
+                  onToggle={async () => {
+                    const wasSelected = isPdfInContext(source.uri);
+                    if (!wasSelected) {
+                      // Ensure PDF is loaded before adding to context
+                      const isLoaded = loadedPdfs.some(p => p.uri === source.uri);
+                      if (!isLoaded) {
+                        const result = await loadPdfFromUrl(source.uri, source.title);
+                        // @ts-ignore
+                        if (result && !result.success) return;
+                      }
+                    }
+                    togglePdfContext(source.uri, source.title);
+                  }}
+                  onView={async () => {
+                    // Handled by WebSearchView internally
+                  }}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Web Search Tab - Empty state */}
+        {activeTab === 'web' && !webSearchLoading && !webSearchError && currentWebSources.length === 0 && (
+          <div className="py-24 flex flex-col items-center justify-center text-center opacity-40">
+            <Search size={64} className="mb-6 text-gray-300" />
+            <h3 className="text-xl font-bold text-gray-800 dark:text-white">No web search results</h3>
+            <p className="text-xs max-w-xs leading-relaxed dark:text-gray-300">Enter a query in the search bar to find relevant sources.</p>
+          </div>
+        )}
+
+        {/* Deep Research Tab - Show results */}
+        {activeTab === 'deep' && !isBlurred && currentTabCandidates.length > 0 && (
+          <div className="text-sm text-gray-500 dark:text-gray-400 font-medium px-1 flex items-center gap-2 mb-2 animate-fade-in">
+            <BookOpenText size={14} className="opacity-60" />
+            About {currentTabCandidates.length} paper{currentTabCandidates.length !== 1 ? 's' : ''} with {totalNotes} note{totalNotes !== 1 ? 's' : ''} found
+          </div>
+        )}
+
+        {activeTab === 'deep' && (sortBy === 'most-relevant-notes' ? (
           (content as any[]).map((note) => (
             <ResearchCardNote
               key={note.uniqueId}
@@ -404,25 +447,18 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
               selectedNoteIds={selectedNoteIds}
               onSelectNote={handleSelectNote}
               forceExpanded={allNotesExpanded}
-              onView={() => activeTab === 'results' ? (onViewPdf && onViewPdf(paper)) : null}
-              isLocal={activeTab === 'uploaded'}
+              onView={() => onViewPdf && onViewPdf(paper)}
+              isLocal={false}
             />
           ))
-        )}
+        ))}
 
-        {activeTab === 'uploaded' && loadedPdfs.length === 0 && (
+        {/* Deep Research Tab - Empty state */}
+        {activeTab === 'deep' && candidates.length === 0 && researchPhase === 'idle' && (
           <div className="py-24 flex flex-col items-center justify-center text-center opacity-40">
-            <Upload size={64} className="mb-6 text-gray-300" />
-            <h3 className="text-xl font-bold text-gray-800 dark:text-white">No papers uploaded</h3>
-            <p className="text-xs max-w-xs leading-relaxed dark:text-gray-300">Upload your own PDFs in the search bar to analyze them here.</p>
-          </div>
-        )}
-
-        {activeTab === 'results' && candidates.length === 0 && researchPhase === 'idle' && (
-          <div className="py-24 flex flex-col items-center justify-center text-center opacity-40">
-            <Search size={64} className="mb-6 text-gray-300" />
-            <h3 className="text-xl font-bold text-gray-800 dark:text-white">No search results</h3>
-            <p className="text-xs max-w-xs leading-relaxed dark:text-gray-300">Enter topics in the search bar to find new academic papers.</p>
+            <BookOpenText size={64} className="mb-6 text-gray-300" />
+            <h3 className="text-xl font-bold text-gray-800 dark:text-white">No deep research results</h3>
+            <p className="text-xs max-w-xs leading-relaxed dark:text-gray-300">Enter topics in the search bar to find academic papers.</p>
           </div>
         )}
       </div>
@@ -482,8 +518,8 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
   const [isExpanded, setIsExpanded] = useState(true);
   const { toggleArxivSelection, selectedArxivIds } = useResearch();
   const { isPaperSaved, savePaper, deletePaper, canDeletePaper } = useDatabase();
-  const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf, failedUrlErrors } = useLibrary();
-  const { setColumnVisibility } = useUI();
+  const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf, failedUrlErrors, downloadingUris } = useLibrary();
+  const { setColumnVisibility, openColumn } = useUI();
 
   const isSelected = isLocal ? isPdfInContext(paper.id) : selectedArxivIds.has(paper.id);
   const isSaved = isPaperSaved(paper.pdfUri);
@@ -511,38 +547,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     }
   }, [forceExpanded]);
 
-  const handleSaveToggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
 
-    console.log('[Paper Card] Save toggle clicked:', {
-      paperUri: paper.pdfUri,
-      isSaved,
-      canDelete,
-      paperTitle: paper.title
-    });
-
-    if (isSaved && !canDelete) {
-      // Cannot delete paper - it has saved notes
-      console.warn('[Paper Card] Cannot unsave paper - it has saved notes. Remove all notes first.');
-      alert('Cannot unsave this paper because it has saved notes. Please remove all saved notes from this paper first.');
-      return;
-    }
-
-    if (isSaved) {
-      console.log('[Paper Card] Deleting paper...');
-      deletePaper(paper.pdfUri);
-    } else {
-      console.log('[Paper Card] Saving paper...');
-      const loaded = loadedPdfs.find(p => p.uri === paper.pdfUri);
-      const paperData = {
-        ...paper,
-        uri: paper.pdfUri, // Ensure URI consistency
-        pdfUri: paper.pdfUri, // Keep both for compatibility
-        numPages: loaded ? loaded.numPages : undefined
-      };
-      savePaper(paperData);
-    }
-  };
 
   const handleSelectionToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -561,6 +566,38 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     } else if (onView) {
       onView();
     }
+  };
+
+  const handleAddToSources = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (isSaved) {
+      if (!canDelete) {
+        alert('Cannot unsave this paper because it has saved notes. Please remove all saved notes from this paper first.');
+        return;
+      }
+      deletePaper(paper.pdfUri);
+      return;
+    }
+
+    // Load if needed
+    const loaded = loadedPdfs.find(p => p.uri === paper.pdfUri);
+    if (!loaded) {
+      const result = await loadPdfFromUrl(paper.pdfUri, paper.title);
+      // @ts-ignore
+      if (result && !result.success) return;
+    }
+
+    // Save
+    const loadedPdf = loadedPdfs.find(p => p.uri === paper.pdfUri);
+    const paperData = {
+      ...paper,
+      uri: paper.pdfUri,
+      pdfUri: paper.pdfUri,
+      numPages: loadedPdf ? loadedPdf.numPages : undefined
+    };
+    savePaper(paperData);
+    openColumn('left');
   };
 
   return (
@@ -585,23 +622,24 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                   <button onClick={handleOpenPdf} className="text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 ">
                     <BookText size={12} /> View
                   </button>
-                  {!isLocal && (
-                    <button
-                      onClick={handleSaveToggle}
-                      disabled={isSaved && !canDelete}
-                      className={`text-xs font-medium px-2 py-0.5 rounded border transition-colors flex items-center gap-1 shadow-sm
-                          ${isSaved && !canDelete
-                          ? 'bg-gray-300 border-gray-300 text-gray-500 cursor-not-allowed'
-                          : isSaved
-                            ? 'bg-scholar-600 border-scholar-600 text-white hover:bg-scholar-700'
-                            : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                        }`}
-                      title={isSaved && !canDelete ? 'Cannot unsave - paper has saved notes. Remove notes first.' : ''}
-                    >
-                      {isSaved ? <Check size={12} /> : <Library size={12} />}
-                      {isSaved ? (canDelete ? 'Saved' : 'Saved*') : 'Save paper'}
-                    </button>
-                  )}
+
+                  <button
+                    onClick={handleAddToSources}
+                    disabled={downloadingUris.has(paper.pdfUri)}
+                    className={`text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm
+                      ${isSaved
+                        ? 'bg-scholar-100 text-scholar-700 border border-scholar-200 hover:bg-scholar-200 dark:bg-scholar-900/40 dark:text-scholar-300 dark:border-scholar-800'
+                        : 'bg-white text-scholar-600 border border-scholar-200 hover:bg-scholar-50 dark:bg-gray-800 dark:text-scholar-400 dark:border-gray-700 dark:hover:bg-gray-700'
+                      }
+                    `}
+                  >
+                    {downloadingUris.has(paper.pdfUri) ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      isSaved ? <Check size={12} /> : <Plus size={12} />
+                    )}
+                    {isSaved ? 'Added' : 'Add to Sources'}
+                  </button>
                 </div>
               </div>
             </div>

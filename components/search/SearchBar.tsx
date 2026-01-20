@@ -223,7 +223,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     if (file && file.type === 'application/pdf') {
       await addPdfFile(file);
       // FIXED: Don't switch setActiveSearchMode to 'deep' here. Stay in 'upload' mode.
-      setColumnVisibility(prev => ({ ...prev, right: true, middle: true }));
+      setColumnVisibility(prev => ({ ...prev, left: true, right: true, middle: false }));
       // Reset input so same file can be selected again if needed
       e.target.value = '';
     }
@@ -235,7 +235,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       const result = await loadPdfFromUrl(url);
       if (result.success) {
         updateSearchBar({ mainInput: '' });
-        setColumnVisibility(prev => ({ ...prev, right: true, middle: true }));
+        setColumnVisibility(prev => ({ ...prev, left: true, right: true, middle: false }));
       } else {
         if (result.error) {
           flashError(`${result.error.reason}: ${result.error.actionableMsg.split('.')[0]}`);

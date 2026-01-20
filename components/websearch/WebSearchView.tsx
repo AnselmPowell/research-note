@@ -33,7 +33,8 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const hasAutoExpanded = useRef(false);
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
-  const { loadedPdfs } = useLibrary();
+  const { loadedPdfs, loadPdfFromUrl } = useLibrary();
+  const { openColumn } = useUI();
 
   const isSaved = isPaperSaved(source.uri);
 
@@ -62,18 +63,38 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
     }
   };
 
-  const handleSaveToggle = (e: React.MouseEvent) => {
+
+
+  const handleAddToSources = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
     if (isSaved) {
       deletePaper(source.uri);
-    } else {
-      const loaded = loadedPdfs.find(p => p.uri === source.uri);
-      savePaper({
-        ...source,
-        numPages: loaded ? loaded.numPages : undefined
-      });
+      return;
     }
+
+    // First, ensure the PDF is loaded
+    const loaded = loadedPdfs.find(p => p.uri === source.uri);
+    if (!loaded) {
+      // Need to load the PDF first
+      const result = await loadPdfFromUrl(source.uri, source.title);
+      // @ts-ignore
+      if (result && !result.success) {
+        // Failed to load PDF
+        return;
+      }
+    }
+
+    // Save the paper to database with is_explicitly_saved flag
+    const loadedPdf = loadedPdfs.find(p => p.uri === source.uri);
+    savePaper({
+      ...source,
+      numPages: loadedPdf ? loadedPdf.numPages : undefined
+    });
+
+    // Open the sources panel
+    openColumn('left');
   };
 
   const domain = getDomain(source.uri);
@@ -128,16 +149,17 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
             )}
 
             <button
-              onClick={handleSaveToggle}
-              className={`text-xs font-medium px-2 py-0.5 rounded border transition-colors flex items-center gap-1 shadow-sm
-                    ${isSaved
-                  ? 'bg-scholar-600 border-scholar-600 text-white hover:bg-scholar-700'
-                  : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+              onClick={handleAddToSources}
+              disabled={isDownloading}
+              className={`text-xs font-medium px-2 py-0.5 rounded border transition-colors flex items-center gap-1
+                ${isSaved
+                  ? 'bg-scholar-100 text-scholar-700 border-scholar-200 hover:bg-scholar-200 dark:bg-scholar-900/40 dark:text-scholar-300 dark:border-scholar-800'
+                  : 'bg-white text-scholar-600 border-scholar-200 hover:bg-scholar-50 dark:bg-gray-800 dark:text-scholar-400 dark:border-gray-700 dark:hover:bg-gray-700'
                 }
-                `}
+              `}
             >
-              {isSaved ? <Check size={12} /> : <Library size={12} />}
-              {isSaved ? 'Saved' : 'Save paper'}
+              {isDownloading ? <Loader2 size={12} className="animate-spin" /> : (isSaved ? <Check size={12} /> : <Plus size={12} />)}
+              {isSaved ? 'Added' : 'Add to Sources'}
             </button>
           </div>
         </div>
