@@ -5,7 +5,7 @@ import { useUI } from '../../contexts/UIContext';
 import { FileText, X, Plus, Upload, Link, Search, Loader2, AlertCircle, CheckSquare, Square } from 'lucide-react';
 
 export const SourcesPanel: React.FC = () => {
-    const { savedPapers, deletePaper } = useDatabase();
+    const { savedPapers, deletePaper, savePaper } = useDatabase();
     const { setActivePdf, loadPdfFromUrl, addPdfFile, isPdfInContext, togglePdfContext, loadedPdfs, downloadingUris } = useLibrary();
     const { setColumnVisibility } = useUI();
 
@@ -15,6 +15,9 @@ export const SourcesPanel: React.FC = () => {
     const [uploadMode, setUploadMode] = useState<'search' | 'url' | 'menu'>('search');
     const [urlInput, setUrlInput] = useState('');
     const [showUploadMenu, setShowUploadMenu] = useState(false);
+    
+    // Multiple file upload state
+    const [uploadProgress, setUploadProgress] = useState<{current: number; total: number; currentFileName: string} | null>(null);
 
     // Only show explicitly saved papers
     const sourcePapers = savedPapers.filter(p => p.is_explicitly_saved);
@@ -61,18 +64,76 @@ export const SourcesPanel: React.FC = () => {
     };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || file.type !== 'application/pdf') return;
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+
+        // Validate all files first
+        const pdfFiles = files.filter(file => file.type === 'application/pdf');
+        const invalidFiles = files.filter(file => file.type !== 'application/pdf');
+
+        if (invalidFiles.length > 0) {
+            setUploadError(`${invalidFiles.length} file(s) skipped: Only PDF files are allowed`);
+        }
+
+        if (pdfFiles.length === 0) {
+            e.target.value = '';
+            return;
+        }
+
+        if (pdfFiles.length > 8) {
+            setUploadError('Maximum 8 files allowed at once');
+            e.target.value = '';
+            return;
+        }
 
         setIsLoading(true);
         setUploadError(null);
+
         try {
-            await addPdfFile(file);
+            // Process files sequentially for better user feedback
+            for (let i = 0; i < pdfFiles.length; i++) {
+                const file = pdfFiles[i];
+                
+                setUploadProgress({
+                    current: i + 1,
+                    total: pdfFiles.length,
+                    currentFileName: file.name
+                });
+
+                // Load PDF into memory
+                await addPdfFile(file);
+                
+                // Get the newly added PDF by finding the one with our filename pattern
+                const fileBaseName = file.name.replace('.pdf', '');
+                const loadedPdf = loadedPdfs.find(p => 
+                    p.uri.includes(fileBaseName) && p.uri.startsWith('local://')
+                ) || loadedPdfs[loadedPdfs.length - 1]; // Fallback to last added
+
+                if (loadedPdf) {
+                    // Create paper data following the same pattern as "Add to Sources"
+                    const paperData = {
+                        uri: loadedPdf.uri,
+                        pdfUri: loadedPdf.uri,
+                        title: loadedPdf.metadata?.title || file.name.replace('.pdf', ''),
+                        authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
+                        summary: '',
+                        publishedDate: new Date().toISOString(),
+                        numPages: loadedPdf.numPages,
+                        is_explicitly_saved: true
+                    };
+                    
+                    // Save to database/localStorage
+                    await savePaper(paperData);
+                }
+            }
+
             setUploadMode('search');
             setShowUploadMenu(false);
+            setUploadProgress(null);
         } catch (error) {
             console.error('[SourcesPanel] File upload failed:', error);
-            setUploadError('Failed to upload file');
+            setUploadError(`Failed to upload ${uploadProgress?.currentFileName || 'file'}`);
+            setUploadProgress(null);
         } finally {
             setIsLoading(false);
             e.target.value = ''; // Reset input
@@ -87,6 +148,26 @@ export const SourcesPanel: React.FC = () => {
         try {
             const result = await loadPdfFromUrl(urlInput.trim());
             if (result.success) {
+                // Get the loaded PDF to create paper data for saving
+                const loadedPdf = loadedPdfs.find(p => p.uri === urlInput.trim());
+                
+                if (loadedPdf) {
+                    // Create paper data following the same pattern as "Add to Sources"  
+                    const paperData = {
+                        uri: loadedPdf.uri,
+                        pdfUri: loadedPdf.uri, 
+                        title: loadedPdf.metadata?.title || 'Untitled Document',
+                        authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
+                        summary: '',
+                        publishedDate: new Date().toISOString(),
+                        numPages: loadedPdf.numPages,
+                        is_explicitly_saved: true
+                    };
+                    
+                    // Save to database/localStorage
+                    await savePaper(paperData);
+                }
+                
                 setUrlInput('');
                 setUploadMode('search');
                 setShowUploadMenu(false);
@@ -171,10 +252,11 @@ export const SourcesPanel: React.FC = () => {
                                         <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50 animate-fade-in">
                                             <label className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors">
                                                 <Upload size={16} className="text-gray-600 dark:text-gray-400" />
-                                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Upload from computer</span>
+                                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Upload from computer (max 8)</span>
                                                 <input
                                                     type="file"
                                                     accept="application/pdf"
+                                                    multiple
                                                     onChange={handleFileUpload}
                                                     className="hidden"
                                                 />
@@ -194,11 +276,30 @@ export const SourcesPanel: React.FC = () => {
                     )}
                 </div>
 
+                {/* Upload Progress */}
+                {uploadProgress && (
+                    <div className="bg-scholar-50 dark:bg-scholar-900/30 border border-scholar-100 dark:border-scholar-800 rounded-lg p-3 text-xs">
+                        <div className="flex items-center gap-2">
+                            <Loader2 size={14} className="animate-spin text-scholar-600 dark:text-scholar-400 flex-shrink-0" />
+                            <div className="flex-1">
+                                <div className="text-scholar-800 dark:text-scholar-200 font-semibold mb-1">
+                                    Uploading {uploadProgress.current} of {uploadProgress.total} files
+                                </div>
+                                <div className="text-scholar-700 dark:text-scholar-300 truncate text-xs">
+                                    {uploadProgress.currentFileName}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Error Message */}
                 {uploadError && (
-                    <div className="flex items-start gap-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs">
-                        <AlertCircle size={12} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                        <span className="text-red-700 dark:text-red-300">{uploadError}</span>
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 py-2 rounded-lg text-xs">
+                        <div className="flex items-start gap-2">
+                            <AlertCircle size={12} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                            <span>{uploadError}</span>
+                        </div>
                     </div>
                 )}
 
@@ -213,9 +314,19 @@ export const SourcesPanel: React.FC = () => {
 
             {/* Papers List - Scrollable */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-3">
-                {isLoading && uploadMode !== 'url' ? (
-                    <div className="flex items-center justify-center py-12">
+                {(isLoading && uploadMode !== 'url') || uploadProgress ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-3">
                         <Loader2 size={24} className="animate-spin text-scholar-600" />
+                        {uploadProgress && (
+                            <div className="text-center">
+                                <div className="text-sm font-medium text-scholar-700 dark:text-scholar-300">
+                                    Processing file {uploadProgress.current} of {uploadProgress.total}
+                                </div>
+                                <div className="text-xs text-scholar-600 dark:text-scholar-400 mt-1 max-w-xs truncate">
+                                    {uploadProgress.currentFileName}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ) : filteredPapers.length === 0 ? (
                     <div className="text-center py-12 opacity-40">

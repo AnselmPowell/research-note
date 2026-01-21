@@ -185,6 +185,16 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           updateSearchBar({ mainInput: '' });
         }
       }
+    } else if (newMode === 'upload') {
+      setIsExpanded(false);
+      // When switching to upload mode, clear text unless it's a URL format
+      const currentInput = searchBarState.mainInput.trim();
+      if (currentInput) {
+        const isUrl = URL.canParse(currentInput);
+        if (!isUrl) {
+          updateSearchBar({ mainInput: '' });
+        }
+      }
     } else {
       setIsExpanded(false);
       // Auto-populate main input with the first topic tag when switching to Web Search mode
