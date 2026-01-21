@@ -6,7 +6,7 @@ import { FileText, X, Plus, Upload, Link, Search, Loader2, AlertCircle, CheckSqu
 
 export const SourcesPanel: React.FC = () => {
     const { savedPapers, deletePaper, savePaper } = useDatabase();
-    const { setActivePdf, loadPdfFromUrl, addPdfFile, isPdfInContext, togglePdfContext, loadedPdfs, downloadingUris } = useLibrary();
+    const { setActivePdf, loadPdfFromUrl, addPdfFile, addPdfFileAndReturn, isPdfInContext, togglePdfContext, loadedPdfs, downloadingUris, removePdf } = useLibrary();
     const { setColumnVisibility } = useUI();
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -100,17 +100,11 @@ export const SourcesPanel: React.FC = () => {
                     currentFileName: file.name
                 });
 
-                // Load PDF into memory
-                await addPdfFile(file);
-                
-                // Get the newly added PDF by finding the one with our filename pattern
-                const fileBaseName = file.name.replace('.pdf', '');
-                const loadedPdf = loadedPdfs.find(p => 
-                    p.uri.includes(fileBaseName) && p.uri.startsWith('local://')
-                ) || loadedPdfs[loadedPdfs.length - 1]; // Fallback to last added
+                // Load PDF into memory and get the result directly
+                const loadedPdf = await addPdfFileAndReturn(file);
 
                 if (loadedPdf) {
-                    // Create paper data following the same pattern as "Add to Sources"
+                    // Create paper data using the returned PDF (eliminates stale closure issue)
                     const paperData = {
                         uri: loadedPdf.uri,
                         pdfUri: loadedPdf.uri,
@@ -147,26 +141,24 @@ export const SourcesPanel: React.FC = () => {
         setUploadError(null);
         try {
             const result = await loadPdfFromUrl(urlInput.trim());
-            if (result.success) {
-                // Get the loaded PDF to create paper data for saving
-                const loadedPdf = loadedPdfs.find(p => p.uri === urlInput.trim());
+            if (result.success && result.pdf) {
+                // Use the PDF object directly from the result (eliminates stale closure issue)
+                const loadedPdf = result.pdf;
                 
-                if (loadedPdf) {
-                    // Create paper data following the same pattern as "Add to Sources"  
-                    const paperData = {
-                        uri: loadedPdf.uri,
-                        pdfUri: loadedPdf.uri, 
-                        title: loadedPdf.metadata?.title || 'Untitled Document',
-                        authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
-                        summary: '',
-                        publishedDate: new Date().toISOString(),
-                        numPages: loadedPdf.numPages,
-                        is_explicitly_saved: true
-                    };
-                    
-                    // Save to database/localStorage
-                    await savePaper(paperData);
-                }
+                // Create paper data using the returned PDF
+                const paperData = {
+                    uri: loadedPdf.uri,
+                    pdfUri: loadedPdf.uri, 
+                    title: loadedPdf.metadata?.title || 'Untitled Document',
+                    authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
+                    summary: '',
+                    publishedDate: new Date().toISOString(),
+                    numPages: loadedPdf.numPages,
+                    is_explicitly_saved: true
+                };
+                
+                // Save to database/localStorage
+                await savePaper(paperData);
                 
                 setUrlInput('');
                 setUploadMode('search');
@@ -186,6 +178,12 @@ export const SourcesPanel: React.FC = () => {
         if (confirm(`Remove "${title}" from sources?`)) {
             try {
                 await deletePaper(uri);
+                
+                // Also remove from LibraryContext if loaded to maintain consistency
+                const isLoaded = loadedPdfs.some(p => p.uri === uri);
+                if (isLoaded) {
+                    removePdf(uri); // Remove from loaded PDFs and context
+                }
             } catch (error) {
                 console.error('[SourcesPanel] Failed to remove paper:', error);
             }

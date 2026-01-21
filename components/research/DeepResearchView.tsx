@@ -582,14 +582,18 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
 
     // Load if needed
     const loaded = loadedPdfs.find(p => p.uri === paper.pdfUri);
+    let loadedPdf = loaded;
+    
     if (!loaded) {
       const result = await loadPdfFromUrl(paper.pdfUri, paper.title);
       // @ts-ignore
       if (result && !result.success) return;
+      
+      // Use the PDF from the result to avoid stale closure issue
+      loadedPdf = result.pdf;
     }
 
-    // Save
-    const loadedPdf = loadedPdfs.find(p => p.uri === paper.pdfUri);
+    // Save using the correct PDF reference
     const paperData = {
       ...paper,
       uri: paper.pdfUri,

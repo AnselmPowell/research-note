@@ -76,6 +76,8 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
 
     // First, ensure the PDF is loaded
     const loaded = loadedPdfs.find(p => p.uri === source.uri);
+    let loadedPdf = loaded;
+    
     if (!loaded) {
       // Need to load the PDF first
       const result = await loadPdfFromUrl(source.uri, source.title);
@@ -84,10 +86,12 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
         // Failed to load PDF
         return;
       }
+      
+      // Use the PDF from the result to avoid stale closure issue
+      loadedPdf = result.pdf;
     }
 
-    // Save the paper to database with is_explicitly_saved flag
-    const loadedPdf = loadedPdfs.find(p => p.uri === source.uri);
+    // Save the paper to database with is_explicitly_saved flag using correct PDF reference
     savePaper({
       ...source,
       numPages: loadedPdf ? loadedPdf.numPages : undefined

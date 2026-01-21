@@ -14,8 +14,9 @@ interface LibraryContextType {
   contextUris: Set<string>;
 
   setSearchHighlight: (text: string | null) => void;
-  loadPdfFromUrl: (uri: string, title?: string, author?: string) => Promise<{ success: boolean, error?: { reason: string, actionableMsg: string } }>;
+  loadPdfFromUrl: (uri: string, title?: string, author?: string) => Promise<{ success: boolean, pdf?: LoadedPdf, error?: { reason: string, actionableMsg: string } }>;
   addPdfFile: (file: File) => Promise<void>;
+  addPdfFileAndReturn: (file: File) => Promise<LoadedPdf>; // New: returns the PDF object directly
   addLoadedPdf: (pdf: LoadedPdf) => void; // New: directly add processed PDF
   removePdf: (uri: string) => void;
   setActivePdf: (uri: string | null) => void;
@@ -70,8 +71,9 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // Already loaded
     if (loadedPdfs.some(p => p.uri === uri)) {
+      const existingPdf = loadedPdfs.find(p => p.uri === uri);
       setActivePdfUri(uri);
-      return { success: true };
+      return { success: true, pdf: existingPdf };
     }
 
     // Already downloading
@@ -101,7 +103,7 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       setLoadedPdfs(prev => [...prev, newPdf]);
       setActivePdfUri(uri);
-      return { success: true };
+      return { success: true, pdf: newPdf };
     } catch (error: any) {
       console.error("Error downloading PDF:", error);
 
@@ -152,6 +154,10 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const addPdfFile = async (file: File) => {
+    await addPdfFileAndReturn(file);
+  };
+
+  const addPdfFileAndReturn = async (file: File): Promise<LoadedPdf> => {
     const uri = `local://${file.name}-${Date.now()}`;
     const arrayBuffer = await file.arrayBuffer();
     const extractedData = await extractPdfData(arrayBuffer);
@@ -165,6 +171,7 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setLoadedPdfs(prev => [...prev, newPdf]);
     setActivePdfUri(uri);
+    return newPdf; // Return the PDF object directly
   };
 
   // Add already processed PDF to library (avoid re-downloading)
@@ -242,6 +249,7 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setSearchHighlight,
       loadPdfFromUrl,
       addPdfFile,
+      addPdfFileAndReturn,
       addLoadedPdf,
       removePdf,
       setActivePdf: setActivePdfUri,
