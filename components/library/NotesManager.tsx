@@ -1,37 +1,34 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
-  Search, 
-  Filter, 
-  Trash2, 
-  Copy, 
+  Square, 
+  Check, 
+  ChevronDown, 
+  ChevronUp, 
   Star, 
   Flag, 
   Edit3, 
-  Check, 
-  Square, 
+  Trash2, 
+  Search, 
+  Filter, 
+  Copy, 
   X,
-  Library,
   LayoutGrid,
   LayoutList,
   FileText,
-  Lightbulb,
-  BookOpenText,
-  TextSearch,
-  AlertTriangle,
-  Loader2,
-  ChevronDown,
-  ChevronUp,
-  FileJson,
-  Link as LinkIcon,
-  ArrowUpDown,
-  Search as SearchIcon,
+  Table as TableIcon,
+  Library,
   Bookmark,
-  Sparkles,
-  BookText
+  ArrowUpDown,
+  TextSearch,
+  BookOpenText,
+  Lightbulb,
+  FileJson
 } from 'lucide-react';
 import { useDatabase } from '../../database/DatabaseContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
+import { PapersTable } from './PapersTable';
+import { NotesTable } from './NotesTable';
 
 interface NotesManagerProps {
   activeView: string;
@@ -69,7 +66,9 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     setActivePdf, 
     setSearchHighlight,
     isPdfInContext,
-    togglePdfContext
+    togglePdfContext,
+    downloadingUris,
+    failedUris
   } = useLibrary();
 
   const { setColumnVisibility } = useUI();
@@ -87,7 +86,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
   }, [activeView]);
 
   const [paperSubFilter, setPaperSubFilter] = useState<'all' | 'saved' | 'noted'>('all');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'table'>('table');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [localFilters, setLocalFilters] = useState({
@@ -245,6 +244,16 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     });
   };
 
+  const handleLocateNote = (note: any) => {
+      const paper = savedPapers.find(p => p.uri === note.paper_uri);
+      const cleanedQuote = note.content.replace(/^[\W\d]+|[\W\d]+$/g, '').trim();
+      
+      loadPdfFromUrl(note.paper_uri, paper?.title);
+      setActivePdf(note.paper_uri);
+      setSearchHighlight(cleanedQuote);
+      setColumnVisibility(prev => ({ ...prev, right: true }));
+  };
+
   const handleTogglePaperExpand = (uri: string) => {
     setExpandedPapers(prev => {
       const next = new Set(prev);
@@ -330,16 +339,22 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
             </div>
 
             <div className="flex items-center gap-2">
-              {activeTab === 'notes' && (
-                <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
-                    <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600' : 'text-gray-400 hover:text-scholar-600'}`}>
-                      <LayoutGrid size={18} />
-                    </button>
-                    <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600' : 'text-gray-400 hover:text-scholar-600'}`}>
-                      <LayoutList size={18} />
-                    </button>
-                </div>
-              )}
+              <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
+                  <button 
+                    onClick={() => setViewMode('table')} 
+                    className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600' : 'text-gray-400 hover:text-scholar-600'}`}
+                    title="Table View"
+                  >
+                    <TableIcon size={18} />
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('list')} 
+                    className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600' : 'text-gray-400 hover:text-scholar-600'}`}
+                    title="List View"
+                  >
+                    <LayoutList size={18} />
+                  </button>
+              </div>
 
               <button
                 onClick={() => setShowFilters(!showFilters)}
@@ -464,104 +479,142 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                 </div>
               )}
 
-              <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4 notes-grid" : "space-y-1 sm:space-y-2"}>
-                {paginatedNotes.length > 0 ? paginatedNotes.map((note) => (
-                  <NoteCard
-                    key={note.id}
-                    note={note}
-                    viewMode={viewMode}
-                    isSelected={selectedNoteIds.includes(note.id)}
-                    isExpanded={expandedNotes.has(note.id)}
-                    isEditing={editingNoteId === note.id}
-                    onSelect={() => handleNoteSelect(note.id)}
-                    onCardClick={() => handleToggleExpand(note.id)}
-                    onToggleStar={() => toggleStar(note.id, !note.is_starred)}
-                    onToggleFlag={() => toggleFlag(note.id, !note.is_flagged)}
-                    onEdit={() => setEditingNoteId(note.id)}
+              {viewMode === 'table' ? (
+                 <NotesTable 
+                    notes={paginatedNotes}
+                    papers={savedPapers}
+                    selectedIds={selectedNoteIds}
+                    expandedIds={expandedNotes}
+                    expandedId={null} // Manager controls set
+                    sortColumn={sortColumn}
+                    sortDirection={sortDirection}
+                    onSort={(col) => { 
+                       if (sortColumn === col) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                       else { setSortColumn(col); setSortDirection('asc'); }
+                    }}
+                    onSelect={handleNoteSelect}
+                    onExpand={handleToggleExpand}
+                    onDelete={(id) => openDeleteNoteModal([id])}
+                    onToggleStar={(id, s) => toggleStar(id, s)}
+                    onToggleFlag={(id, f) => toggleFlag(id, f)}
+                    onEdit={setEditingNoteId}
                     onSaveEdit={async (id, content) => { await updateNote(id, content); setEditingNoteId(null); }}
                     onCancelEdit={() => setEditingNoteId(null)}
-                    onDelete={() => openDeleteNoteModal([note.id])}
-                    paper={savedPapers.find(p => p.uri === note.paper_uri)}
-                  />
-                )) : (
-                  <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
-                     <Library size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300" />
-                     <h3 className="text-xl sm:text-2xl font-bold text-gray-800">No notes found</h3>
-                     <p className="text-xs sm:text-sm max-w-xs leading-relaxed">Save meaningful insights from your research to populate this section.</p>
-                  </div>
-                )}
-              </div>
+                    editingId={editingNoteId}
+                    onViewPdf={handleLocateNote}
+                 />
+              ) : (
+                <div className="space-y-1 sm:space-y-2">
+                  {paginatedNotes.length > 0 ? paginatedNotes.map((note) => (
+                    <NoteCard
+                      key={note.id}
+                      note={note}
+                      viewMode={'list'} // Always list if not table
+                      isSelected={selectedNoteIds.includes(note.id)}
+                      isExpanded={expandedNotes.has(note.id)}
+                      isEditing={editingNoteId === note.id}
+                      onSelect={() => handleNoteSelect(note.id)}
+                      onCardClick={() => handleToggleExpand(note.id)}
+                      onToggleStar={() => toggleStar(note.id, !note.is_starred)}
+                      onToggleFlag={() => toggleFlag(note.id, !note.is_flagged)}
+                      onEdit={() => setEditingNoteId(note.id)}
+                      onSaveEdit={async (id, content) => { await updateNote(id, content); setEditingNoteId(null); }}
+                      onCancelEdit={() => setEditingNoteId(null)}
+                      onDelete={() => openDeleteNoteModal([note.id])}
+                      paper={savedPapers.find(p => p.uri === note.paper_uri)}
+                    />
+                  )) : (
+                    <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
+                       <Library size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300" />
+                       <h3 className="text-xl sm:text-2xl font-bold text-gray-800">No notes found</h3>
+                       <p className="text-xs sm:text-sm max-w-xs leading-relaxed">Save meaningful insights from your research to populate this section.</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <>
               {selectedPaperUris.length > 0 && (
                 <div className="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 sm:p-5 bg-scholar-600 text-white rounded-2xl shadow-scholar-lg animate-slide-up ring-4 ring-scholar-100/50">
-                  <div className="flex items-center gap-4 w-full sm:w-auto">
-                    <button onClick={() => setSelectedPaperUris([])} className="hover:bg-white/20 p-2 rounded-xl transition-colors">
-                      <Check size={26} strokeWidth={3} />
-                    </button>
-                    <div>
-                      <span className="text-xl font-black block leading-none">{selectedPaperUris.length}</span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Papers Selected</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 ml-auto w-full sm:w-auto justify-end">
-                     <button 
-                        onClick={handleBulkDeletePapers} 
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-4 px-6 py-2.5 bg-red-500/80 hover:bg-red-600 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm"
-                     >
-                        <Trash2 size={18} /> Delete All
-                     </button>
-                  </div>
+                  {/* ... (bulk actions) ... */}
                 </div>
               )}
 
-              <div className="space-y-4">
-                {paginatedPapers.length > 0 ? paginatedPapers.map((paper) => (
-                  <LibraryPaperCard 
-                    key={paper.uri}
-                    paper={paper}
-                    isSelected={isPdfInContext(paper.uri)}
-                    isExpanded={expandedPapers.has(paper.uri)}
-                    onSelect={() => handlePaperSelect(paper)}
-                    onToggleExpand={() => handleTogglePaperExpand(paper.uri)}
-                    notes={savedNotes.filter(n => n.paper_uri === paper.uri)}
-                    onDelete={() => openDeletePaperModal(paper)}
-                  />
-                )) : (
-                    <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
-                      <FileText size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300" />
-                      <h3 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">No papers match this filter</h3>
-                      <p className="text-xs sm:text-sm max-w-xs leading-relaxed dark:text-scholar-400">Try changing your sub-filter or search query.</p>
-                    </div>
-                )}
-              </div>
+              {viewMode === 'table' ? (
+                <PapersTable 
+                   papers={paginatedPapers}
+                   selectedUris={selectedPaperUris}
+                   expandedUris={expandedPapers}
+                   sortColumn={sortColumn}
+                   sortDirection={sortDirection}
+                   onSort={(col) => {
+                      if (sortColumn === col) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                      else { setSortColumn(col); setSortDirection('asc'); }
+                   }}
+                   onSelect={handlePaperSelect}
+                   onExpand={handleTogglePaperExpand}
+                   onDelete={openDeletePaperModal}
+                   onView={(p) => {
+                      loadPdfFromUrl(p.uri, p.title);
+                      setActivePdf(p.uri);
+                      setColumnVisibility(prev => ({ ...prev, right: true }));
+                   }}
+                   isPaperSaved={(uri) => savedPapers.find(p => p.uri === uri)?.is_explicitly_saved || false}
+                   getNotesCount={(uri) => savedNotes.filter(n => n.paper_uri === uri).length}
+                   isDownloading={(uri) => downloadingUris.has(uri)}
+                   isFailed={(uri) => failedUris.has(uri)}
+                />
+              ) : (
+                <div className="space-y-4">
+                  {paginatedPapers.length > 0 ? paginatedPapers.map((paper) => (
+                    <LibraryPaperCard 
+                      key={paper.uri}
+                      paper={paper}
+                      isSelected={isPdfInContext(paper.uri)}
+                      isExpanded={expandedPapers.has(paper.uri)}
+                      onSelect={() => handlePaperSelect(paper)}
+                      onToggleExpand={() => handleTogglePaperExpand(paper.uri)}
+                      notes={savedNotes.filter(n => n.paper_uri === paper.uri)}
+                      onDelete={() => openDeletePaperModal(paper)}
+                    />
+                  )) : (
+                      <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
+                        <FileText size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300" />
+                        <h3 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">No papers match this filter</h3>
+                        <p className="text-xs sm:text-sm max-w-xs leading-relaxed dark:text-scholar-400">Try changing your sub-filter or search query.</p>
+                      </div>
+                  )}
+                </div>
+              )}
             </>
           )}
 
           {(activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) > PAGE_SIZE && (
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-8 mt-12 sm:mt-16 mb-12 pagination-controls">
-               <div className="flex items-center gap-3 w-full sm:w-auto">
+               <div className="flex items-center gap-4">
                  <button 
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
                   disabled={currentPage === 1} 
-                  className="flex-1 sm:flex-none px-8 py-2.5 rounded-2xl font-bold text-gray-500 bg-white/40 border border-gray-100 hover:border-scholar-200 hover:text-scholar-600 disabled:opacity-30 transition-all text-sm shadow-sm"
+                  className="px-6 py-2 rounded-xl font-bold text-gray-500 bg-white/40 border border-gray-100 hover:border-scholar-200 hover:text-scholar-600 disabled:opacity-30 transition-all text-sm shadow-sm"
                  >
                    Previous
                  </button>
+                 
+                 <div className="flex items-center gap-2">
+                   <span className="text-xs font-black text-scholar-600 uppercase tracking-tighter">Page</span>
+                   <span className="text-lg font-bold text-gray-900 dark:text-white">{currentPage}</span>
+                   <span className="text-xs font-black text-gray-300 dark:text-scholar-400 uppercase tracking-tighter">of</span>
+                   <span className="text-lg font-bold text-gray-400 dark:text-scholar-400">{Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE)}</span>
+                 </div>
+
                  <button 
                   onClick={() => setCurrentPage(p => Math.min(Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE), p + 1))} 
                   disabled={currentPage === Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE)} 
-                  className="flex-1 sm:flex-none px-8 py-2.5 rounded-2xl font-bold text-gray-500 bg-white/40 border border-gray-100 hover:border-scholar-200 hover:text-scholar-600 disabled:opacity-30 transition-all text-sm shadow-sm"
+                  className="px-6 py-2 rounded-xl font-bold text-gray-500 bg-white/40 border border-gray-100 hover:border-scholar-200 hover:text-scholar-600 disabled:opacity-30 transition-all text-sm shadow-sm"
                  >
                    Next
                  </button>
-               </div>
-               <div className="flex items-center gap-2">
-                 <span className="text-xs font-black text-scholar-600 uppercase tracking-tighter">Page</span>
-                 <span className="text-lg font-bold text-gray-900 dark:text-white">{currentPage}</span>
-                 <span className="text-xs font-black text-gray-300 dark:text-scholar-400 uppercase tracking-tighter">of</span>
-                 <span className="text-lg font-bold text-gray-400 dark:text-scholar-400">{Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE)}</span>
                </div>
             </div>
           )}
