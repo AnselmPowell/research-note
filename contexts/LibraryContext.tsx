@@ -87,7 +87,8 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const finalMetadata = {
         ...extractedData.metadata,
         title: title || extractedData.metadata.title,
-        author: author || extractedData.metadata.author
+        author: author || extractedData.metadata.author,
+        subject: extractedData.metadata.subject  // Preserve subject field
       };
 
       const filename = uri.split('/').pop()?.split('?')[0] || 'document.pdf';

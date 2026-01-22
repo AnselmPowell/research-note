@@ -1,5 +1,6 @@
 
 import * as pdfjsLib from 'pdfjs-dist';
+import { enhanceMetadataWithAI } from './geminiService';
 
 // Set the worker source to the same version as the library
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
@@ -291,7 +292,7 @@ function extractReferences(pages: string[]): string[] {
 }
 
 
-export const extractPdfData = async (arrayBuffer: ArrayBuffer): Promise<ExtractedData> => {
+export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSignal): Promise<ExtractedData> => {
   try {
     // 1. Load Document
     // CRITICAL FIX: Slice the buffer to create a copy. 
@@ -360,8 +361,32 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer): Promise<Extracte
     // 5. Extract References
     const references = extractReferences(pages);
 
+    // 6. Enhance metadata with AI if needed
+    let finalMetadata = metadata;
+    const needsTitle = metadata.title === "Untitled Document";
+    const needsAuthor = metadata.author === "Unknown Author"; 
+    const needsSubject = metadata.subject === "";
+
+    if (needsTitle || needsAuthor || needsSubject) {
+      try {
+        // Check if aborted before AI call
+        if (signal?.aborted) throw new Error('Aborted');
+        
+        console.log('[PDF Service] Enhancing metadata with AI...');
+        const firstFourPages = pages.slice(0, 4).join('\n\n');
+        if (firstFourPages.length > 100) { // Only if we have substantial text
+          finalMetadata = await enhanceMetadataWithAI(firstFourPages, metadata, signal);
+          console.log('[PDF Service] Metadata enhanced successfully');
+        }
+      } catch (error: any) {
+        if (error.message === 'Aborted') throw error; // Re-throw abort
+        console.warn('[PDF Service] Metadata enhancement failed, using original:', error);
+        finalMetadata = metadata; // Keep original if AI fails
+      }
+    }
+
     return {
-      metadata,
+      metadata: finalMetadata,  // Use enhanced metadata
       text: abstract,
       pages,
       references,

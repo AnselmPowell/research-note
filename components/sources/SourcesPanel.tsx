@@ -110,7 +110,7 @@ export const SourcesPanel: React.FC = () => {
                         pdfUri: loadedPdf.uri,
                         title: loadedPdf.metadata?.title || file.name.replace('.pdf', ''),
                         authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
-                        summary: '',
+                        summary: loadedPdf.metadata?.subject || '',  // Include subject as summary
                         publishedDate: new Date().toISOString(),
                         numPages: loadedPdf.numPages,
                         is_explicitly_saved: true
@@ -151,7 +151,7 @@ export const SourcesPanel: React.FC = () => {
                     pdfUri: loadedPdf.uri, 
                     title: loadedPdf.metadata?.title || 'Untitled Document',
                     authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
-                    summary: '',
+                    summary: loadedPdf.metadata?.subject || '',  // Include subject as summary
                     publishedDate: new Date().toISOString(),
                     numPages: loadedPdf.numPages,
                     is_explicitly_saved: true
@@ -274,18 +274,26 @@ export const SourcesPanel: React.FC = () => {
                     )}
                 </div>
 
-                {/* Upload Progress */}
-                {uploadProgress && (
-                    <div className="bg-scholar-50 dark:bg-scholar-900/30 border border-scholar-100 dark:border-scholar-800 rounded-lg p-3 text-xs">
+                {/* Upload Progress - Simplified and Mobile Friendly */}
+                {(uploadProgress || (isLoading && uploadMode === 'url')) && (
+                    <div className="bg-scholar-50 dark:bg-scholar-900/30 border border-scholar-100 dark:border-scholar-800 rounded-lg p-2 text-xs mb-2">
                         <div className="flex items-center gap-2">
-                            <Loader2 size={14} className="animate-spin text-scholar-600 dark:text-scholar-400 flex-shrink-0" />
-                            <div className="flex-1">
-                                <div className="text-scholar-800 dark:text-scholar-200 font-semibold mb-1">
-                                    Uploading {uploadProgress.current} of {uploadProgress.total} files
-                                </div>
-                                <div className="text-scholar-700 dark:text-scholar-300 truncate text-xs">
-                                    {uploadProgress.currentFileName}
-                                </div>
+                            <Loader2 size={12} className="animate-spin text-scholar-600 dark:text-scholar-400 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                                {uploadProgress ? (
+                                    <>
+                                        <div className="text-scholar-800 dark:text-scholar-200 font-medium">
+                                            Processing {uploadProgress.current}/{uploadProgress.total}
+                                        </div>
+                                        <div className="text-scholar-600 dark:text-scholar-400 truncate">
+                                            {uploadProgress.currentFileName}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-scholar-800 dark:text-scholar-200 font-medium">
+                                        Loading PDF from URL...
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -310,23 +318,9 @@ export const SourcesPanel: React.FC = () => {
                 </div>
             </div>
 
-            {/* Papers List - Scrollable */}
+            {/* Papers List - Always Accessible */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-3">
-                {(isLoading && uploadMode !== 'url') || uploadProgress ? (
-                    <div className="flex flex-col items-center justify-center py-12 space-y-3">
-                        <Loader2 size={24} className="animate-spin text-scholar-600" />
-                        {uploadProgress && (
-                            <div className="text-center">
-                                <div className="text-sm font-medium text-scholar-700 dark:text-scholar-300">
-                                    Processing file {uploadProgress.current} of {uploadProgress.total}
-                                </div>
-                                <div className="text-xs text-scholar-600 dark:text-scholar-400 mt-1 max-w-xs truncate">
-                                    {uploadProgress.currentFileName}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ) : filteredPapers.length === 0 ? (
+                {filteredPapers.length === 0 ? (
                     <div className="text-center py-12 opacity-40">
                         {searchQuery ? (
                             <>

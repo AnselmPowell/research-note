@@ -359,7 +359,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (signal?.aborted) throw new Error("Aborted");
         const buffer = await fetchPdfBuffer(paper.pdfUri);
         if (signal?.aborted) throw new Error("Aborted");
-        const extracted = await extractPdfData(buffer);
+        const extracted = await extractPdfData(buffer, signal);
         setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: 'processing' } : p));
         if (signal?.aborted) throw new Error("Aborted");
         const relevantPages = await findRelevantPages([{ uri: paper.pdfUri, pages: extracted.pages }], userQuestions.join("\n"), keywords);
@@ -396,7 +396,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const arrayBuffer = await fetchPdfBuffer(url);
         if (signal?.aborted) return null;
 
-        const extractedData = await extractPdfData(arrayBuffer);
+        const extractedData = await extractPdfData(arrayBuffer, signal);
         const filename = url.split('/').pop()?.split('?')[0] || 'document.pdf';
 
         const pdf: LoadedPdf = {

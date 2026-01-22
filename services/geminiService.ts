@@ -106,6 +106,91 @@ async function callOpenAI(prompt: string): Promise<any> {
 /**
  * Uses Gemini to generate 5 distinct, effective search queries for finding PDFs
  */ 
+export const enhanceMetadataWithAI = async (
+  firstFourPagesText: string,
+  currentMetadata: { title: string; author: string; subject: string },
+  signal?: AbortSignal
+): Promise<{ title: string; author: string; subject: string }> => {
+  
+  // Check abort before starting
+  if (signal?.aborted) throw new Error('Aborted');
+  
+  const prompt = `You are analyzing the first 4 pages of a research paper to extract missing metadata.
+
+Current metadata:
+- Title: ${currentMetadata.title}
+- Author: ${currentMetadata.author} 
+- Subject: ${currentMetadata.subject}
+
+Text from first 4 pages:
+${firstFourPagesText}
+
+Extract the title, author(s), and subject/abstract from this text. Return as JSON:
+{
+  "title": "exact paper title found in the text",
+  "author": "main author or first author listed", 
+  "subject": "brief abstract or subject description"
+}
+
+If you cannot find clear information for any field, return the current value for that field.`;
+
+  try {
+    if (!ai) {
+      console.warn('[MetadataEnhancement] Gemini AI not available - using fallback OpenAI');
+      throw new Error('Gemini AI not initialized');
+    }
+    
+    // Check abort before AI call
+    if (signal?.aborted) throw new Error('Aborted');
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: { responseMimeType: "application/json" }
+    });
+    
+    // Check abort after AI call
+    if (signal?.aborted) throw new Error('Aborted');
+    
+    const text = response.text;
+    if (text) {
+      const enhanced = JSON.parse(cleanJson(text));
+      return {
+        title: enhanced.title || currentMetadata.title,
+        author: enhanced.author || currentMetadata.author,
+        subject: enhanced.subject || currentMetadata.subject
+      };
+    }
+  } catch (error: any) {
+    if (error.message === 'Aborted') throw error; // Re-throw abort
+    
+    console.warn(`[MetadataEnhancement] Gemini failed. Switching to OpenAI.`);
+    
+    // Try OpenAI fallback
+    try {
+      if (signal?.aborted) throw new Error('Aborted');
+      
+      if (OPENAI_API_KEY) {
+        const result = await callOpenAI(prompt);
+        
+        if (signal?.aborted) throw new Error('Aborted');
+        
+        return {
+          title: result.title || currentMetadata.title,
+          author: result.author || currentMetadata.author,
+          subject: result.subject || currentMetadata.subject
+        };
+      }
+    } catch (err: any) {
+      if (err.message === 'Aborted') throw err;
+      console.error('[MetadataEnhancement] OpenAI fallback failed:', err);
+    }
+  }
+
+  // Fallback: return current metadata if all AI calls fail
+  return currentMetadata;
+};
+
 export const generateSearchVariations = async (originalQuery: string): Promise<string[]> => {
   const model = "gemini-3-flash-preview";
   const prompt = `You are a research assistant. The user is looking for PDF documents/papers about: "${originalQuery}".
