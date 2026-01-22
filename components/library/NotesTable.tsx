@@ -11,7 +11,11 @@ import {
     Trash2,
     ArrowUpDown,
     MessageSquareQuote,
-    BookOpen
+    BookOpen,
+    Copy,
+    FileText,
+    FileJson,
+    MoreHorizontal
 } from 'lucide-react';
 import { DeepResearchNote, DeepResearchResult } from '../../types';
 
@@ -19,7 +23,7 @@ interface NotesTableProps {
     notes: DeepResearchNote[];
     papers: DeepResearchResult[];
     selectedIds: number[];
-    expandedId: number | null; // Single expansion or set? Let's assume set based on manager
+    expandedId: number | null; 
     expandedIds: Set<number>;
     sortColumn: string;
     sortDirection: 'asc' | 'desc';
@@ -35,6 +39,22 @@ interface NotesTableProps {
     editingId: number | null;
     onViewPdf: (note: DeepResearchNote) => void;
 }
+
+const formatFullNote = (note: DeepResearchNote, paper: DeepResearchResult | undefined) => {
+    const authors = paper?.authors ? (Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors) : '';
+    const citationLines = note.citations?.map((c: any) => `${c.inline} ${c.full}`).join('\n') || '';
+  
+    return `
+  Title: ${paper?.title || 'Untitled Paper'}
+  ${authors ? `Authors: ${authors}` : ''}
+  Details: Page ${note.page_number}
+  ---
+  ${note.content}
+  ---
+  ${citationLines ? `Citations:\n${citationLines}\n` : ''}
+  Source: ${note.paper_uri}
+  `.trim();
+};
 
 export const NotesTable: React.FC<NotesTableProps> = ({
     notes,
@@ -58,6 +78,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
     
     // Local state for editing content
     const [editContent, setEditContent] = useState('');
+    const [actionMenuOpen, setActionMenuOpen] = useState<number | null>(null);
 
     // Update edit content when editingId changes
     React.useEffect(() => {
@@ -67,10 +88,29 @@ export const NotesTable: React.FC<NotesTableProps> = ({
         }
     }, [editingId, notes]);
 
+    // Close menu when clicking outside
+    React.useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+             if (actionMenuOpen !== null && !(event.target as Element).closest('.action-menu-trigger')) {
+                 setActionMenuOpen(null);
+             }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [actionMenuOpen]);
+
     const handleSave = async (id: number) => {
         if (editContent.trim()) {
             await onSaveEdit(id, editContent);
         }
+    };
+
+    const handleCopy = (e: React.MouseEvent, note: DeepResearchNote, full: boolean) => {
+        e.stopPropagation();
+        const paper = papers.find(p => p.uri === note.paper_uri);
+        const text = full ? formatFullNote(note, paper) : note.content;
+        navigator.clipboard.writeText(text);
+        setActionMenuOpen(null);
     };
 
 
@@ -88,7 +128,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                             <span className="sr-only">Select</span>
                         </th>
                         <th
-                            className="py-3 px-4 cursor-pointer hover:text-scholar-600 transition-colors group select-none w-1/2"
+                            className="py-3 px-4 cursor-pointer hover:text-scholar-600 transition-colors group select-none w-1/3"
                             onClick={() => onSort('content')}
                         >
                             <div className="flex items-center">
@@ -96,8 +136,11 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                 <SortIcon column="content" />
                             </div>
                         </th>
+                        <th className="hidden xl:table-cell py-3 px-4 w-48 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider">Query</th>
+                        <th className="hidden lg:table-cell py-3 px-4 w-32 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider">Author</th>
+                        <th className="hidden lg:table-cell py-3 px-4 w-20 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider">Year</th>
                         <th
-                            className="hidden md:table-cell py-3 px-4 w-1/4 cursor-pointer hover:text-scholar-600 transition-colors group select-none"
+                            className="hidden md:table-cell py-3 px-4 w-1/6 cursor-pointer hover:text-scholar-600 transition-colors group select-none"
                             onClick={() => onSort('paper')}
                         >
                             <div className="flex items-center">
@@ -183,7 +226,25 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                         </div>
                                     </td>
 
-                                    <td className="hidden md:table-cell py-3 px-4">
+                                    <td className="hidden xl:table-cell py-5 px-4 vertical-top">
+                                        <span className="text-xs text-gray-500 italic line-clamp-2" title={note.related_question}>
+                                            {note.related_question || '-'}
+                                        </span>
+                                    </td>
+
+                                    <td className="hidden lg:table-cell py-5 px-4 vertical-top">
+                                         <span className="text-xs text-gray-600 dark:text-gray-400 font-medium line-clamp-1" title={Array.isArray(paper?.authors) ? paper?.authors.join(', ') : paper?.authors}>
+                                            {Array.isArray(paper?.authors) ? (paper?.authors[0] + (paper!.authors.length > 1 ? ' et al.' : '')) : (paper?.authors || 'Unknown')}
+                                        </span>
+                                    </td>
+                                    
+                                    <td className="hidden lg:table-cell py-5 px-4 vertical-top">
+                                        <span className="text-xs text-gray-500 font-mono">
+                                            {paper?.year || (paper?.published ? new Date(paper.published).getFullYear() : '-')}
+                                        </span>
+                                    </td>
+
+                                    <td className="hidden md:table-cell py-5 px-4 vertical-top">
                                         <span
                                             className="text-xs font-bold text-scholar-600 hover:underline cursor-pointer truncate block max-w-[200px]"
                                             onClick={(e) => { e.stopPropagation(); onViewPdf(note); }}
@@ -216,7 +277,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                     </td>
 
                                     <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                                        <div className="flex items-center justify-end gap-1">
+                                        <div className="flex items-center justify-end gap-1 relative">
                                             <button
                                                 onClick={() => onViewPdf(note)}
                                                 className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all"
@@ -231,6 +292,34 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                             >
                                                 <Edit3 size={16} />
                                             </button>
+                                            
+                                            <div className="relative">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setActionMenuOpen(actionMenuOpen === note.id ? null : note.id!); }}
+                                                    className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all action-menu-trigger"
+                                                    title="Copy options"
+                                                >
+                                                    <Copy size={16} />
+                                                </button>
+                                                
+                                                {actionMenuOpen === note.id && (
+                                                    <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-50 animate-fade-in overflow-hidden">
+                                                        <button
+                                                            onClick={(e) => handleCopy(e, note, false)}
+                                                            className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                                                        >
+                                                            <FileText size={14} /> Copy Text
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => handleCopy(e, note, true)}
+                                                            className="w-full text-left px-4 py-2 text-xs font-bold text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 flex items-center gap-2"
+                                                        >
+                                                            <FileJson size={14} /> Copy Full
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
                                             <button
                                                 onClick={() => onDelete(note.id!)}
                                                 className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
@@ -270,11 +359,8 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                     </button>
                                                 </div>
 
-                                                <div>
-                                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-2">
-                                                        <MessageSquareQuote size={12} /> Full Extract
-                                                    </h4>
-                                                    <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed font-serif pl-4 border-l-2 border-scholar-200 italic bg-white dark:bg-gray-900/50 p-3 rounded-r-lg">
+                                                <div className="mb-4">
+                                                    <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed font-serif italic bg-white dark:bg-gray-900/50 p-4 rounded-lg border border-gray-100 dark:border-gray-800">
                                                         "{note.content}"
                                                     </p>
                                                 </div>
@@ -293,8 +379,9 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                         <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Citations</h4>
                                                         <div className="space-y-1">
                                                             {note.citations.map((cit, idx) => (
-                                                                <div key={idx} className="text-xs font-mono text-gray-500 bg-gray-100 dark:bg-gray-800 inline-block px-2 py-1 rounded mr-2">
-                                                                    {cit.inline}
+                                                                <div key={idx} className="text-xs text-gray-600 bg-gray-50 dark:bg-gray-800/50 block p-2 rounded mb-1">
+                                                                    <span className="font-bold text-scholar-600 mr-2">{cit.inline}</span>
+                                                                    <span className="text-gray-500">{cit.full}</span>
                                                                 </div>
                                                             ))}
                                                         </div>
