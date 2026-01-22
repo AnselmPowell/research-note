@@ -110,12 +110,19 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [allNotesExpanded, setAllNotesExpanded] = useState(true);
 
-  // Sync: Reset to Web Search tab when a new web search starts
+  // Sync: Switch to Deep Research tab when deep research starts
   useEffect(() => {
     if (researchPhase === 'initializing') {
-      setActiveTab('web');
+      setActiveTab('deep');
     }
   }, [researchPhase]);
+
+  // Sync: Switch to Web Search tab when web search starts
+  useEffect(() => {
+    if (webSearchLoading) {
+      setActiveTab('web');
+    }
+  }, [webSearchLoading]);
 
   // Auto-switch to deep research tab when ArXiv candidates are available
   useEffect(() => {
@@ -234,10 +241,10 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
       )}
 
       {!isBlurred && (
-        <div className="sticky top-0 z-30 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-0 mb-3 -pt-3 -mt-3 -mx-3 sm:-mx-6 px-3 sm:px-6 shadow-sm">
+      <div className="sticky top-0 z-30 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-0 mb-3 -pt-3 -mt-3 -mx-3 sm:-mx-6 px-3 sm:px-6 shadow-sm">
 
-          {/* SINGLE ROW - TABS LEFT, ACTIONS RIGHT */}
-          <div className="flex items-center justify-between py-3 gap-4 deep-header-row">
+        {/* SINGLE ROW - TABS LEFT, ACTIONS RIGHT */}
+        <div className="flex items-center justify-between py-3 gap-4 deep-header-row">
 
 
             {/* LEFT SIDE - TABS */}
@@ -343,9 +350,9 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
 
 
-            </div>
           </div>
         </div>
+      </div>
       )}
 
       <div className={`space-y-6 transition-all duration-500 ${isBlurred ? 'blur-sm opacity-50 pointer-events-none select-none overflow-hidden h-screen' : 'blur-0 opacity-100'}`}>
