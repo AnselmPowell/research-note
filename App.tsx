@@ -100,8 +100,9 @@ const App: React.FC = () => {
     return <SourcesPanel />;
   }, []);
 
-  // Calculate showDeepResearch first
-  const showDeepResearch = researchPhase !== 'idle' || loadedPdfs.length > 0;
+  // Calculate showDeepResearch first - include web search results
+  const hasWebSearchResults = searchState.data?.sources && searchState.data.sources.length > 0;
+  const showDeepResearch = researchPhase !== 'idle' || loadedPdfs.length > 0 || hasWebSearchResults;
 
   // Memoize middle content to prevent unnecessary re-renders
   const middleContent = useMemo(() => {

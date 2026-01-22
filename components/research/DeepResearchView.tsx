@@ -124,9 +124,11 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     }
   }, [webSearchLoading]);
 
-  // Auto-switch to deep research tab when ArXiv candidates are available
+  // Auto-switch to deep research tab when ArXiv candidates are available DURING ACTIVE RESEARCH
+  // Don't auto-switch when just loading persisted 'completed' results from localStorage
   useEffect(() => {
-    if (candidates.length > 0 && researchPhase !== 'idle') {
+    const activeResearchPhases = ['initializing', 'searching', 'filtering', 'extracting'];
+    if (candidates.length > 0 && activeResearchPhases.includes(researchPhase)) {
       setActiveTab('deep');
     }
   }, [candidates.length, researchPhase]);
@@ -196,23 +198,6 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     }
   }, [selectedArxivIds.size, candidates, clearArxivSelection, selectAllArxivPapers]);
 
-  if (isSearching) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[500px] p-8 space-y-6 animate-fade-in">
-        <div className="relative">
-          <div className="w-20 h-20 border-4 border-scholar-100 dark:border-scholar-900 border-t-scholar-600 dark:border-t-scholar-500 rounded-full animate-spin"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <BookOpenText size={24} className="text-scholar-600 dark:text-scholar-500 animate-pulse" />
-          </div>
-        </div>
-        <div className="text-center space-y-3 max-w-md mx-auto">
-          <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Deep Research in Progress</h3>
-          <p className="text-gray-500 dark:text-gray-400 leading-relaxed animate-pulse">{status || "Analysing topics..."}</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-3 sm:p-6 font-sans max-w-4xl mx-auto min-h-[500px] relative" style={{ containerType: 'inline-size' }}>
       <style>{`
@@ -277,6 +262,9 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
               >
                 <BookOpenText size={20} className="flex-shrink-0" />
                 <span className="tab-label deep-tab-label">Deep Research</span>
+                {isSearching && activeTab === 'web' && (
+                  <Loader2 size={14} className="animate-spin text-scholar-600 flex-shrink-0" />
+                )}
               </button>
             </div>
 
@@ -459,6 +447,22 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
             />
           ))
         ))}
+
+        {/* Deep Research Tab - Loading state (searching/initializing) */}
+        {activeTab === 'deep' && isSearching && (
+          <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-8 space-y-6 animate-fade-in">
+            <div className="relative">
+              <div className="w-20 h-20 border-4 border-scholar-100 dark:border-scholar-900 border-t-scholar-600 dark:border-t-scholar-500 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <BookOpenText size={24} className="text-scholar-600 dark:text-scholar-500 animate-pulse" />
+              </div>
+            </div>
+            <div className="text-center space-y-3 max-w-md mx-auto">
+              <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Deep Research in Progress</h3>
+              <p className="text-gray-500 dark:text-gray-400 leading-relaxed animate-pulse">{status || "Analysing topics..."}</p>
+            </div>
+          </div>
+        )}
 
         {/* Deep Research Tab - Empty state */}
         {activeTab === 'deep' && candidates.length === 0 && researchPhase === 'idle' && (
