@@ -58,9 +58,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     setMode(activeSearchMode);
     if (activeSearchMode !== 'deep') {
       setIsExpanded(false);
-    } else {
-      setIsExpanded(true);
     }
+    // Removed automatic expansion for deep mode
   }, [activeSearchMode]);
 
   // If initialQuery passed (e.g. from props fallback), sync it to context if context is empty
@@ -174,7 +173,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     setIsExpanded(false); // Close expanded deep search when mode changes
 
     if (newMode === 'deep') {
-      setIsExpanded(true);
+      // Removed setIsExpanded(true) to prevent auto-opening
       // If switching back to Deep, and the text input matches an existing tag (e.g. from Web auto-fill),
       // clear the text input so we don't see the duplicate (Tag + Text).
       if (searchBarState.additionalTopics.length > 0) {
@@ -268,6 +267,11 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       setShowHistory(hasMatches);
     } else {
       setShowHistory(false);
+    }
+    
+    // Auto-expand deep research menu when typing
+    if (mode === 'deep' && value.trim().length > 0) {
+      setIsExpanded(true);
     }
   };
 
@@ -624,7 +628,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
               value={searchBarState.mainInput}
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleMainInputKeyDown}
-              onFocus={() => {
+              onDoubleClick={() => {
                 if (mode === 'deep') setIsExpanded(true);
               }}
               onClick={handleInputClick}
