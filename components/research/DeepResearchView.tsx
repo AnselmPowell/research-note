@@ -475,43 +475,42 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
       </div>
 
       {pendingDeepResearchQuery && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 animate-fade-in">
-          {/* Note Manager modal design without backdrop/red border as requested */}
-          <div className="absolute inset-0" onClick={() => setPendingDeepResearchQuery(null)} />
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-transparent" onClick={() => setPendingDeepResearchQuery(null)} />
 
-          <div className="relative w-full max-w-md bg-white dark:bg-dark-card rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden animate-slide-up border border-gray-100 dark:border-gray-800">
-            <div className="p-6 sm:p-10 text-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-red-50 dark:bg-red-900/20 rounded-2xl sm:rounded-3xl flex items-center justify-center mx-auto mb-6 sm:mb-8 transform rotate-3">
-                <AlertTriangle size={32} className="sm:w-[40px] sm:h-[40px] text-red-600" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white mb-3 sm:mb-4 leading-tight uppercase tracking-tight">
-                New Search?
-              </h2>
-              <p className="text-gray-500 dark:text-gray-400 leading-relaxed font-medium text-xs sm:text-sm">
-                CAUTION: Starting a new search will remove your current deep research results and notes unless saved. Do you wish to continue?
+          <div className="relative w-full max-w-lg bg-white dark:bg-gray-900 rounded-xl shadow-2xl ring-1 ring-gray-900/5 dark:ring-white/10 p-8 animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center mb-8">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
+                Start New Research Session?
+              </h3>
+              <p className="text-base text-gray-500 dark:text-gray-400 leading-relaxed">
+                Starting a new search will <span className="font-semibold text-gray-900 dark:text-gray-200">permanently clear</span> your current research results and any unsaved notes.
+                <br /><br />
+                Are you sure you want to discard your current progress?
               </p>
             </div>
-            <div className="p-4 sm:p-6 bg-gray-50 dark:bg-gray-800/50 flex flex-col sm:flex-row gap-3 sm:gap-4">
+
+            <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={() => setPendingDeepResearchQuery(null)}
-                className="flex-1 px-8 py-3 sm:py-4 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 transition-colors text-xs sm:text-sm uppercase tracking-widest"
+                className="px-6 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"
               >
-                Cancel
+                Go Back
               </button>
               <button
                 onClick={() => {
                   performDeepResearch(pendingDeepResearchQuery);
                   setPendingDeepResearchQuery(null);
                 }}
-                className="flex-1 px-8 py-3 sm:py-4 bg-red-600 text-white font-bold rounded-xl sm:rounded-2xl shadow-lg hover:bg-red-700 transition-all flex items-center justify-center gap-3 text-xs sm:text-sm uppercase tracking-widest"
+                className="px-6 py-3 text-sm font-bold text-white bg-scholar-600 hover:bg-scholar-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
               >
-                <Sparkles size={18} /> Continue
+                <Sparkles size={18} />
+                Start New Session
               </button>
             </div>
           </div>
         </div>
-      )
-      }
+      )}
     </div >
   );
 };

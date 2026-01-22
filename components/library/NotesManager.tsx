@@ -569,40 +569,40 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
       </div>
 
       {deleteModal.isOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 animate-fade-in">
-          <div className="absolute inset-0 bg-scholar-900/20 backdrop-blur-sm" onClick={() => !deleteModal.isProcessing && setDeleteModal(prev => ({ ...prev, isOpen: false }))} />
-          <div className="relative w-full max-w-md bg-white dark:bg-dark-card rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden animate-slide-up border border-gray-100 dark:border-gray-800">
-            <div className="p-6 sm:p-10 text-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-red-50 dark:bg-red-900/20 rounded-2xl sm:rounded-3xl flex items-center justify-center mx-auto mb-6 sm:mb-8 transform rotate-3">
-                <AlertTriangle size={32} className="sm:w-[40px] sm:h-[40px] text-red-600" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white mb-3 sm:mb-4 leading-tight uppercase tracking-tight">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-transparent" onClick={() => !deleteModal.isProcessing && setDeleteModal(prev => ({ ...prev, isOpen: false }))} />
+          
+          <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-xl shadow-2xl ring-1 ring-gray-900/5 dark:ring-white/10 p-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                 {deleteModal.paperUri 
-                  ? (deleteModal.notesCount ? `Delete Paper & Insights?` : 'Delete Paper?') 
+                  ? (deleteModal.notesCount ? 'Delete Paper & Insights?' : 'Delete Paper?') 
                   : 'Remove Insight?'}
-              </h2>
-              <p className="text-gray-500 dark:text-gray-400 leading-relaxed font-medium text-xs sm:text-sm">
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
                 {deleteModal.paperUri 
                    ? (deleteModal.notesCount 
-                      ? `CAUTION: Deleting "${deleteModal.paperTitle}" will also erase ${deleteModal.notesCount} associated notes.` 
-                      : `Are you sure you want to delete this paper?`)
-                   : `Are you sure you want to delete this specific insight?`}
+                      ? `This will remove "${deleteModal.paperTitle}" and ${deleteModal.notesCount} notes.` 
+                      : `Are you sure you want to remove this paper from your library?`)
+                   : `This action cannot be undone.`}
               </p>
             </div>
-            <div className="p-4 sm:p-6 bg-gray-50 dark:bg-gray-800/50 flex flex-col sm:flex-row gap-3 sm:gap-4">
+
+            <div className="grid grid-cols-2 gap-3">
               <button 
                 onClick={() => setDeleteModal(prev => ({ ...prev, isOpen: false }))}
                 disabled={deleteModal.isProcessing}
-                className="flex-1 px-8 py-3 sm:py-4 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 text-xs sm:text-sm uppercase tracking-widest"
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleConfirmDelete}
                 disabled={deleteModal.isProcessing}
-                className="flex-1 px-8 py-3 sm:py-4 bg-red-600 text-white font-bold rounded-xl sm:rounded-2xl shadow-lg hover:bg-red-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50 text-xs sm:text-sm uppercase tracking-widest"
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2"
               >
-                {deleteModal.isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />} Confirm
+                {deleteModal.isProcessing ? <Loader2 size={16} className="animate-spin" /> : null}
+                Delete
               </button>
             </div>
           </div>

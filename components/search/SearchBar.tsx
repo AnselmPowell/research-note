@@ -424,6 +424,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
     const validUrls = searchBarState.urls.map(u => typeof u === 'string' ? u : u.value);
     const deepQuery: DeepResearchQuery = { topics: allTopics, urls: validUrls, questions: finalQuestions };
+    
+    // Close the search bar before triggering the action to prevent UI overlap
+    setIsExpanded(false);
 
     handleTriggerSearch(deepQuery, 'deep');
   };
