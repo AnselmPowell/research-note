@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Globe, BookOpenText, Layout, Maximize2, X, Lock, Unlock, Library, FileText, FolderOpen } from 'lucide-react';
 import { useUI, ColumnKey } from '../../contexts/UIContext';
 import { useResearch } from '../../contexts/ResearchContext';
@@ -33,7 +33,11 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef<ColumnKey | null>(null);
 
-  const activeColumnCount = (showLeft ? 1 : 0) + (showMiddle ? 1 : 0) + (showLibrary ? 1 : 0) + (showRight ? 1 : 0);
+  // Memoize active column count calculation
+  const activeColumnCount = useMemo(() => 
+    (showLeft ? 1 : 0) + (showMiddle ? 1 : 0) + (showLibrary ? 1 : 0) + (showRight ? 1 : 0), 
+    [showLeft, showMiddle, showLibrary, showRight]
+  );
 
   // Auto-adjust widths when column configuration changes
   useEffect(() => {
@@ -55,8 +59,8 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
     }
   }, [showLeft, showMiddle, showRight, showLibrary]);
 
-  // Calculate optimal widths based on active columns
-  const getColumnWidth = (column: 'left' | 'middle' | 'library' | 'right') => {
+  // Calculate optimal widths based on active columns - memoized for performance
+  const getColumnWidth = useCallback((column: 'left' | 'middle' | 'library' | 'right') => {
     // If only one column is visible, enforce max width for left column
     if (activeColumnCount === 1) {
       if (column === 'left') {
@@ -112,7 +116,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
     }
 
     return 'auto';
-  };
+  }, [activeColumnCount, showLeft, showMiddle, showLibrary, showRight, leftWidth, middleWidth, libraryWidth]);
 
   // Mouse move handler for resizing
   useEffect(() => {
@@ -155,26 +159,26 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
     };
   }, [showLeft, showMiddle, showLibrary, showRight, leftWidth, middleWidth, libraryWidth, rightWidth]);
 
-  const startResize = (col: ColumnKey) => {
+  const startResize = useCallback((col: ColumnKey) => {
     isResizing.current = col;
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-  };
+  }, []);
 
-  const handleExpand = (col: ColumnKey) => {
+  const handleExpand = useCallback((col: ColumnKey) => {
     setColumnVisibility({
       left: col === 'left',
       middle: col === 'middle',
       library: col === 'library',
       right: col === 'right'
     });
-  };
+  }, [setColumnVisibility]);
 
-  const handleTitleClick = (colKey: ColumnKey) => {
+  const handleTitleClick = useCallback((colKey: ColumnKey) => {
     if (colKey === 'left') setActiveSearchMode('web');
     if (colKey === 'middle') setActiveSearchMode('deep');
     if (colKey === 'right') setActiveSearchMode('upload');
-  };
+  }, [setActiveSearchMode]);
 
   const RenderHeader = ({
     title,
@@ -224,14 +228,14 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
     </div>
   );
 
-  const ResizeHandle = ({ onMouseDown }: { onMouseDown: () => void }) => (
+  const ResizeHandle = React.memo(({ onMouseDown }: { onMouseDown: () => void }) => (
     <div
       className="w-2 h-full cursor-col-resize flex-none flex items-center justify-center group hover:bg-black/5 dark:hover:bg-white/5 transition-colors z-20 rounded-lg"
       onMouseDown={onMouseDown}
     >
       <div className="w-1 h-8 bg-gray-200 dark:bg-gray-700 group-hover:bg-scholar-400 rounded-full transition-colors"></div>
     </div>
-  );
+  ));
 
   return (
     <div className="flex-1 bg-cream dark:bg-dark-bg p-1 h-full overflow-hidden transition-colors duration-300">

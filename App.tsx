@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { ThreeColumnLayout } from './components/layout/ThreeColumnLayout';
 import { SearchBar } from './components/search/SearchBar';
 import { WebSearchView } from './components/websearch/WebSearchView';
@@ -95,6 +95,68 @@ const App: React.FC = () => {
       .slice(0, 5);
   }, []);
 
+  // Memoized content components - must be called before any conditional returns
+  const renderSourcesColumn = useCallback(() => {
+    return <SourcesPanel />;
+  }, []);
+
+  // Calculate showDeepResearch first
+  const showDeepResearch = researchPhase !== 'idle' || loadedPdfs.length > 0;
+
+  // Memoize middle content to prevent unnecessary re-renders
+  const middleContent = useMemo(() => {
+    if (showDeepResearch) {
+      return (
+        <DeepResearchView
+          researchPhase={researchPhase}
+          status={gatheringStatus}
+          candidates={researchPhase === 'extracting' || researchPhase === 'completed' ? filteredCandidates : arxivCandidates}
+          generatedKeywords={arxivKeywords}
+          webSearchSources={searchState.data?.sources || []}
+          webSearchLoading={searchState.isLoading}
+          webSearchError={searchState.error}
+          onViewPdf={async (paper) => {
+            const success = await loadPdfFromUrl(paper.pdfUri, paper.title, paper.authors.join(', '));
+            if (success) {
+              setActivePdf(paper.pdfUri);
+              openColumn('right');
+            }
+          }}
+        />
+      );
+    } else {
+      return (
+        <div className="p-12 flex flex-col items-center justify-center text-center opacity-50 h-full">
+          <Library size={48} className="text-gray-300 dark:text-gray-600 mb-4" />
+          <p className="text-gray-400">Deep Research Inactive</p>
+        </div>
+      );
+    }
+  }, [
+    showDeepResearch,
+    researchPhase,
+    gatheringStatus,
+    filteredCandidates,
+    arxivCandidates,
+    arxivKeywords,
+    searchState.data?.sources,
+    searchState.isLoading,
+    searchState.error,
+    loadPdfFromUrl,
+    setActivePdf,
+    openColumn
+  ]);
+
+  // Memoize library content
+  const libraryContent = useMemo(() => {
+    return <NotesManager activeView={libraryActiveView} />;
+  }, [libraryActiveView]);
+
+  // Memoize right content
+  const rightContent = useMemo(() => {
+    return <PdfWorkspace />;
+  }, []);
+
   // Show loading screen during authentication or config loading
   if (authLoading || isConfigLoading) {
     return (
@@ -155,13 +217,7 @@ const App: React.FC = () => {
     }, 50);
   };
 
-  const renderSourcesColumn = () => {
-    return <SourcesPanel />;
-  };
-
   const allColumnsClosed = !columnVisibility.left && !columnVisibility.middle && !columnVisibility.library && !columnVisibility.right;
-  // MODIFIED: Show DeepResearchView if phase is active OR if user has uploaded papers
-  const showDeepResearch = researchPhase !== 'idle' || loadedPdfs.length > 0;
   const showHeaderSearch = !allColumnsClosed;
 
   // Show loading screen while validating config
@@ -223,33 +279,9 @@ const App: React.FC = () => {
       ) : (
         <ThreeColumnLayout
           sourcesContent={renderSourcesColumn()}
-          middleContent={
-            showDeepResearch ? (
-              <DeepResearchView
-                researchPhase={researchPhase}
-                status={gatheringStatus}
-                candidates={researchPhase === 'extracting' || researchPhase === 'completed' ? filteredCandidates : arxivCandidates}
-                generatedKeywords={arxivKeywords}
-                webSearchSources={searchState.data?.sources || []}
-                webSearchLoading={searchState.isLoading}
-                webSearchError={searchState.error}
-                onViewPdf={async (paper) => {
-                  const success = await loadPdfFromUrl(paper.pdfUri, paper.title, paper.authors.join(', '));
-                  if (success) {
-                    setActivePdf(paper.pdfUri);
-                    openColumn('right');
-                  }
-                }}
-              />
-            ) : (
-              <div className="p-12 flex flex-col items-center justify-center text-center opacity-50 h-full">
-                <Library size={48} className="text-gray-300 dark:text-gray-600 mb-4" />
-                <p className="text-gray-400">Deep Research Inactive</p>
-              </div>
-            )
-          }
-          libraryContent={<NotesManager activeView={libraryActiveView} />}
-          rightContent={<PdfWorkspace />}
+          middleContent={middleContent}
+          libraryContent={libraryContent}
+          rightContent={rightContent}
         />
       )}
 

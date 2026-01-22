@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useDatabase } from '../../database/DatabaseContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
@@ -19,8 +19,11 @@ export const SourcesPanel: React.FC = () => {
     // Multiple file upload state
     const [uploadProgress, setUploadProgress] = useState<{current: number; total: number; currentFileName: string} | null>(null);
 
-    // Only show explicitly saved papers
-    const sourcePapers = savedPapers.filter(p => p.is_explicitly_saved);
+    // Only show explicitly saved papers - memoize this computation
+    const sourcePapers = useMemo(() => 
+        savedPapers.filter(p => p.is_explicitly_saved), 
+        [savedPapers]
+    );
 
     // Filter and sort papers based on search query
     const filteredPapers = useMemo(() => {
@@ -39,7 +42,7 @@ export const SourcesPanel: React.FC = () => {
             .map(({ paper }) => paper);
     }, [sourcePapers, searchQuery]);
 
-    const handleToggleButton = async (e: React.MouseEvent, paper: any) => {
+    const handleToggleButton = useCallback(async (e: React.MouseEvent, paper: any) => {
         e.stopPropagation();
         const wasSelected = isPdfInContext(paper.uri);
 
@@ -51,9 +54,9 @@ export const SourcesPanel: React.FC = () => {
             }
         }
         togglePdfContext(paper.uri, paper.title);
-    };
+    }, [isPdfInContext, loadedPdfs, loadPdfFromUrl, togglePdfContext]);
 
-    const handleOpenPaper = async (uri: string, title: string) => {
+    const handleOpenPaper = useCallback(async (uri: string, title: string) => {
         try {
             await loadPdfFromUrl(uri, title);
             setActivePdf(uri);
@@ -61,7 +64,7 @@ export const SourcesPanel: React.FC = () => {
         } catch (error) {
             console.error('[SourcesPanel] Failed to open paper:', error);
         }
-    };
+    }, [loadPdfFromUrl, setActivePdf, setColumnVisibility]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
