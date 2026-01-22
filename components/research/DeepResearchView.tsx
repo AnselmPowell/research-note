@@ -100,7 +100,9 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     clearDeepResearchResults,
     pendingDeepResearchQuery,
     setPendingDeepResearchQuery,
-    performDeepResearch
+    performDeepResearch,
+    activeSearchMode,
+    setActiveSearchMode
   } = useResearch();
 
   // State Management
@@ -109,6 +111,13 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   const [sortBy, setSortBy] = useState<SortOption>('relevant-papers');
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [allNotesExpanded, setAllNotesExpanded] = useState(true);
+
+  // Sync: Switch tab based on active search mode (keeps SearchBar and View in sync)
+  useEffect(() => {
+    if (activeSearchMode === 'web' || activeSearchMode === 'deep') {
+      setActiveTab(activeSearchMode);
+    }
+  }, [activeSearchMode]);
 
   // Sync: Switch to Deep Research tab when deep research starts
   useEffect(() => {
@@ -249,7 +258,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
               )}
 
               <button
-                onClick={() => { setActiveTab('web'); }}
+                onClick={() => { setActiveTab('web'); setActiveSearchMode('web'); }}
                 className={`deep-tab-button px-4 py-1  text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'web' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
               >
                 <Search size={20} className="flex-shrink-0" />
@@ -257,7 +266,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
               </button>
 
               <button
-                onClick={() => { setActiveTab('deep'); }}
+                onClick={() => { setActiveTab('deep'); setActiveSearchMode('deep'); }}
                 className={`deep-tab-button px-4 py-1 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'deep' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
               >
                 <BookOpenText size={20} className="flex-shrink-0" />
