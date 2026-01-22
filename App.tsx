@@ -20,6 +20,7 @@ import { Globe, Check, Library, ChevronsDown, ChevronsUp, AlertTriangle, User, L
 // Import configuration to validate on app start
 import { getConfig } from './config/env';
 import { dataMigrationService } from './utils/dataMigrationService';
+import { cleanupExpiredCache } from './utils/metadataCache';
 
 const ALL_SUGGESTIONS = [
   "Renewable Energy Solutions",
@@ -42,6 +43,10 @@ const App: React.FC = () => {
   useEffect(() => {
     try {
       getConfig(); // This will throw if required config is missing
+      
+      // Clean up expired metadata cache entries
+      cleanupExpiredCache();
+      
       setIsConfigLoading(false);
     } catch (error) {
       setConfigError(error instanceof Error ? error.message : 'Configuration error');
