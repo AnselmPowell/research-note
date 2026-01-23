@@ -280,13 +280,24 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     }
   }, [uiSelectedPaperUris.length, paginatedPapers]);
 
-  const handleUiPaperSelect = useCallback((paperUri: string) => {
+  const handleUiPaperSelect = useCallback(async (paperUri: string) => {
+    // Update UI selection state
     setUiSelectedPaperUris(prev => 
       prev.includes(paperUri) 
         ? prev.filter(uri => uri !== paperUri)
         : [...prev, paperUri]
     );
-  }, []);
+    
+    // ALSO add/remove from PDF context for researcher (issue #3 fix)
+    const paper = savedPapers.find(p => p.uri === paperUri);
+    if (paper) {
+      const wasInContext = isPdfInContext(paperUri);
+      togglePdfContext(paperUri, paper.title);
+      if (!wasInContext) {
+        await loadPdfFromUrl(paperUri, paper.title);
+      }
+    }
+  }, [savedPapers, isPdfInContext, togglePdfContext, loadPdfFromUrl]);
 
   const handleNoteSelect = (id: number) => {
     setSelectedNoteIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -423,21 +434,24 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
           {/* ACTION BAR ROW - ONLY WHEN ITEMS SELECTED */}
           {((activeTab === 'notes' && selectedNoteIds.length > 0) || (activeTab === 'papers' && uiSelectedPaperUris.length > 0)) && (
-            <div className="flex items-center justify-between py-3 bg-scholar-50/50 dark:bg-scholar-900/20">
+            <div className="flex items-center justify-between py-3 gap-4 border-t border-gray-100 dark:border-gray-700/50 bg-cream/30 dark:bg-dark-card/30 rounded-b-xl -mx-4 px-4">
               
               {/* LEFT: SELECTION INFO */}
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => activeTab === 'notes' ? setSelectedNoteIds([]) : setUiSelectedPaperUris([])}
-                  className="p-2 text-scholar-600 hover:bg-scholar-100 dark:hover:bg-scholar-900/30 rounded-lg transition-all"
+                  className="p-2.5 text-gray-500 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  title="Clear selection"
                 >
-                  <Check size={18} />
+                  <div className="w-6 h-6 rounded border-2 bg-scholar-600 border-scholar-600 transition-colors flex items-center justify-center">
+                    <Check size={16} className="text-white" />
+                  </div>
                 </button>
                 <div>
-                  <span className="text-lg font-bold text-scholar-700 dark:text-scholar-400">
+                  <span className="text-lg font-bold text-gray-700 dark:text-gray-300">
                     {activeTab === 'notes' ? selectedNoteIds.length : uiSelectedPaperUris.length}
                   </span>
-                  <span className="text-xs font-bold uppercase tracking-widest text-scholar-600 dark:text-scholar-500 opacity-80 ml-1">
+                  <span className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 opacity-80 ml-1">
                     Selected
                   </span>
                 </div>
@@ -451,11 +465,11 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                   <div className="relative" ref={bulkCopyRef}>
                     <button 
                       onClick={() => setShowBulkCopyMenu(!showBulkCopyMenu)}
-                      className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-scholar-700 dark:text-scholar-400 hover:bg-scholar-100 dark:hover:bg-scholar-900/30 rounded-lg transition-all"
+                      className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
                     >
                       <Copy size={16} />
                       <span className="action-bar-text">Copy</span>
-                      <ChevronDown size={14} className={`transition-transform ${showBulkCopyMenu ? 'rotate-180' : ''}`} />
+                      <ChevronDown size={14} className={`text-gray-400 transition-transform ${showBulkCopyMenu ? 'rotate-180' : ''}`} />
                     </button>
                     
                     {showBulkCopyMenu && (
@@ -491,7 +505,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                       });
                     }
                   }}
-                  className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all action-bar-button"
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors action-bar-button"
                 >
                   <Trash2 size={16} />
                   <span className="action-bar-text">Delete</span>
@@ -648,7 +662,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                       if (sortColumn === col) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
                       else { setSortColumn(col); setSortDirection('asc'); }
                    }}
-                   onSelect={handleUiPaperSelect}
+                   onSelect={(paper) => handleUiPaperSelect(paper.uri)}
                    onExpand={handleTogglePaperExpand}
                    onDelete={openDeletePaperModal}
                    onView={(p) => {
