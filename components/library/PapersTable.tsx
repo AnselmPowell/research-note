@@ -223,9 +223,9 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                         <tr>
                             <td colSpan={6} className="py-24 text-center">
                                 <div className="flex flex-col items-center justify-center opacity-40">
-                                    <FileText size={48} className="mb-4 text-gray-300" />
-                                    <p className="text-gray-900 font-bold">No papers found</p>
-                                    <p className="text-sm text-gray-500">Try adjusting your filters</p>
+                                    <FileText size={48} className="mb-4 text-gray-300 dark:text-gray-600" />
+                                    <p className="text-gray-900 dark:text-white font-bold">No papers found</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Try adjusting your filters</p>
                                 </div>
                             </td>
                         </tr>

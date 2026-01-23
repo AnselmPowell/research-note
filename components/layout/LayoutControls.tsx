@@ -26,7 +26,7 @@ const DesktopButton = ({ col, icon: Icon, label, tooltipIcon, isActive, onToggle
       onClick={() => onToggle(col)}
       className={`group relative p-2 md:p-2.5 rounded-lg transition-all duration-200 ${isActive
         ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400'
-        : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800'
+        : 'text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
         }`}
     >
       <Icon size={20} />
@@ -102,28 +102,28 @@ export const LayoutControls: React.FC = () => {
             </div>
 
             <button onClick={() => handleToggle('left')} className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <FolderOpen size={18} className={columnVisibility.left ? "text-scholar-600" : "text-gray-400"} />
-              <span className={`text-sm ${columnVisibility.left ? "font-semibold text-scholar-600" : "text-gray-600 dark:text-gray-300"}`}>Sources</span>
-              {columnVisibility.left && <Check size={16} className="ml-auto text-scholar-600" />}
+              <FolderOpen size={18} className={columnVisibility.left ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+              <span className={`text-sm ${columnVisibility.left ? "font-semibold text-scholar-600 dark:text-scholar-400" : "text-gray-600 dark:text-white"}`}>Sources</span>
+              {columnVisibility.left && <Check size={16} className="ml-auto text-scholar-600 dark:text-scholar-400" />}
             </button>
 
             <button onClick={() => handleToggle('middle')} className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <BookOpenText size={18} className={columnVisibility.middle ? "text-scholar-600" : "text-gray-400"} />
-              <span className={`text-sm ${columnVisibility.middle ? "font-semibold text-scholar-600" : "text-gray-600 dark:text-gray-300"}`}>Deep Research</span>
-              {columnVisibility.middle && <Check size={16} className="ml-auto text-scholar-600" />}
+              <BookOpenText size={18} className={columnVisibility.middle ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+              <span className={`text-sm ${columnVisibility.middle ? "font-semibold text-scholar-600 dark:text-scholar-400" : "text-gray-600 dark:text-white"}`}>Deep Research</span>
+              {columnVisibility.middle && <Check size={16} className="ml-auto text-scholar-600 dark:text-scholar-400" />}
             </button>
 
             <button onClick={() => handleToggle('right')} className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <FileText size={18} className={columnVisibility.right ? "text-scholar-600" : "text-gray-400"} />
-              <span className={`text-sm ${columnVisibility.right ? "font-semibold text-scholar-600" : "text-gray-600 dark:text-gray-300"}`}>Paper View</span>
-              {columnVisibility.right && <Check size={16} className="ml-auto text-scholar-600" />}
+              <FileText size={18} className={columnVisibility.right ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+              <span className={`text-sm ${columnVisibility.right ? "font-semibold text-scholar-600 dark:text-scholar-400" : "text-gray-600 dark:text-white"}`}>Paper View</span>
+              {columnVisibility.right && <Check size={16} className="ml-auto text-scholar-600 dark:text-scholar-400" />}
             </button>
 
             <div className="h-px bg-gray-100 dark:bg-gray-700 mx-4 my-1"></div>
 
             <button onClick={() => { toggleDarkMode(); setIsMobileMenuOpen(false); }} className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              {darkMode ? <Sun size={18} className="text-gray-500" /> : <Moon size={18} className="text-gray-500" />}
-              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">{darkMode ? 'Switch to Light' : 'Switch to Dark'}</span>
+              {darkMode ? <Sun size={18} className="text-gray-500 dark:text-gray-400" /> : <Moon size={18} className="text-gray-500" />}
+              <span className="text-sm font-medium text-gray-600 dark:text-white">{darkMode ? 'Switch to Light' : 'Switch to Dark'}</span>
             </button>
           </div>
         )}

@@ -364,7 +364,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
               {(activeTab === 'notes' ? paginatedNotes.length > 0 : paginatedPapers.length > 0) && (
                 <button
                   onClick={activeTab === 'notes' ? handleSelectAllNotes : handleSelectAllPapers}
-                  className="p-2.5 text-gray-500 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  className="p-2.5 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
                   title={`Select all ${activeTab} on page`}
                 >
                   <div className={`w-5 h-5 rounded border-2 transition-colors flex items-center justify-center ${
@@ -384,7 +384,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
               {/* EXISTING TAB BUTTONS */}
               <button 
                 onClick={() => { setActiveTab('notes'); setCurrentPage(1); setUiSelectedPaperUris([]); }}
-                className={`tab-button px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'notes' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
+                className={`tab-button px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'notes' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
               >
                 <LayoutList size={18} className="flex-shrink-0" />
                 <span className="tab-label">
@@ -394,7 +394,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
               
               <button 
                 onClick={() => { setActiveTab('papers'); setCurrentPage(1); setSelectedNoteIds([]); }}
-                className={`tab-button px-6 py-4 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === 'papers' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
+                className={`tab-button px-6 py-4 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === 'papers' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
               >
                 <FileText size={18} className="flex-shrink-0" />
                 <span className="tab-label">Papers</span>
@@ -406,14 +406,14 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
               <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
                 <button 
                   onClick={() => setViewMode('table')} 
-                  className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600' : 'text-gray-400 hover:text-scholar-600'}`}
+                  className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400' : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
                   title="Table View"
                 >
                   <TableIcon size={18} />
                 </button>
                 <button 
                   onClick={() => setViewMode('list')} 
-                  className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600' : 'text-gray-400 hover:text-scholar-600'}`}
+                  className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400' : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
                   title="List View"
                 >
                   <LayoutList size={18} />
@@ -422,7 +422,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition-all ${showFilters ? 'bg-scholar-50 border-scholar-200 text-scholar-600' : 'bg-white/60 border-gray-100 text-gray-500 hover:border-scholar-200 hover:text-scholar-600'}`}
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition-all ${showFilters ? 'bg-scholar-50 dark:bg-scholar-900/30 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400' : 'bg-white/60 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
               >
                 <Filter size={18} className="flex-shrink-0" />
                 <span className="tab-label">Filters</span>
@@ -438,7 +438,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
               <div className="flex items-center gap-3">
                 <button 
                   onClick={activeTab === 'notes' ? handleSelectAllNotes : handleSelectAllPapers}
-                  className="p-2.5 text-gray-500 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  className="p-2.5 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
                   title={(activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) || (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length) ? 'Clear selection' : 'Select all on page'}
                 >
                   <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${
@@ -471,7 +471,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                   <div className="relative" ref={bulkCopyRef}>
                     <button 
                       onClick={() => setShowBulkCopyMenu(!showBulkCopyMenu)}
-                      className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                      className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
                     >
                       <Copy size={16} />
                       <span className="action-bar-text">Copy</span>
@@ -479,13 +479,13 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                     </button>
                     
                     {showBulkCopyMenu && (
-                      <div className="absolute bottom-full mb-2 right-0 w-52 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50">
-                        <button onClick={() => handleBulkCopy('raw')} className="w-full text-left px-4 py-2.5 text-sm font-medium hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
+                      <div className="absolute bottom-full mb-2 right-0 w-52 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50">
+                        <button onClick={() => handleBulkCopy('raw')} className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-white hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
                           <FileText size={16} className="text-gray-400" />
                           Copy Quotes Only
                         </button>
-                        <button onClick={() => handleBulkCopy('full')} className="w-full text-left px-4 py-2.5 text-sm font-medium hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
-                          <FileJson size={16} className="text-scholar-600" />
+                        <button onClick={() => handleBulkCopy('full')} className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-white hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
+                          <FileJson size={16} className="text-scholar-600 dark:text-scholar-400" />
                           Copy Full Quotes
                         </button>
                       </div>
@@ -548,9 +548,9 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
             <div className="bg-white/60 dark:bg-dark-card/60 backdrop-blur-md border border-white dark:border-gray-700 rounded-2xl p-4 sm:p-6 mb-8 shadow-scholar animate-fade-in">
               <div className="flex flex-col gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-6 filters-grid">
                 <div className="sm:col-span-2 space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Keywords</label>
+                  <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest pl-1">Keywords</label>
                   <div className="relative group">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-scholar-600 transition-colors" />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-scholar-600 dark:group-focus-within:text-scholar-400 transition-colors" />
                     <input 
                       className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl pl-11 pr-10 py-2.5 text-sm outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all"
                       value={searchQuery}
@@ -641,9 +641,9 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                     />
                   )) : (
                     <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
-                       <Library size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300" />
-                       <h3 className="text-xl sm:text-2xl font-bold text-gray-800">No notes found</h3>
-                       <p className="text-xs sm:text-sm max-w-xs leading-relaxed">Save meaningful insights from your research to populate this section.</p>
+                       <Library size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300 dark:text-gray-600" />
+                       <h3 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">No notes found</h3>
+                       <p className="text-xs sm:text-sm max-w-xs leading-relaxed text-gray-500 dark:text-gray-400">Save meaningful insights from your research to populate this section.</p>
                     </div>
                   )}
                 </div>
@@ -663,12 +663,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                       else { setSortColumn(col); setSortDirection('asc'); }
                    }}
                    onSelect={(paper) => {
-                     // Use just the UI selection without PDF loading for table checkboxes
-                     setUiSelectedPaperUris(prev => 
-                       prev.includes(paper.uri) 
-                         ? prev.filter(uri => uri !== paper.uri)
-                         : [...prev, paper.uri]
-                     );
+                     // FIXED: Use handleUiPaperSelect to add to AgentResearcher context
+                     handleUiPaperSelect(paper.uri);
                    }}
                    onExpand={handleTogglePaperExpand}
                    onDelete={openDeletePaperModal}
@@ -696,9 +692,9 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                     />
                   )) : (
                       <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
-                        <FileText size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300" />
+                        <FileText size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300 dark:text-gray-600" />
                         <h3 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">No papers match this filter</h3>
-                        <p className="text-xs sm:text-sm max-w-xs leading-relaxed dark:text-scholar-400">Try changing your sub-filter or search query.</p>
+                        <p className="text-xs sm:text-sm max-w-xs leading-relaxed text-gray-500 dark:text-gray-400">Try changing your sub-filter or search query.</p>
                       </div>
                   )}
                 </div>
@@ -712,13 +708,13 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                  <button 
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
                   disabled={currentPage === 1} 
-                  className="px-6 py-2 rounded-xl font-bold text-gray-500 bg-white/40 border border-gray-100 hover:border-scholar-200 hover:text-scholar-600 disabled:opacity-30 transition-all text-sm shadow-sm"
+                  className="px-6 py-2 rounded-xl font-bold text-gray-500 dark:text-gray-400 bg-white/40 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400 disabled:opacity-30 transition-all text-sm shadow-sm"
                  >
                    Previous
                  </button>
                  
                  <div className="flex items-center gap-2">
-                   <span className="text-xs font-black text-scholar-600 uppercase tracking-tighter">Page</span>
+                   <span className="text-xs font-black text-scholar-600 dark:text-scholar-400 uppercase tracking-tighter">Page</span>
                    <span className="text-lg font-bold text-gray-900 dark:text-white">{currentPage}</span>
                    <span className="text-xs font-black text-gray-300 dark:text-scholar-400 uppercase tracking-tighter">of</span>
                    <span className="text-lg font-bold text-gray-400 dark:text-scholar-400">{Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE)}</span>
@@ -727,7 +723,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                  <button 
                   onClick={() => setCurrentPage(p => Math.min(Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE), p + 1))} 
                   disabled={currentPage === Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE)} 
-                  className="px-6 py-2 rounded-xl font-bold text-gray-500 bg-white/40 border border-gray-100 hover:border-scholar-200 hover:text-scholar-600 disabled:opacity-30 transition-all text-sm shadow-sm"
+                  className="px-6 py-2 rounded-xl font-bold text-gray-500 dark:text-gray-400 bg-white/40 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400 disabled:opacity-30 transition-all text-sm shadow-sm"
                  >
                    Next
                  </button>
@@ -819,10 +815,10 @@ function LibraryPaperCard({ paper, isSelected, isExpanded, onSelect, onToggleExp
           <div className="pt-1 mr-2 sm:mr-4">
             <button 
                 onClick={(e) => { e.stopPropagation(); onSelect(); }} 
-                className={`hover:text-scholar-600 transition-colors opacity-100 sm:group-hover/paper:opacity-100 ${isSelected ? 'text-scholar-600' : 'text-gray-300 dark:text-scholar-400 sm:opacity-0'}`}
+                className={`hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors opacity-100 sm:group-hover/paper:opacity-100 ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-300 dark:text-gray-500 sm:opacity-0'}`}
             > 
-             {isDownloading ? <Loader2 size={24} className="animate-spin text-scholar-600" />
-              : isSelected ? <Check size={24} className="text-scholar-600" /> : <Square size={24} />
+             {isDownloading ? <Loader2 size={24} className="animate-spin text-scholar-600 dark:text-scholar-400" />
+              : isSelected ? <Check size={24} className="text-scholar-600 dark:text-scholar-400" /> : <Square size={24} />
               }
             </button>
           </div>
@@ -851,7 +847,7 @@ function LibraryPaperCard({ paper, isSelected, isExpanded, onSelect, onToggleExp
                </div>
             </div>
 
-            <h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white leading-snug mb-2 cursor-pointer hover:text-scholar-600 transition-colors" onClick={handleOpenPdf}>
+            <h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white leading-snug mb-2 cursor-pointer hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors" onClick={handleOpenPdf}>
               {paper.title}
             </h3>
 
@@ -1011,7 +1007,7 @@ function NoteCard({
           <div className="pt-0.5 sm:pt-1 flex-shrink-0">
              <button 
                 onClick={(e) => { handleActionClick(e); onSelect(); }} 
-                className={`transition-all transform hover:scale-110 opacity-100 sm:group-hover:opacity-100 ${isSelected ? 'text-scholar-600' : 'text-gray-300 dark:text-scholar-400 sm:opacity-0 hover:text-scholar-600'}`}
+                className={`transition-all transform hover:scale-110 opacity-100 sm:group-hover:opacity-100 ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-300 dark:text-gray-500 sm:opacity-0 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
              >
                 {isSelected ? <Check size={18} className="stroke-[3px] sm:w-[22px] sm:h-[22px]" /> : <Square size={18} className="sm:w-[22px] sm:h-[22px]" />}
              </button>
@@ -1021,7 +1017,7 @@ function NoteCard({
              {sourceTitle && viewMode === 'list' && (
                <div className="mb-2 sm:mb-3 pb-1.5 sm:pb-2 border-b border-gray-50 dark:border-gray-700 group/title flex items-center gap-2" onClick={handleOpenPdf}>
                  <FileText size={10} className="sm:w-[12px] sm:h-[12px] text-gray-400 dark:text-scholar-400" />
-                 <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest truncate group-hover/title:text-scholar-600 transition-colors">
+                 <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest truncate group-hover/title:text-scholar-600 dark:group-hover/title:text-scholar-400 transition-colors">
                     {sourceTitle}
                  </span>
                </div>
@@ -1085,9 +1081,9 @@ function NoteCard({
             >
               <Flag size={14} className="sm:w-[18px] sm:h-[18px]" fill={note.is_flagged ? "currentColor" : "none"} />
             </button>
-            <button onClick={onEdit} className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center text-gray-400 dark:text-scholar-400 hover:bg-gray-50 hover:text-scholar-600 transition-all" title="Edit"><Edit3 size={14} className="sm:w-[18px] sm:h-[18px]" /></button>
+            <button onClick={onEdit} className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center text-gray-400 dark:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-scholar-600 dark:hover:text-scholar-400 transition-all" title="Edit"><Edit3 size={14} className="sm:w-[18px] sm:h-[18px]" /></button>
 
-             <button onClick={handleViewPdfWithHighlight} className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center text-gray-400 dark:text-scholar-400 hover:bg-red-50 hover:text-scholar-600 transition-all"><TextSearch size={14}  className="sm:w-[18px] sm:h-[18px]" /></button>
+             <button onClick={handleViewPdfWithHighlight} className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center text-gray-400 dark:text-scholar-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-scholar-600 dark:hover:text-scholar-400 transition-all"><TextSearch size={14}  className="sm:w-[18px] sm:h-[18px]" /></button>
             
             <div className="relative" ref={copyMenuRef}>
               <button 
@@ -1103,7 +1099,7 @@ function NoteCard({
                      <FileText size={12} className="sm:w-[14px] sm:h-[14px] text-gray-400" /> Copy Text
                    </button>
                    <button onClick={handleCopyFull} className="w-full text-left px-3 sm:px-4 py-2 text-[9px] sm:text-xs font-bold uppercase tracking-widest hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-2 sm:gap-3 transition-colors">
-                     <FileJson size={12} className="sm:w-[14px] sm:h-[14px] text-scholar-600" /> Citation
+                     <FileJson size={12} className="sm:w-[14px] sm:h-[14px] text-scholar-600 dark:text-scholar-400" /> Citation
                    </button>
                 </div>
               )}

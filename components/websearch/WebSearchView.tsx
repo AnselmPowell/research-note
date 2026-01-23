@@ -33,7 +33,7 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const hasAutoExpanded = useRef(false);
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
-  const { loadedPdfs, loadPdfFromUrl } = useLibrary();
+  const { loadedPdfs, loadPdfFromUrl, togglePdfContext } = useLibrary();
   const { openColumn } = useUI();
 
   const isSaved = isPaperSaved(source.uri);
@@ -96,6 +96,9 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
       ...source,
       numPages: loadedPdf ? loadedPdf.numPages : undefined
     });
+
+    // FIXED: Also add to AgentResearcher context like other workflows do
+    togglePdfContext(source.uri, source.title);
 
     // Open the sources panel
     openColumn('left');

@@ -139,8 +139,8 @@ const SidebarUserProfile: React.FC<{
 
             {/* Settings */}
             <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <Settings size={16} className="text-gray-500" />
-              <span className="text-sm text-gray-600 dark:text-gray-300">Settings</span>
+              <Settings size={16} className="text-gray-500 dark:text-gray-400" />
+              <span className="text-sm text-gray-600 dark:text-white">Settings</span>
               <span className="text-xs text-gray-400 ml-auto">Ctrl+,</span>
             </button>
 
@@ -149,8 +149,8 @@ const SidebarUserProfile: React.FC<{
               onClick={() => { toggleDarkMode(); }}
               className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
-              {darkMode ? <Sun size={16} className="text-gray-500" /> : <Moon size={16} className="text-gray-500" />}
-              <span className="text-sm text-gray-600 dark:text-gray-300">
+              {darkMode ? <Sun size={16} className="text-gray-500 dark:text-gray-400" /> : <Moon size={16} className="text-gray-500" />}
+              <span className="text-sm text-gray-600 dark:text-white">
                 {darkMode ? 'Light mode' : 'Dark mode'}
               </span>
             </button>
@@ -159,22 +159,22 @@ const SidebarUserProfile: React.FC<{
 
             {/* Upgrade plan */}
             <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500 dark:text-gray-400">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
-              <span className="text-sm text-gray-600 dark:text-gray-300">Upgrade plan</span>
+              <span className="text-sm text-gray-600 dark:text-white">Upgrade plan</span>
             </button>
 
             {/* Learn more */}
             <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500 dark:text-gray-400">
                 <circle cx="12" cy="12" r="10" />
                 <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
                 <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
-              <span className="text-sm text-gray-600 dark:text-gray-300">Learn more</span>
+              <span className="text-sm text-gray-600 dark:text-white">Learn more</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 ml-auto">
                 <polyline points="9,18 15,12 9,6" />
               </svg>
@@ -253,7 +253,7 @@ export const SidebarNav: React.FC<{
         <div className="mt-4 px-3 md:px-4">
           <button
             onClick={() => { openColumn('library'); if (onClose) onClose(); }}
-            className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shadow-sm"
+            className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shadow-sm"
           >
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 flex items-center justify-center">

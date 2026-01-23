@@ -123,6 +123,9 @@ export const SourcesPanel: React.FC = () => {
                     
                     // Save to database/localStorage
                     await savePaper(paperData);
+                    
+                    // FIXED: Also add to AgentResearcher context for consistency
+                    togglePdfContext(paperData.uri, paperData.title);
                 }
             }
 
@@ -163,6 +166,9 @@ export const SourcesPanel: React.FC = () => {
                 
                 // Save to database/localStorage
                 await savePaper(paperData);
+                
+                // FIXED: Also add to AgentResearcher context for consistency
+                togglePdfContext(paperData.uri, paperData.title);
                 
                 setUrlInput('');
                 setUploadMode('search');

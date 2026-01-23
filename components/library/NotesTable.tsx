@@ -303,16 +303,16 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                 </button>
                                                 
                                                 {actionMenuOpen === note.id && (
-                                                    <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-50 animate-fade-in overflow-hidden">
+                                                    <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-50 animate-fade-in overflow-hidden">
                                                         <button
                                                             onClick={(e) => handleCopy(e, note, false)}
-                                                            className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                                                            className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
                                                         >
                                                             <FileText size={14} /> Copy Text
                                                         </button>
                                                         <button
                                                             onClick={(e) => handleCopy(e, note, true)}
-                                                            className="w-full text-left px-4 py-2 text-xs font-bold text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 flex items-center gap-2"
+                                                            className="w-full text-left px-4 py-2 text-xs font-bold text-scholar-600 dark:text-scholar-400 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 flex items-center gap-2"
                                                         >
                                                             <FileJson size={14} /> Copy Full
                                                         </button>
@@ -397,9 +397,9 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                         <tr>
                             <td colSpan={6} className="py-24 text-center">
                                 <div className="flex flex-col items-center justify-center opacity-40">
-                                    <MessageSquareQuote size={48} className="mb-4 text-gray-300" />
-                                    <p className="text-gray-900 font-bold">No notes found</p>
-                                    <p className="text-sm text-gray-500">Capture insights to fill your ledger</p>
+                                    <MessageSquareQuote size={48} className="mb-4 text-gray-300 dark:text-gray-600" />
+                                    <p className="text-gray-900 dark:text-white font-bold">No notes found</p>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Capture insights to fill your ledger</p>
                                 </div>
                             </td>
                         </tr>

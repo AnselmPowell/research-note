@@ -247,7 +247,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
               {sortBy !== 'most-relevant-notes' && currentTabCandidates.length > 0 && (
                 <button
                   onClick={handleSelectAllPapers}
-                  className="p-2.5 text-gray-500 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  className="p-2.5 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
                   title={`Select all papers (${selectedArxivIds.size > 0 ? `${selectedArxivIds.size}/` : ''}${candidates.length})`}
                 >
                   <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${selectedArxivIds.size === candidates.length ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
@@ -259,7 +259,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
               <button
                 onClick={() => { setActiveTab('web'); setActiveSearchMode('web'); }}
-                className={`deep-tab-button px-4 py-1  text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'web' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
+                className={`deep-tab-button px-4 py-1  text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'web' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
               >
                 <Search size={20} className="flex-shrink-0" />
                 <span className="tab-label deep-tab-label">Web Search</span>
@@ -267,7 +267,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
               <button
                 onClick={() => { setActiveTab('deep'); setActiveSearchMode('deep'); }}
-                className={`deep-tab-button px-4 py-1 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'deep' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
+                className={`deep-tab-button px-4 py-1 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'deep' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
               >
                 <BookOpenText size={20} className="flex-shrink-0" />
                 <span className="tab-label deep-tab-label">Deep Research</span>
@@ -284,7 +284,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
               <div className="relative">
                 <button
                   onClick={() => setIsSortOpen(!isSortOpen)}
-                  className="flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  className="flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
                   title="Sort options"
                 >
                   <ArrowUpDown size={20} className="text-gray-400" />
@@ -301,17 +301,17 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                     <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
                     <div className="absolute right-0 top-[110%] w-full sm:w-56 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 overflow-hidden z-50 animate-fade-in flex flex-col">
                       <button onClick={() => { setSortBy('most-relevant-notes'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                        <Star size={16} className={sortBy === 'most-relevant-notes' ? "text-scholar-600" : "text-gray-400"} />
-                        <span className="text-sm font-medium">Most Relevant Notes</span>
+                        <Star size={16} className={sortBy === 'most-relevant-notes' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+                        <span className="text-sm font-medium text-gray-700 dark:text-white">Most Relevant Notes</span>
                       </button>
                       <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1"></div>
                       <button onClick={() => { setSortBy('relevant-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                        <Layers size={16} className={sortBy === 'relevant-papers' ? "text-scholar-600" : "text-gray-400"} />
-                        <span className="text-sm font-medium">Relevant Papers</span>
+                        <Layers size={16} className={sortBy === 'relevant-papers' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+                        <span className="text-sm font-medium text-gray-700 dark:text-white">Relevant Papers</span>
                       </button>
                       <button onClick={() => { setSortBy('newest-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                        <Calendar size={16} className={sortBy === 'newest-papers' ? "text-scholar-600" : "text-gray-400"} />
-                        <span className="text-sm font-medium">Newest Papers</span>
+                        <Calendar size={16} className={sortBy === 'newest-papers' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+                        <span className="text-sm font-medium text-gray-700 dark:text-white">Newest Papers</span>
                       </button>
                     </div>
                   </>
@@ -338,7 +338,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
               {sortBy !== 'most-relevant-notes' && currentTabCandidates.some(p => p.notes && p.notes.length > 0) && (
                 <button
                   onClick={() => setAllNotesExpanded(!allNotesExpanded)}
-                  className="p-2.5 -pl-3 text-gray-500 font-bold hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  className="p-2.5 -pl-3 text-gray-500 dark:text-gray-400 font-bold hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
                   title={allNotesExpanded ? 'Collapse all notes' : 'Expand all notes'}
                 >
                   {allNotesExpanded ? <ChevronsUp size={24} /> : <ChevronsDown size={24} />}
@@ -417,9 +417,9 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
         {/* Web Search Tab - Empty state */}
         {activeTab === 'web' && !webSearchLoading && !webSearchError && currentWebSources.length === 0 && (
           <div className="py-24 flex flex-col items-center justify-center text-center opacity-40">
-            <Search size={64} className="mb-6 text-gray-300" />
+            <Search size={64} className="mb-6 text-gray-300 dark:text-gray-600" />
             <h3 className="text-xl font-bold text-gray-800 dark:text-white">No web search results</h3>
-            <p className="text-xs max-w-xs leading-relaxed dark:text-gray-300">Enter a query in the search bar to find relevant sources.</p>
+            <p className="text-xs max-w-xs leading-relaxed text-gray-500 dark:text-gray-400">Enter a query in the search bar to find relevant sources.</p>
           </div>
         )}
 
@@ -476,9 +476,9 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
         {/* Deep Research Tab - Empty state */}
         {activeTab === 'deep' && candidates.length === 0 && researchPhase === 'idle' && (
           <div className="py-24 flex flex-col items-center justify-center text-center opacity-40">
-            <BookOpenText size={64} className="mb-6 text-gray-300" />
+            <BookOpenText size={64} className="mb-6 text-gray-300 dark:text-gray-600" />
             <h3 className="text-xl font-bold text-gray-800 dark:text-white">No deep research results</h3>
-            <p className="text-xs max-w-xs leading-relaxed dark:text-gray-300">Enter topics in the search bar to find academic papers.</p>
+            <p className="text-xs max-w-xs leading-relaxed text-gray-500 dark:text-gray-400">Enter topics in the search bar to find academic papers.</p>
           </div>
         )}
       </div>
@@ -616,6 +616,10 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
       numPages: loadedPdf ? loadedPdf.numPages : undefined
     };
     savePaper(paperData);
+    
+    // FIXED: Also add to AgentResearcher context like other workflows do
+    togglePdfContext(paper.pdfUri, paper.title);
+    
     openColumn('left');
   };
 
@@ -624,9 +628,9 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
       <div className={isExpanded ? 'p-1' : ''}>
         <div className="flex items-start">
           <div className="pt-1 mr-2 sm:mr-4">
-            <button onClick={handleSelectionToggle} className={`hover:text-scholar-600 transition-colors opacity-100 sm:group-hover/paper:opacity-100 ${isSelected ? 'text-scholar-600' : 'text-gray-400 sm:opacity-0'}`}>
+            <button onClick={handleSelectionToggle} className={`hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors opacity-100 sm:group-hover/paper:opacity-100 ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-400 dark:text-gray-500 sm:opacity-0'}`}>
               {(isDownloading || isProcessing) ? <Loader2 size={24} className="animate-spin" />
-                : isSelected ? <Check size={24} className="text-scholar-600" /> : <Square size={24} />}
+                : isSelected ? <Check size={24} className="text-scholar-600 dark:text-scholar-400" /> : <Square size={24} />}
             </button>
           </div>
 
@@ -663,7 +667,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
               </div>
             </div>
 
-            <h3 className="text-base sm:text-xl font-medium text-gray-900 dark:text-gray-100 leading-snug mb-2 cursor-pointer hover:text-scholar-600 transition-colors" onClick={handleOpenPdf}>
+            <h3 className="text-base sm:text-xl font-medium text-gray-900 dark:text-gray-100 leading-snug mb-2 cursor-pointer hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors" onClick={handleOpenPdf}>
               {paper.title}
             </h3>
 
@@ -672,12 +676,12 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
             <div className="flex items-center justify-between mt-2">
               <div className="flex items-center gap-3">
                 {(isDownloading || isProcessing || isExtracting) ? (
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-scholar-600">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-scholar-600 dark:text-scholar-400">
                     <Loader2 size={12} className="animate-spin" />
                     <span className="animate-pulse">{getStatusText()}</span>
                   </div>
                 ) : notes.length > 0 ? (
-                  <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-1.5 text-md font-medium text-bold text-scholar-600 hover:text-scholar-800 transition-colors">
+                  <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-1.5 text-md font-medium text-bold text-scholar-600 dark:text-scholar-400 hover:text-scholar-800 dark:hover:text-scholar-300 transition-colors">
                     {notes.length} Note{notes.length !== 1 ? 's' : ''} {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                   </button>
                 ) : isCompleted ? (
@@ -695,7 +699,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                     </span>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-scholar-600">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-scholar-600 dark:text-scholar-400">
                     <Check size={12} className="text-success-600" />
                     <span>Ready to analyze</span>
                   </div>
@@ -800,7 +804,7 @@ const ResearchCardNote: React.FC<{
   return (
     <div
       className={`relative group/note transition-all duration-300 ease-in-out border rounded-xl overflow-hidden cursor-pointer
-        ${isExpanded ? "bg-white dark:bg-gray-800" : "bg-white/50 dark:bg-dark-card"}
+        ${isExpanded ? "bg-white dark:bg-dark-card" : "bg-white/50 dark:bg-dark-card"}
         ${isSelected ? 'border-scholar-500 ring-1 ring-scholar-500' : 'border-gray-200 dark:border-gray-700 hover:shadow-sm'}
         ${isExpanded ? 'shadow-md ring-1 ring-scholar-100 dark:ring-scholar-900' : ''}
       `}
@@ -811,7 +815,7 @@ const ResearchCardNote: React.FC<{
           <div className="pt-1">
             <button
               onClick={(e) => { e.stopPropagation(); onSelect(); }}
-              className={`transition-all ${isSelected ? 'text-scholar-600' : 'text-gray-300 hover:text-scholar-600'}`}
+              className={`transition-all ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-300 dark:text-gray-500 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
             >
               {isSelected ? <Check size={20} strokeWidth={3} /> : <Square size={20} />}
             </button>
@@ -845,7 +849,7 @@ const ResearchCardNote: React.FC<{
               )}
 
               {!isExpanded && (
-                <span className="text-xs text-scholar-600 font-medium ml-auto opacity-0 group-hover/note:opacity-100 transition-opacity">
+                <span className="text-xs text-scholar-600 dark:text-scholar-400 font-medium ml-auto opacity-0 group-hover/note:opacity-100 transition-opacity">
                   Details
                 </span>
               )}
@@ -862,16 +866,16 @@ const ResearchCardNote: React.FC<{
            `}
           onClick={(e) => e.stopPropagation()}
         >
-          <button onClick={handleSaveToggle} className={`p-1.5 rounded-md ${isSaved ? 'text-scholar-600 bg-scholar-50' : 'text-gray-400 hover:bg-gray-100'}`} title="Save to Library">
+          <button onClick={handleSaveToggle} className={`p-1.5 rounded-md ${isSaved ? 'text-scholar-600 bg-scholar-50 dark:bg-scholar-900/30' : 'text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title="Save to Library">
             <Plus size={16} />
           </button>
-          <button onClick={handleContextToggle} className={`p-1.5 rounded-md ${isInContext ? 'text-blue-600 bg-blue-50' : 'text-gray-400 hover:bg-gray-100'}`} title="Add to Context">
+          <button onClick={handleContextToggle} className={`p-1.5 rounded-md ${isInContext ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30' : 'text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title="Add to Context">
             <BookmarkPlus size={16} />
           </button>
-          <button onClick={handleViewPdf} className="p-1.5 rounded-md text-gray-400 hover:bg-gray-100 hover:text-scholar-600" title="View in PDF Viewer">
+          <button onClick={handleViewPdf} className="p-1.5 rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-scholar-600 dark:hover:text-scholar-400" title="View in PDF Viewer">
             <BookText size={16} />
           </button>
-          <button onClick={handleCopy} className="p-1.5 rounded-md text-gray-400 hover:bg-gray-100" title="Copy text">
+          <button onClick={handleCopy} className="p-1.5 rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" title="Copy text">
             {justCopied ? <Check size={16} /> : <Copy size={16} />}
           </button>
         </div>
@@ -885,7 +889,7 @@ const ResearchCardNote: React.FC<{
             )}
             {note.justification && (
               <div className="bg-scholar-50 dark:bg-scholar-900/20 rounded-xl p-4 border border-scholar-100 dark:border-scholar-800/30 mb-4">
-                <h4 className="text-scholar-800 dark:text-scholar-400 text-md font-black uppercase mb-2 flex items-center gap-2">
+                <h4 className="text-scholar-800 dark:text-scholar-300 text-md font-black uppercase mb-2 flex items-center gap-2">
                   Justification/Context
                 </h4>
                 <p className="text-gray-700 dark:text-gray-300 text-xs sm:text-sm leading-relaxed">{note.justification}</p>
@@ -903,8 +907,8 @@ const ResearchCardNote: React.FC<{
                 </h4>
                 <ul className="space-y-3">
                   {note.citations.map((cit, idx) => (
-                    <li key={idx} className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 leading-relaxed pl-3 border-l-2 border-scholar-200">
-                      <span className="font-bold text-scholar-700 mr-2 bg-scholar-50 px-1 rounded">{cit.inline}</span>
+                    <li key={idx} className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 leading-relaxed pl-3 border-l-2 border-scholar-200 dark:border-scholar-800">
+                      <span className="font-bold text-scholar-700 dark:text-scholar-400 mr-2 bg-scholar-50 dark:bg-scholar-900/30 px-1 rounded">{cit.inline}</span>
                       {cit.full}
                     </li>
                   ))}
