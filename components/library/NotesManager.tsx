@@ -92,6 +92,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [localFilters, setLocalFilters] = useState({
     source: 'all',
+    query: 'all',
     flagged: false
   });
   const [sortColumn, setSortColumn] = useState('createdAt');
@@ -192,6 +193,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
       base = base.filter(n => new Date(n.created_at || 0).getTime() > oneDayAgo);
     }
     if (localFilters.source !== 'all') base = base.filter(n => n.paper_uri === localFilters.source);
+    if (localFilters.query !== 'all') base = base.filter(n => n.related_question === localFilters.query);
     if (localFilters.flagged) base = base.filter(n => n.is_flagged);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -202,6 +204,14 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
       if (sortColumn === 'createdAt') {
         valA = new Date(a.created_at || 0).getTime();
         valB = new Date(b.created_at || 0).getTime();
+      } else if (sortColumn === 'publishedYear') {
+        // Sort notes by the publication year of their source paper
+        const paperA = savedPapers.find(p => p.uri === a.paper_uri);
+        const paperB = savedPapers.find(p => p.uri === b.paper_uri);
+        const yearA = paperA?.created_at || paperA?.published || paperA?.publishedDate ? new Date(paperA.created_at || paperA.published || paperA.publishedDate).getFullYear() : 0;
+        const yearB = paperB?.created_at || paperB?.published || paperB?.publishedDate ? new Date(paperB.created_at || paperB.published || paperB.publishedDate).getFullYear() : 0;
+        valA = yearA;
+        valB = yearB;
       } else {
         valA = a.content; valB = b.content;
       }
@@ -223,16 +233,28 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     }
     
     base.sort((a, b) => {
+      // Always prioritize papers with notes first, then apply selected sorting
       const notesA = savedNotes.filter(n => n.paper_uri === a.uri).length;
       const notesB = savedNotes.filter(n => n.paper_uri === b.uri).length;
       if (notesA > 0 && notesB === 0) return -1;
       if (notesB > 0 && notesA === 0) return 1;
-      const valA = new Date(a.created_at || 0).getTime();
-      const valB = new Date(b.created_at || 0).getTime();
+      
+      // Apply the selected sort column
+      let valA, valB;
+      if (sortColumn === 'publishedYear') {
+        const yearA = a.created_at || a.published || a.publishedDate ? new Date(a.created_at || a.published || a.publishedDate).getFullYear() : 0;
+        const yearB = b.created_at || b.published || b.publishedDate ? new Date(b.created_at || b.published || b.publishedDate).getFullYear() : 0;
+        valA = yearA;
+        valB = yearB;
+      } else {
+        // Default to creation date for 'createdAt' and any other values
+        valA = new Date(a.created_at || 0).getTime();
+        valB = new Date(b.created_at || 0).getTime();
+      }
       return sortDirection === 'asc' ? valA - valB : valB - valA;
     });
     return base;
-  }, [savedPapers, savedNotes, searchQuery, sortDirection, paperSubFilter]);
+  }, [savedPapers, savedNotes, searchQuery, sortDirection, sortColumn, paperSubFilter]);
 
   const paginatedNotes = filteredNotes.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const paginatedPapers = filteredPapers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -332,6 +354,15 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
       noted: savedPapers.filter(p => savedNotes.some(n => n.paper_uri === p.uri)).length
   }), [savedPapers, savedNotes]);
 
+  const uniqueQueries = useMemo(() => {
+    const queries = savedNotes
+      .map(note => note.related_question)
+      .filter(query => query && query.trim().length > 0)
+      .filter((query, index, array) => array.indexOf(query) === index) // Remove duplicates
+      .sort();
+    return queries;
+  }, [savedNotes]);
+
   return (
     <div className="flex flex-col h-full overflow-hidden bg-cream dark:bg-dark-bg font-sans notes-manager-container" style={{ containerType: 'inline-size' }}>
       <style>{`
@@ -344,9 +375,17 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
           .tab-button { padding-left: 1.25rem !important; padding-right: 1.25rem !important; }
           .action-bar-text { display: none !important; }
           .action-bar-button { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+          .filter-label { font-size: 11px !important; }
+          .filter-input { font-size: 14px !important; padding: 0.625rem !important; }
+          .paper-pill { font-size: 11px !important; padding: 0.375rem 0.75rem !important; }
         }
         @container (max-width: 650px) {
           .notes-grid { grid-template-columns: 1fr !important; }
+          .filters-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 640px) {
+          .filter-container { padding: 1rem !important; }
+          .filter-grid { gap: 1rem !important; }
         }
       `}</style>
       
@@ -531,13 +570,13 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
               <div className="flex items-center gap-2 mb-6 px-1 animate-fade-in overflow-x-auto no-scrollbar">
                   <button 
                     onClick={() => setPaperSubFilter('all')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border ${paperSubFilter === 'all' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border paper-pill ${paperSubFilter === 'all' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 dark:text-scholar-400 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
                   >
                       All <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${paperSubFilter === 'all' ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-800'}`}>{paperCounts.all}</span>
                   </button>
                   <button 
                     onClick={() => setPaperSubFilter('noted')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border ${paperSubFilter === 'noted' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border paper-pill ${paperSubFilter === 'noted' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 dark:text-scholar-400 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
                   >
                       <Bookmark size={14} /> With Notes <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${paperSubFilter === 'noted' ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-800'}`}>{paperCounts.noted}</span>
                   </button>
@@ -545,21 +584,21 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
           )}
 
           {showFilters && (
-            <div className="bg-white/60 dark:bg-dark-card/60 backdrop-blur-md border border-white dark:border-gray-700 rounded-2xl p-4 sm:p-6 mb-8 shadow-scholar animate-fade-in">
-              <div className="flex flex-col gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-6 filters-grid">
+            <div className="bg-white/60 dark:bg-dark-card/60 backdrop-blur-md border border-white dark:border-gray-700 rounded-2xl p-4 sm:p-6 mb-8 shadow-scholar animate-fade-in filter-container">
+              <div className="flex flex-col gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-5 sm:gap-6 filters-grid filter-grid">
                 <div className="sm:col-span-2 space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest pl-1">Keywords</label>
+                  <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Keywords</label>
                   <div className="relative group">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-scholar-600 dark:group-focus-within:text-scholar-400 transition-colors" />
                     <input 
-                      className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl pl-11 pr-10 py-2.5 text-sm outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all"
+                      className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl pl-11 pr-10 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-scholar-400 outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all filter-input"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder={`Search...`}
                     />
                     {searchQuery && (
                       <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
-                        <X size={14} className="text-gray-400" />
+                        <X size={14} className="text-gray-400 dark:text-scholar-400" />
                       </button>
                     )}
                   </div>
@@ -567,9 +606,9 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
                 {activeTab === 'notes' && (
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Source Paper</label>
+                    <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Source Paper</label>
                     <select 
-                      className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none"
+                      className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none filter-input"
                       value={localFilters.source}
                       onChange={(e) => setLocalFilters({...localFilters, source: e.target.value})}
                     >
@@ -579,15 +618,42 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                   </div>
                 )}
 
+                {activeTab === 'notes' && uniqueQueries.length > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Research Query</label>
+                    <select 
+                      className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none filter-input"
+                      value={localFilters.query}
+                      onChange={(e) => setLocalFilters({...localFilters, query: e.target.value})}
+                    >
+                      <option value="all">All Queries</option>
+                      {uniqueQueries.map(query => <option key={query} value={query}>{query}</option>)}
+                    </select>
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Sort</label>
-                  <button 
-                    onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
-                    className="w-full flex items-center justify-between gap-3 px-4 py-2.5 bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors text-sm font-bold shadow-sm"
+                  <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Sort</label>
+                  <select 
+                    className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none filter-input"
+                    value={`${sortColumn}-${sortDirection}`}
+                    onChange={(e) => {
+                      const [column, direction] = e.target.value.split('-');
+                      setSortColumn(column);
+                      setSortDirection(direction as 'asc' | 'desc');
+                    }}
                   >
-                    <span className="truncate">{sortDirection === 'asc' ? 'Oldest' : 'Newest'}</span>
-                    <ArrowUpDown size={14} className="flex-shrink-0" />
-                  </button>
+                    <option value="createdAt-desc">Newest Added</option>
+                    <option value="createdAt-asc">Oldest Added</option>
+                    <option value="publishedYear-desc">Newest Published</option>
+                    <option value="publishedYear-asc">Oldest Published</option>
+                    {activeTab === 'notes' && (
+                      <>
+                        <option value="content-asc">Content A-Z</option>
+                        <option value="content-desc">Content Z-A</option>
+                      </>
+                    )}
+                  </select>
                 </div>
               </div>
             </div>
