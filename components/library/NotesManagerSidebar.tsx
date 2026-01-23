@@ -1,10 +1,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Clock, 
-  Flag, 
-  Star, 
-  Search, 
+import {
+  Clock,
+  Flag,
+  Star,
+  Search,
   PanelLeftClose,
   PanelLeftOpen,
   LibraryBig,
@@ -26,11 +26,11 @@ import { NotesManager } from './NotesManager';
 
 // --- SUBCOMPONENTS ---
 
-const NavItem: React.FC<{ 
-  icon: any, 
-  label: string, 
-  count: number, 
-  isActive: boolean, 
+const NavItem: React.FC<{
+  icon: any,
+  label: string,
+  count: number,
+  isActive: boolean,
   onClick: () => void,
   iconColor?: string
 }> = ({ icon: Icon, label, count, isActive, onClick, iconColor = "text-gray-500" }) => (
@@ -123,11 +123,11 @@ const SidebarUserProfile: React.FC<{
                 <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email}</p>
               </div>
             ) : (
-              <button 
+              <button
                 onClick={() => {
                   if (onShowAuthModal) onShowAuthModal();
                   setIsOpen(false);
-                }} 
+                }}
                 className="w-full text-left px-4 py-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
                 <p className="text-sm font-medium text-scholar-600 hover:text-scholar-700 dark:text-scholar-400">Sign In</p>
@@ -136,7 +136,7 @@ const SidebarUserProfile: React.FC<{
                 )}
               </button>
             )}
-            
+
             {/* Settings */}
             <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
               <Settings size={16} className="text-gray-500" />
@@ -144,27 +144,15 @@ const SidebarUserProfile: React.FC<{
               <span className="text-xs text-gray-400 ml-auto">Ctrl+,</span>
             </button>
 
-            {/* Language */}
-            <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="2" y1="12" x2="22" y2="12"/>
-                <path d="m8 12 8-8-8 8 8 8"/>
-              </svg>
-              <span className="text-sm text-gray-600 dark:text-gray-300">Language</span>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 ml-auto">
-                <polyline points="9,18 15,12 9,6"/>
-              </svg>
-            </button>
-
-            {/* Get help */}
-            <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                <line x1="12" y1="17" x2="12.01" y2="17"/>
-              </svg>
-              <span className="text-sm text-gray-600 dark:text-gray-300">Get help</span>
+            {/* Dark Mode Toggle */}
+            <button
+              onClick={() => { toggleDarkMode(); }}
+              className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              {darkMode ? <Sun size={16} className="text-gray-500" /> : <Moon size={16} className="text-gray-500" />}
+              <span className="text-sm text-gray-600 dark:text-gray-300">
+                {darkMode ? 'Light mode' : 'Dark mode'}
+              </span>
             </button>
 
             <div className="h-px bg-gray-100 dark:bg-gray-700 my-2"></div>
@@ -172,31 +160,23 @@ const SidebarUserProfile: React.FC<{
             {/* Upgrade plan */}
             <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="8" x2="12" y2="12"/>
-                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
               <span className="text-sm text-gray-600 dark:text-gray-300">Upgrade plan</span>
-            </button>
-
-            {/* Gift Claude */}
-            <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-                <polyline points="20,6 9,17 4,12"/>
-              </svg>
-              <span className="text-sm text-gray-600 dark:text-gray-300">Gift Claude</span>
             </button>
 
             {/* Learn more */}
             <button className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                <line x1="12" y1="17" x2="12.01" y2="17"/>
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
               </svg>
               <span className="text-sm text-gray-600 dark:text-gray-300">Learn more</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 ml-auto">
-                <polyline points="9,18 15,12 9,6"/>
+                <polyline points="9,18 15,12 9,6" />
               </svg>
             </button>
 
@@ -204,8 +184,8 @@ const SidebarUserProfile: React.FC<{
 
             {/* Sign out for authenticated users */}
             {isAuthenticated && (
-              <button 
-                onClick={handleLogout} 
+              <button
+                onClick={handleLogout}
                 className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-red-600"
               >
                 <LogOut size={16} />
@@ -242,7 +222,7 @@ export const SidebarNav: React.FC<{
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl px-4 py-2.5 shadow-sm">
             <Search size={18} className="text-gray-400 mr-2" />
-            <input 
+            <input
               className="w-full bg-transparent text-sm outline-none text-gray-900 dark:text-white"
               placeholder="Filter library..."
               value={searchQuery}
@@ -255,40 +235,40 @@ export const SidebarNav: React.FC<{
             </button>
           )}
         </div>
-        
+
       </div>
-      
+
       <div className="flex-1 overflow-y-auto custom-scrollbar px-0.5 md:px-1">
         <div className="mb-1">
           <NavItem icon={LayoutList} label="All Notes" count={savedNotes.length} isActive={libraryActiveView === 'all'} onClick={() => handleSelect('all')} iconColor="text-gray-700" />
           <NavItem icon={FileText} label="Papers" count={savedPapers.length} isActive={libraryActiveView === 'papers'} onClick={() => handleSelect('papers')} iconColor="text-scholar-500" />
-          
+
           <div className="h-px bg-gray-100 dark:bg-gray-800 mx-6 my-2 opacity-50"></div>
-          
+
           <NavItem icon={Clock} label="Recently Added" count={savedNotes.filter(n => (new Date().getTime() - new Date(n.created_at || 0).getTime()) < 86400000).length} isActive={libraryActiveView === 'recent'} onClick={() => handleSelect('recent')} iconColor="text-gray-600" />
           <NavItem icon={Flag} label="Flagged" count={savedNotes.filter(n => n.is_flagged).length} isActive={libraryActiveView === 'flagged'} onClick={() => handleSelect('flagged')} iconColor="text-red-700" />
           <NavItem icon={Star} label="Favorites" count={savedNotes.filter(n => n.is_starred).length} isActive={libraryActiveView === 'starred'} onClick={() => handleSelect('starred')} iconColor="text-orange-500" />
         </div>
 
         <div className="mt-4 px-3 md:px-4">
-           <button 
-             onClick={() => { openColumn('library'); if (onClose) onClose(); }}
-             className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shadow-sm"
-           >
-              <div className="flex items-center gap-3">
-                 <div className="w-8 h-8 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 flex items-center justify-center">
-                    <LayoutList size={18} />
-                 </div>
-                 <div className="text-left">
-                    <div className="font-bold text-sm">Dashboard Mode</div>
-                    <div className="text-[10px] opacity-70">Focus on Knowledge Base</div>
-                 </div>
+          <button
+            onClick={() => { openColumn('library'); if (onClose) onClose(); }}
+            className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shadow-sm"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 flex items-center justify-center">
+                <LayoutList size={18} />
               </div>
-              <ChevronRight size={16} />
-           </button>
+              <div className="text-left">
+                <div className="font-bold text-sm">Dashboard Mode</div>
+                <div className="text-[10px] opacity-70">Focus on Knowledge Base</div>
+              </div>
+            </div>
+            <ChevronRight size={16} />
+          </button>
         </div>
       </div>
-      
+
       {/* Profile section at bottom - outside scrollable area */}
       <div className="border-t border-gray-100 dark:border-gray-800">
         <SidebarUserProfile onShowAuthModal={onShowAuthModal} resetCallbacks={resetCallbacks} />
@@ -351,7 +331,7 @@ export const NotesManagerSidebar: React.FC<{
     <>
       {/* 1. Hover Detection Strip (Left Edge) */}
       {!isLibraryOpen && (
-        <div 
+        <div
           className="fixed left-0 top-0 h-full w-6 z-[60] cursor-pointer"
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
@@ -375,13 +355,12 @@ export const NotesManagerSidebar: React.FC<{
         NO OVERLAY BACKDROP 
         We removed the blocking overlay so the user can interact with the app while the sidebar glides open.
       */}
-      
+
       {/* 3. Sidebar Drawer - gliding animation */}
-      <div 
+      <div
         ref={sidebarRef}
-        className={`fixed left-0 top-0 bottom-0 w-85 sm:w-85 z-[70] bg-white dark:bg-dark-card border-r-2 border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl transition-transform ${TRANSITION_DURATION} ${TRANSITION_EASING} font-sans overflow-hidden transform ${
-          isLibraryOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed left-0 top-0 bottom-0 w-85 sm:w-85 z-[70] bg-white dark:bg-dark-card border-r-2 border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl transition-transform ${TRANSITION_DURATION} ${TRANSITION_EASING} font-sans overflow-hidden transform ${isLibraryOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
       >
         <SidebarNav onClose={() => setLibraryOpen(false)} onShowAuthModal={onShowAuthModal} resetCallbacks={resetCallbacks} />
       </div>
