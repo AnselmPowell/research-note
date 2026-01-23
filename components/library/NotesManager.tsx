@@ -445,13 +445,11 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                     (activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) || 
                     (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length)
                       ? 'bg-scholar-600 border-scholar-600' 
-                      : 'bg-scholar-600/50 border-scholar-600'
+                      : 'border-gray-400 dark:border-gray-500'
                   }`}>
                     {((activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) || 
-                      (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length)) ? (
+                      (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length)) && (
                       <Check size={16} className="text-white" />
-                    ) : (
-                      <span className="w-2 h-0.5 bg-white rounded"></span>
                     )}
                   </div>
                 </button>
