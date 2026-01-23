@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { 
   Square, 
   Check, 
@@ -12,7 +12,7 @@ import {
   Filter, 
   Copy, 
   X,
-  LayoutGrid,
+  BookText,
   LayoutList,
   FileText,
   Table as TableIcon,
@@ -98,6 +98,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [selectedNoteIds, setSelectedNoteIds] = useState<number[]>([]);
   const [selectedPaperUris, setSelectedPaperUris] = useState<string[]>([]);
+  const [uiSelectedPaperUris, setUiSelectedPaperUris] = useState<string[]>([]); // NEW: UI-only selection
   const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set());
   const [expandedPapers, setExpandedPapers] = useState<Set<string>>(new Set());
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
@@ -263,6 +264,30 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     });
   };
 
+  const handleSelectAllNotes = useCallback(() => {
+    if (selectedNoteIds.length === paginatedNotes.length && selectedNoteIds.length > 0) {
+      setSelectedNoteIds([]);
+    } else {
+      setSelectedNoteIds(paginatedNotes.map(note => note.id));
+    }
+  }, [selectedNoteIds.length, paginatedNotes]);
+
+  const handleSelectAllPapers = useCallback(() => {
+    if (uiSelectedPaperUris.length === paginatedPapers.length && uiSelectedPaperUris.length > 0) {
+      setUiSelectedPaperUris([]);
+    } else {
+      setUiSelectedPaperUris(paginatedPapers.map(paper => paper.uri));
+    }
+  }, [uiSelectedPaperUris.length, paginatedPapers]);
+
+  const handleUiPaperSelect = useCallback((paperUri: string) => {
+    setUiSelectedPaperUris(prev => 
+      prev.includes(paperUri) 
+        ? prev.filter(uri => uri !== paperUri)
+        : [...prev, paperUri]
+    );
+  }, []);
+
   const handleNoteSelect = (id: number) => {
     setSelectedNoteIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
@@ -308,53 +333,82 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
           .pagination-controls { flex-direction: column; gap: 1rem; }
           .notes-grid { grid-template-columns: 1fr !important; }
           .tab-button { padding-left: 1.25rem !important; padding-right: 1.25rem !important; }
+          .action-bar-text { display: none !important; }
+          .action-bar-button { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
         }
         @container (max-width: 650px) {
           .notes-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
       
-      <div className="flex-1 overflow-auto custom-scrollbar">
-        <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
+      {/* STICKY HEADER - OUTSIDE SCROLL CONTAINER */}
+      <div className="sticky top-0 z-20 bg-cream/95 dark:bg-dark-bg/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4">
           
-          <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6 justify-between items-center">
-            <div className="flex -mb-px">
+          {/* PRIMARY HEADER ROW */}
+          <div className="flex justify-between items-center py-4 border-b border-gray-200 dark:border-gray-800">
+            
+            {/* LEFT: TABS WITH SELECT ALL */}
+            <div className="flex items-center -mb-px gap-2">
+              
+              {/* SELECT ALL BUTTON */}
+              {((activeTab === 'notes' && paginatedNotes.length > 0) || (activeTab === 'papers' && paginatedPapers.length > 0)) && (
+                <button
+                  onClick={activeTab === 'notes' ? handleSelectAllNotes : handleSelectAllPapers}
+                  className="p-2 text-gray-500 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  title={`Select all ${activeTab} on page`}
+                >
+                  <div className={`w-5 h-5 rounded border-2 transition-colors flex items-center justify-center ${
+                    (activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length && selectedNoteIds.length > 0) ||
+                    (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length && uiSelectedPaperUris.length > 0)
+                      ? 'bg-scholar-600 border-scholar-600' 
+                      : 'border-gray-400 dark:border-gray-500'
+                  }`}>
+                    {((activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length && selectedNoteIds.length > 0) ||
+                      (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length && uiSelectedPaperUris.length > 0)) && (
+                      <Check size={14} className="text-white" />
+                    )}
+                  </div>
+                </button>
+              )}
+
+              {/* EXISTING TAB BUTTONS */}
               <button 
-                onClick={() => { setActiveTab('notes'); setCurrentPage(1); }}
+                onClick={() => { setActiveTab('notes'); setCurrentPage(1); setUiSelectedPaperUris([]); }}
                 className={`tab-button px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'notes' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
-                title="Notes"
               >
                 <LayoutList size={18} className="flex-shrink-0" />
                 <span className="tab-label">
-                  {activeView === 'all' || activeView == 'papers'  ? 'All Notes' : activeView.charAt(0).toUpperCase() + activeView.slice(1)}
+                  {activeView === 'all' || activeView == 'papers' ? 'All Notes' : activeView.charAt(0).toUpperCase() + activeView.slice(1)}
                 </span>
               </button>
+              
               <button 
-                onClick={() => { setActiveTab('papers'); setCurrentPage(1); }}
+                onClick={() => { setActiveTab('papers'); setCurrentPage(1); setSelectedNoteIds([]); }}
                 className={`tab-button px-6 py-4 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === 'papers' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
-                title="Papers"
               >
                 <FileText size={18} className="flex-shrink-0" />
                 <span className="tab-label">Papers</span>
               </button>
             </div>
 
+            {/* RIGHT: VIEW TOGGLES AND FILTERS */}
             <div className="flex items-center gap-2">
               <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
-                  <button 
-                    onClick={() => setViewMode('table')} 
-                    className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600' : 'text-gray-400 hover:text-scholar-600'}`}
-                    title="Table View"
-                  >
-                    <TableIcon size={18} />
-                  </button>
-                  <button 
-                    onClick={() => setViewMode('list')} 
-                    className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600' : 'text-gray-400 hover:text-scholar-600'}`}
-                    title="List View"
-                  >
-                    <LayoutList size={18} />
-                  </button>
+                <button 
+                  onClick={() => setViewMode('table')} 
+                  className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600' : 'text-gray-400 hover:text-scholar-600'}`}
+                  title="Table View"
+                >
+                  <TableIcon size={18} />
+                </button>
+                <button 
+                  onClick={() => setViewMode('list')} 
+                  className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600' : 'text-gray-400 hover:text-scholar-600'}`}
+                  title="List View"
+                >
+                  <LayoutList size={18} />
+                </button>
               </div>
 
               <button
@@ -366,6 +420,91 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
               </button>
             </div>
           </div>
+
+          {/* ACTION BAR ROW - ONLY WHEN ITEMS SELECTED */}
+          {((activeTab === 'notes' && selectedNoteIds.length > 0) || (activeTab === 'papers' && uiSelectedPaperUris.length > 0)) && (
+            <div className="flex items-center justify-between py-3 bg-scholar-50/50 dark:bg-scholar-900/20">
+              
+              {/* LEFT: SELECTION INFO */}
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => activeTab === 'notes' ? setSelectedNoteIds([]) : setUiSelectedPaperUris([])}
+                  className="p-2 text-scholar-600 hover:bg-scholar-100 dark:hover:bg-scholar-900/30 rounded-lg transition-all"
+                >
+                  <Check size={18} />
+                </button>
+                <div>
+                  <span className="text-lg font-bold text-scholar-700 dark:text-scholar-400">
+                    {activeTab === 'notes' ? selectedNoteIds.length : uiSelectedPaperUris.length}
+                  </span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-scholar-600 dark:text-scholar-500 opacity-80 ml-1">
+                    Selected
+                  </span>
+                </div>
+              </div>
+
+              {/* RIGHT: ACTIONS */}
+              <div className="flex items-center gap-2">
+                
+                {/* COPY ACTIONS - NOTES ONLY */}
+                {activeTab === 'notes' && (
+                  <div className="relative" ref={bulkCopyRef}>
+                    <button 
+                      onClick={() => setShowBulkCopyMenu(!showBulkCopyMenu)}
+                      className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-scholar-700 dark:text-scholar-400 hover:bg-scholar-100 dark:hover:bg-scholar-900/30 rounded-lg transition-all"
+                    >
+                      <Copy size={16} />
+                      <span className="action-bar-text">Copy</span>
+                      <ChevronDown size={14} className={`transition-transform ${showBulkCopyMenu ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {showBulkCopyMenu && (
+                      <div className="absolute bottom-full mb-2 right-0 w-52 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50">
+                        <button onClick={() => handleBulkCopy('raw')} className="w-full text-left px-4 py-2.5 text-sm font-medium hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
+                          <FileText size={16} className="text-gray-400" />
+                          Copy Quotes Only
+                        </button>
+                        <button onClick={() => handleBulkCopy('full')} className="w-full text-left px-4 py-2.5 text-sm font-medium hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
+                          <FileJson size={16} className="text-scholar-600" />
+                          Copy Full Quotes
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* DELETE ACTION */}
+                <button 
+                  onClick={() => {
+                    if (activeTab === 'notes') {
+                      openDeleteNoteModal(selectedNoteIds);
+                    } else {
+                      // Use UI selection for papers
+                      const totalNotes = savedNotes.filter(n => uiSelectedPaperUris.includes(n.paper_uri)).length;
+                      setDeleteModal({
+                        isOpen: true,
+                        ids: [],
+                        paperUri: 'bulk',
+                        paperTitle: `${uiSelectedPaperUris.length} selected papers`,
+                        notesCount: totalNotes,
+                        isProcessing: false
+                      });
+                    }
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all action-bar-button"
+                >
+                  <Trash2 size={16} />
+                  <span className="action-bar-text">Delete</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* SCROLL CONTAINER - BELOW STICKY HEADER */}
+      <div className="flex-1 overflow-auto custom-scrollbar">
+        <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
 
           {/* Paper Sub-Filters (Pills) */}
           {activeTab === 'papers' && (
@@ -442,44 +581,6 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
           {activeTab === 'notes' ? (
             <>
-              {selectedNoteIds.length > 0 && (
-                <div className="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 sm:p-5 bg-scholar-600 text-white rounded-2xl shadow-scholar-lg animate-slide-up ring-4 ring-scholar-100/50">
-                  <div className="flex items-center gap-4 w-full sm:w-auto">
-                    <button onClick={() => setSelectedNoteIds([])} className="hover:bg-white/20 p-2 rounded-xl transition-colors">
-                      <Check size={26} strokeWidth={3} />
-                    </button>
-                    <div>
-                      <span className="text-xl font-black block leading-none">{selectedNoteIds.length}</span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Selected</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 sm:gap-3 ml-0 sm:ml-auto w-full sm:w-auto justify-end">
-                     <div className="relative flex-1 sm:flex-none" ref={bulkCopyRef}>
-                        <button 
-                          onClick={() => setShowBulkCopyMenu(!showBulkCopyMenu)}
-                          className="w-full flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-white/20 hover:bg-white/30 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm"
-                        >
-                          <Copy size={18} /> 
-                          Copy
-                          <ChevronDown size={14} className={`transition-transform ${showBulkCopyMenu ? 'rotate-180' : ''}`} />
-                        </button>
-                        
-                        {showBulkCopyMenu && (
-                          <div className="absolute bottom-full mb-3 right-0 w-56 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 py-1.5 overflow-hidden z-50 text-gray-900 dark:text-white animate-fade-in">
-                            <button onClick={() => handleBulkCopy('raw')} className="w-full text-left px-5 py-3 text-sm font-medium hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
-                              <FileText size={16} className="text-gray-400" /> Copy Quotes Only
-                            </button>
-                            <button onClick={() => handleBulkCopy('full')} className="w-full text-left px-5 py-3 text-sm font-medium hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
-                              <FileJson size={16} className="text-scholar-600" /> Copy Full Quotes
-                            </button>
-                          </div>
-                        )}
-                     </div>
-                     <button onClick={() => openDeleteNoteModal(selectedNoteIds)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-red-500/80 hover:bg-red-600 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm"><Trash2 size={18} /> Delete</button>
-                  </div>
-                </div>
-              )}
-
               {viewMode === 'table' ? (
                  <NotesTable 
                     notes={paginatedNotes}
@@ -533,19 +634,13 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                   )}
                 </div>
               )}
-            </>
+            </> 
           ) : (
             <>
-              {selectedPaperUris.length > 0 && (
-                <div className="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 sm:p-5 bg-scholar-600 text-white rounded-2xl shadow-scholar-lg animate-slide-up ring-4 ring-scholar-100/50">
-                  {/* ... (bulk actions) ... */}
-                </div>
-              )}
-
               {viewMode === 'table' ? (
                 <PapersTable 
                    papers={paginatedPapers}
-                   selectedUris={selectedPaperUris}
+                   selectedUris={uiSelectedPaperUris}
                    expandedUris={expandedPapers}
                    sortColumn={sortColumn}
                    sortDirection={sortDirection}
@@ -553,7 +648,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                       if (sortColumn === col) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
                       else { setSortColumn(col); setSortDirection('asc'); }
                    }}
-                   onSelect={handlePaperSelect}
+                   onSelect={handleUiPaperSelect}
                    onExpand={handleTogglePaperExpand}
                    onDelete={openDeletePaperModal}
                    onView={(p) => {
@@ -572,9 +667,9 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                     <LibraryPaperCard 
                       key={paper.uri}
                       paper={paper}
-                      isSelected={isPdfInContext(paper.uri)}
+                      isSelected={uiSelectedPaperUris.includes(paper.uri)}
                       isExpanded={expandedPapers.has(paper.uri)}
-                      onSelect={() => handlePaperSelect(paper)}
+                      onSelect={() => handleUiPaperSelect(paper.uri)}
                       onToggleExpand={() => handleTogglePaperExpand(paper.uri)}
                       notes={savedNotes.filter(n => n.paper_uri === paper.uri)}
                       onDelete={() => openDeletePaperModal(paper)}
