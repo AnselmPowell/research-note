@@ -114,7 +114,7 @@ export const dbService = {
           WHEN EXCLUDED.is_explicitly_saved = true THEN true
           ELSE papers.is_explicitly_saved
         END,
-        user_id = COALESCE(papers.user_id, EXCLUDED.user_id)
+        user_id = EXCLUDED.user_id
       RETURNING *;
     `;
   },
@@ -169,9 +169,9 @@ export const dbService = {
 
   async getAllLibraryData(userId?: string) {
     if (userId) {
-      // Return user-specific data
-      const papers = await sql`SELECT * FROM papers WHERE user_id = ${userId} OR user_id IS NULL ORDER BY created_at DESC;`;
-      const notes = await sql`SELECT * FROM notes WHERE user_id = ${userId} OR user_id IS NULL ORDER BY created_at DESC;`;
+      // Return ONLY user-specific data (no legacy NULL user_id papers)
+      const papers = await sql`SELECT * FROM papers WHERE user_id = ${userId} ORDER BY created_at DESC;`;
+      const notes = await sql`SELECT * FROM notes WHERE user_id = ${userId} ORDER BY created_at DESC;`;
       return { papers, notes };
     }
     
@@ -183,15 +183,15 @@ export const dbService = {
 
   // User-specific data retrieval methods
   async getUserPapers(userId: string) {
-    return await sql`SELECT * FROM papers WHERE user_id = ${userId} OR user_id IS NULL ORDER BY created_at DESC;`;
+    return await sql`SELECT * FROM papers WHERE user_id = ${userId} ORDER BY created_at DESC;`;
   },
 
   async getUserNotes(userId: string) {
-    return await sql`SELECT * FROM notes WHERE user_id = ${userId} OR user_id IS NULL ORDER BY created_at DESC;`;
+    return await sql`SELECT * FROM notes WHERE user_id = ${userId} ORDER BY created_at DESC;`;
   },
 
   async getUserFolders(userId: string) {
-    return await sql`SELECT * FROM folders WHERE user_id = ${userId} OR user_id IS NULL ORDER BY id ASC;`;
+    return await sql`SELECT * FROM folders WHERE user_id = ${userId} ORDER BY id ASC;`;
   },
 
   async deletePaper(uri: string) {

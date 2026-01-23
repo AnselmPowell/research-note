@@ -22,7 +22,8 @@ import {
   TextSearch,
   BookOpenText,
   Lightbulb,
-  FileJson
+  FileJson,
+  Loader2
 } from 'lucide-react';
 import { useDatabase } from '../../database/DatabaseContext';
 import { useLibrary } from '../../contexts/LibraryContext';
