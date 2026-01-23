@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useDatabase } from '../../database/DatabaseContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
-import { FileText, X, Plus, Upload, Link, Search, Loader2, AlertCircle, CheckSquare, Square } from 'lucide-react';
+import { FileText, X, Plus, Upload, Link, Search, Loader2, AlertCircle, CheckSquare, Square, Trash2, Check } from 'lucide-react';
 
 export const SourcesPanel: React.FC = () => {
     const { savedPapers, deletePaper, savePaper } = useDatabase();
@@ -18,10 +18,13 @@ export const SourcesPanel: React.FC = () => {
     
     // Multiple file upload state
     const [uploadProgress, setUploadProgress] = useState<{current: number; total: number; currentFileName: string} | null>(null);
+    
+    // Selection state for bulk operations
+    const [selectedPaperUris, setSelectedPaperUris] = useState<string[]>([]);
 
-    // Only show explicitly saved papers - memoize this computation
+    // Show all papers - memoize this computation
     const sourcePapers = useMemo(() => 
-        savedPapers.filter(p => p.is_explicitly_saved), 
+        savedPapers, 
         [savedPapers]
     );
 
@@ -115,8 +118,7 @@ export const SourcesPanel: React.FC = () => {
                         authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
                         summary: loadedPdf.metadata?.subject || '',  // Include subject as summary
                         publishedDate: new Date().toISOString(),
-                        numPages: loadedPdf.numPages,
-                        is_explicitly_saved: true
+                        numPages: loadedPdf.numPages
                     };
                     
                     // Save to database/localStorage
@@ -156,8 +158,7 @@ export const SourcesPanel: React.FC = () => {
                     authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
                     summary: loadedPdf.metadata?.subject || '',  // Include subject as summary
                     publishedDate: new Date().toISOString(),
-                    numPages: loadedPdf.numPages,
-                    is_explicitly_saved: true
+                    numPages: loadedPdf.numPages
                 };
                 
                 // Save to database/localStorage
@@ -187,8 +188,44 @@ export const SourcesPanel: React.FC = () => {
                 if (isLoaded) {
                     removePdf(uri); // Remove from loaded PDFs and context
                 }
+                
+                // Remove from selection if selected
+                setSelectedPaperUris(prev => prev.filter(u => u !== uri));
             } catch (error) {
                 console.error('[SourcesPanel] Failed to remove paper:', error);
+            }
+        }
+    };
+
+    const handleSelectAll = useCallback(() => {
+        if (selectedPaperUris.length === filteredPapers.length && selectedPaperUris.length > 0) {
+            setSelectedPaperUris([]);
+        } else {
+            setSelectedPaperUris(filteredPapers.map(p => p.uri));
+        }
+    }, [selectedPaperUris.length, filteredPapers]);
+
+    const handleToggleSelect = useCallback((uri: string) => {
+        setSelectedPaperUris(prev => 
+            prev.includes(uri) ? prev.filter(u => u !== uri) : [...prev, uri]
+        );
+    }, []);
+
+    const handleBulkDelete = async () => {
+        if (selectedPaperUris.length === 0) return;
+        
+        if (confirm(`Remove ${selectedPaperUris.length} source${selectedPaperUris.length > 1 ? 's' : ''} from your library?`)) {
+            try {
+                for (const uri of selectedPaperUris) {
+                    await deletePaper(uri);
+                    const isLoaded = loadedPdfs.some(p => p.uri === uri);
+                    if (isLoaded) {
+                        removePdf(uri);
+                    }
+                }
+                setSelectedPaperUris([]);
+            } catch (error) {
+                console.error('[SourcesPanel] Bulk delete failed:', error);
             }
         }
     };
@@ -321,6 +358,47 @@ export const SourcesPanel: React.FC = () => {
                 </div>
             </div>
 
+            {/* Select All Row + Action Bar */}
+            {filteredPapers.length > 0 && (
+                <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                    <div className="flex items-center justify-between">
+                        <button
+                            onClick={handleSelectAll}
+                            className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 hover:text-scholar-600 transition-colors"
+                        >
+                            <div className={`w-4 h-4 rounded border-2 transition-colors flex items-center justify-center ${
+                                selectedPaperUris.length === filteredPapers.length && selectedPaperUris.length > 0
+                                    ? 'bg-scholar-600 border-scholar-600' 
+                                    : selectedPaperUris.length > 0
+                                        ? 'bg-scholar-600/50 border-scholar-600'
+                                        : 'border-gray-400 dark:border-gray-500'
+                            }`}>
+                                {selectedPaperUris.length === filteredPapers.length && selectedPaperUris.length > 0 ? (
+                                    <Check size={10} className="text-white" />
+                                ) : selectedPaperUris.length > 0 ? (
+                                    <span className="w-1.5 h-0.5 bg-white rounded"></span>
+                                ) : null}
+                            </div>
+                            <span className="font-medium">
+                                {selectedPaperUris.length > 0 
+                                    ? `${selectedPaperUris.length} selected` 
+                                    : 'Select all'}
+                            </span>
+                        </button>
+                        
+                        {selectedPaperUris.length > 0 && (
+                            <button
+                                onClick={handleBulkDelete}
+                                className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                            >
+                                <Trash2 size={12} />
+                                Delete
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Papers List - Always Accessible */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-3">
                 {filteredPapers.length === 0 ? (
@@ -343,20 +421,23 @@ export const SourcesPanel: React.FC = () => {
                 ) : (
                     <div className="space-y-2">
                         {filteredPapers.map(paper => {
-                            const isSelected = isPdfInContext(paper.uri);
+                            const isInContext = isPdfInContext(paper.uri);
+                            const isSelected = selectedPaperUris.includes(paper.uri);
                             const isDownloading = downloadingUris.has(paper.uri);
                             return (
                                 <div
                                     key={paper.uri}
                                     className={`p-2.5 bg-white dark:bg-gray-800 rounded-lg border transition-all group cursor-pointer ${isSelected
-                                            ? 'border-scholar-500 ring-1 ring-scholar-500 shadow-sm'
-                                            : 'border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-scholar-300 dark:hover:border-scholar-700'
+                                            ? 'border-scholar-500 ring-1 ring-scholar-500 shadow-sm bg-scholar-50/50 dark:bg-scholar-900/20'
+                                            : isInContext
+                                                ? 'border-scholar-300 dark:border-scholar-700'
+                                                : 'border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-scholar-300 dark:hover:border-scholar-700'
                                         }`}
                                     onClick={() => handleOpenPaper(paper.uri, paper.title)}
                                 >
                                     <div className="flex items-start gap-2">
                                         <button
-                                            onClick={(e) => handleToggleButton(e, paper)}
+                                            onClick={(e) => { e.stopPropagation(); handleToggleSelect(paper.uri); }}
                                             disabled={isDownloading}
                                             className={`mt-0.5 flex-shrink-0 transition-colors ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-300 dark:text-gray-600 hover:text-gray-400'
                                                 }`}

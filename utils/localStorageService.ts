@@ -18,7 +18,7 @@ export const localStorageService = {
       const paperData = {
         ...paper,
         uri: uri, // Ensure consistent URI field
-        is_explicitly_saved: true
+        created_at: paper.created_at || new Date().toISOString()
       };
       
       if (existingIndex >= 0) {
@@ -47,14 +47,15 @@ export const localStorageService = {
   deletePaper: (uri: string): void => {
     try {
       const papers = localStorageService.getLocalPapers();
-      const paperIndex = papers.findIndex(p => p.uri === uri);
+      const filteredPapers = papers.filter(p => p.uri !== uri);
+      localStorage.setItem('anonymous_papers', JSON.stringify(filteredPapers));
       
-      if (paperIndex >= 0) {
-        // Set is_explicitly_saved to false instead of removing the paper
-        // This preserves the paper record for any notes that reference it
-        papers[paperIndex].is_explicitly_saved = false;
-        localStorage.setItem('anonymous_papers', JSON.stringify(papers));
-      }
+      // Also delete all notes associated with this paper (cascade delete)
+      const notes = localStorageService.getLocalNotes();
+      const filteredNotes = notes.filter(n => n.paper_uri !== uri);
+      localStorage.setItem('anonymous_notes', JSON.stringify(filteredNotes));
+      
+      console.log('[LocalStorage] Paper deleted:', uri);
     } catch (error) {
       console.error('[LocalStorage] Failed to delete paper:', error);
     }
@@ -111,14 +112,12 @@ export const localStorageService = {
       const paperData = {
         ...paper,
         uri: uri, // Ensure consistent URI field
-        is_explicitly_saved: true
+        created_at: paper.created_at || new Date().toISOString()
       };
       
       if (existingIndex >= 0) {
-        // Update existing paper and mark as explicitly saved
         papers[existingIndex] = { ...papers[existingIndex], ...paperData };
       } else {
-        // Add new paper and mark as explicitly saved
         papers.push(paperData);
       }
       

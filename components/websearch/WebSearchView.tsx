@@ -91,7 +91,7 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
       loadedPdf = result.pdf;
     }
 
-    // Save the paper to database with is_explicitly_saved flag using correct PDF reference
+    // Save the paper to database using correct PDF reference
     savePaper({
       ...source,
       numPages: loadedPdf ? loadedPdf.numPages : undefined

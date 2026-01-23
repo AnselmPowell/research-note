@@ -536,13 +536,12 @@ interface PaperCardProps {
 const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const { toggleArxivSelection, selectedArxivIds } = useResearch();
-  const { isPaperSaved, savePaper, deletePaper, canDeletePaper } = useDatabase();
+  const { isPaperSaved, savePaper, deletePaper } = useDatabase();
   const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf, failedUrlErrors, downloadingUris } = useLibrary();
   const { setColumnVisibility, openColumn } = useUI();
 
   const isSelected = isLocal ? isPdfInContext(paper.id) : selectedArxivIds.has(paper.id);
   const isSaved = isPaperSaved(paper.pdfUri);
-  const canDelete = canDeletePaper(paper.pdfUri);
 
   const isDownloading = paper.analysisStatus === 'downloading';
   const isProcessing = paper.analysisStatus === 'processing';
@@ -591,10 +590,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     e.stopPropagation();
 
     if (isSaved) {
-      if (!canDelete) {
-        alert('Cannot unsave this paper because it has saved notes. Please remove all saved notes from this paper first.');
-        return;
-      }
+      // Now does a true delete (paper + cascade deletes notes)
       deletePaper(paper.pdfUri);
       return;
     }

@@ -86,7 +86,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     }
   }, [activeView]);
 
-  const [paperSubFilter, setPaperSubFilter] = useState<'all' | 'saved' | 'noted'>('all');
+  const [paperSubFilter, setPaperSubFilter] = useState<'all' | 'noted'>('all');
   const [viewMode, setViewMode] = useState<'list' | 'table'>('table');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -163,10 +163,11 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     setDeleteModal(prev => ({ ...prev, isProcessing: true }));
     try {
       if (deleteModal.paperUri === 'bulk') {
-          for (const uri of selectedPaperUris) {
+          // FIXED: Use uiSelectedPaperUris instead of selectedPaperUris for bulk delete
+          for (const uri of uiSelectedPaperUris) {
               await deletePaper(uri);
           }
-          setSelectedPaperUris([]);
+          setUiSelectedPaperUris([]); // Clear UI selection after delete
       } else if (deleteModal.paperUri) {
         await deletePaper(deleteModal.paperUri);
       } else {
@@ -212,9 +213,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
   const filteredPapers = useMemo(() => {
     let base = [...savedPapers];
     
-    if (paperSubFilter === 'saved') {
-        base = base.filter(p => p.is_explicitly_saved);
-    } else if (paperSubFilter === 'noted') {
+    if (paperSubFilter === 'noted') {
         base = base.filter(p => savedNotes.some(n => n.paper_uri === p.uri));
     }
 
@@ -270,7 +269,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     } else {
       setSelectedNoteIds(paginatedNotes.map(note => note.id));
     }
-  }, [selectedNoteIds.length, paginatedNotes]);
+  }, [selectedNoteIds, paginatedNotes]); // FIXED: Include full selectedNoteIds array, not just length
 
   const handleSelectAllPapers = useCallback(() => {
     if (uiSelectedPaperUris.length === paginatedPapers.length && uiSelectedPaperUris.length > 0) {
@@ -278,7 +277,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     } else {
       setUiSelectedPaperUris(paginatedPapers.map(paper => paper.uri));
     }
-  }, [uiSelectedPaperUris.length, paginatedPapers]);
+  }, [uiSelectedPaperUris, paginatedPapers]); // FIXED: Include full uiSelectedPaperUris array, not just length
 
   const handleUiPaperSelect = useCallback(async (paperUri: string) => {
     // Update UI selection state
@@ -330,7 +329,6 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
   const paperCounts = useMemo(() => ({
       all: savedPapers.length,
-      saved: savedPapers.filter(p => p.is_explicitly_saved).length,
       noted: savedPapers.filter(p => savedNotes.some(n => n.paper_uri === p.uri)).length
   }), [savedPapers, savedNotes]);
 
@@ -363,10 +361,10 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
             <div className="flex items-center -mb-px gap-2">
               
               {/* SELECT ALL BUTTON */}
-              {((activeTab === 'notes' && paginatedNotes.length > 0) || (activeTab === 'papers' && paginatedPapers.length > 0)) && (
+              {(activeTab === 'notes' ? paginatedNotes.length > 0 : paginatedPapers.length > 0) && (
                 <button
                   onClick={activeTab === 'notes' ? handleSelectAllNotes : handleSelectAllPapers}
-                  className="p-2 text-gray-500 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  className="p-2.5 text-gray-500 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
                   title={`Select all ${activeTab} on page`}
                 >
                   <div className={`w-5 h-5 rounded border-2 transition-colors flex items-center justify-center ${
@@ -439,12 +437,22 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
               {/* LEFT: SELECTION INFO */}
               <div className="flex items-center gap-3">
                 <button 
-                  onClick={() => activeTab === 'notes' ? setSelectedNoteIds([]) : setUiSelectedPaperUris([])}
+                  onClick={activeTab === 'notes' ? handleSelectAllNotes : handleSelectAllPapers}
                   className="p-2.5 text-gray-500 hover:text-scholar-600 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
-                  title="Clear selection"
+                  title={(activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) || (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length) ? 'Clear selection' : 'Select all on page'}
                 >
-                  <div className="w-6 h-6 rounded border-2 bg-scholar-600 border-scholar-600 transition-colors flex items-center justify-center">
-                    <Check size={16} className="text-white" />
+                  <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${
+                    (activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) || 
+                    (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length)
+                      ? 'bg-scholar-600 border-scholar-600' 
+                      : 'bg-scholar-600/50 border-scholar-600'
+                  }`}>
+                    {((activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) || 
+                      (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length)) ? (
+                      <Check size={16} className="text-white" />
+                    ) : (
+                      <span className="w-2 h-0.5 bg-white rounded"></span>
+                    )}
                   </div>
                 </button>
                 <div>
@@ -528,12 +536,6 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                     className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border ${paperSubFilter === 'all' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
                   >
                       All <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${paperSubFilter === 'all' ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-800'}`}>{paperCounts.all}</span>
-                  </button>
-                  <button 
-                    onClick={() => setPaperSubFilter('saved')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border ${paperSubFilter === 'saved' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
-                  >
-                      <Bookmark size={14} /> Saved <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${paperSubFilter === 'saved' ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-800'}`}>{paperCounts.saved}</span>
                   </button>
                   <button 
                     onClick={() => setPaperSubFilter('noted')}
@@ -662,7 +664,14 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                       if (sortColumn === col) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
                       else { setSortColumn(col); setSortDirection('asc'); }
                    }}
-                   onSelect={(paper) => handleUiPaperSelect(paper.uri)}
+                   onSelect={(paper) => {
+                     // Use just the UI selection without PDF loading for table checkboxes
+                     setUiSelectedPaperUris(prev => 
+                       prev.includes(paper.uri) 
+                         ? prev.filter(uri => uri !== paper.uri)
+                         : [...prev, paper.uri]
+                     );
+                   }}
                    onExpand={handleTogglePaperExpand}
                    onDelete={openDeletePaperModal}
                    onView={(p) => {
@@ -670,7 +679,6 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                       setActivePdf(p.uri);
                       setColumnVisibility(prev => ({ ...prev, right: true }));
                    }}
-                   isPaperSaved={(uri) => savedPapers.find(p => p.uri === uri)?.is_explicitly_saved || false}
                    getNotesCount={(uri) => savedNotes.filter(n => n.paper_uri === uri).length}
                    isDownloading={(uri) => downloadingUris.has(uri)}
                    isFailed={(uri) => failedUris.has(uri)}
@@ -778,11 +786,10 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 function LibraryPaperCard({ paper, isSelected, isExpanded, onSelect, onToggleExpand, notes, onDelete }) {
   const { loadPdfFromUrl, setActivePdf, setSearchHighlight, downloadingUris, failedUris } = useLibrary();
   const { setColumnVisibility, setLibraryExpanded, setLibraryOpen } = useUI();
-  const { deleteNote, toggleStar, toggleFlag, updateNote, isPaperSaved } = useDatabase();
+  const { deleteNote, toggleStar, toggleFlag, updateNote } = useDatabase();
 
   const isDownloading = downloadingUris.has(paper.uri);
   const isFailed = failedUris.has(paper.uri);
-  const isActuallySaved = isPaperSaved(paper.uri);
 
   const handleOpenPdf = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -835,11 +842,6 @@ function LibraryPaperCard({ paper, isSelected, isExpanded, onSelect, onToggleExp
                     <button onClick={handleOpenPdf} className="flex items-center gap-1 text-xs font-bold text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30 px-2 py-1 rounded-md transition-colors border border-scholar-100 dark:border-scholar-800">
                       <BookText size={12} /> View
                     </button>
-                    {isActuallySaved && (
-                        <span className="bg-scholar-100 dark:bg-scholar-900/30 text-scholar-700 dark:text-scholar-400 text-[8px] font-black uppercase px-2 py-1 rounded-md flex items-center gap-1 border border-scholar-200 dark:border-scholar-800">
-                            <Bookmark size={10} fill="currentColor" /> Saved
-                        </span>
-                    )}
                     <button 
                         onClick={(e) => { e.stopPropagation(); onDelete(); }} 
                         className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-all"

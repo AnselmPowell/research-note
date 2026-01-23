@@ -25,7 +25,6 @@ interface PapersTableProps {
     onExpand: (uri: string) => void;
     onDelete: (paper: DeepResearchResult) => void;
     onView: (paper: DeepResearchResult) => void;
-    isPaperSaved: (uri: string) => boolean;
     getNotesCount: (uri: string) => number;
     isDownloading: (uri: string) => boolean;
     isFailed: (uri: string) => boolean;
@@ -42,7 +41,6 @@ export const PapersTable: React.FC<PapersTableProps> = ({
     onExpand,
     onDelete,
     onView,
-    isPaperSaved,
     getNotesCount,
     isDownloading
 }) => {
@@ -98,7 +96,6 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                         const notesCount = getNotesCount(paper.uri);
                         const year = paper.created_at || paper.published || paper.publishedDate ? new Date(paper.created_at || paper.published || paper.publishedDate).getFullYear() : '—';
                         const authors = Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || 'Unknown');
-                        const saved = isPaperSaved(paper.uri);
 
                         return (
                             <React.Fragment key={paper.uri}>
@@ -143,11 +140,6 @@ export const PapersTable: React.FC<PapersTableProps> = ({
 
                                     <td className="hidden sm:table-cell py-5 px-4 text-center">
                                         <div className="flex items-center justify-center gap-2">
-                                            {saved && (
-                                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-scholar-100 dark:bg-scholar-900/30 text-scholar-600" title="Saved to Library">
-                                                    <Bookmark size={12} fill="currentColor" />
-                                                </div>
-                                            )}
                                             {notesCount > 0 && (
                                                 <div className="flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-full">
                                                     <FileText size={10} /> {notesCount}
@@ -191,11 +183,6 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                                                 <div className="flex flex-wrap gap-2 mb-2">
                                                     {/* Mobile badges shown in expanded view */}
                                                     <div className="sm:hidden flex items-center gap-2">
-                                                        {saved && (
-                                                            <span className="bg-scholar-100 text-scholar-700 text-[10px] font-bold uppercase px-2 py-1 rounded-md flex items-center gap-1">
-                                                                <Bookmark size={10} fill="currentColor" /> Saved
-                                                            </span>
-                                                        )}
                                                         {notesCount > 0 && (
                                                             <span className="bg-white border border-gray-200 text-gray-600 text-[10px] font-bold uppercase px-2 py-1 rounded-md flex items-center gap-1">
                                                                 <FileText size={10} /> {notesCount} Notes

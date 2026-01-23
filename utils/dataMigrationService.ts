@@ -20,7 +20,7 @@ export const dataMigrationService = {
       // Migrate papers
       for (const paper of localData.papers) {
         try {
-          await dbService.savePaper(paper, paper.is_explicitly_saved, userId);
+          await dbService.savePaper(paper, userId);
           migratedPapers++;
         } catch (error) {
           console.warn('[Migration] Failed to migrate paper:', paper.uri, error);

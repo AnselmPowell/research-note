@@ -96,7 +96,7 @@ export const dbService = {
     }
   },
 
-  async savePaper(paper: any, isExplicit: boolean = true, userId?: string) {
+  async savePaper(paper: any, userId?: string) {
     const uri = paper.pdfUri || paper.uri;
     const title = paper.title || "Untitled";
     const abstract = paper.summary || paper.abstract || "";
@@ -104,16 +104,12 @@ export const dbService = {
     const numPages = paper.num_pages || paper.numPages || null;
     
     return await sql`
-      INSERT INTO papers (uri, title, abstract, authors, num_pages, is_explicitly_saved, user_id)
-      VALUES (${uri}, ${title}, ${abstract}, ${JSON.stringify(authors)}, ${numPages}, ${isExplicit}, ${userId})
+      INSERT INTO papers (uri, title, abstract, authors, num_pages, user_id)
+      VALUES (${uri}, ${title}, ${abstract}, ${JSON.stringify(authors)}, ${numPages}, ${userId})
       ON CONFLICT (uri) DO UPDATE SET
         title = EXCLUDED.title,
         abstract = EXCLUDED.abstract,
         num_pages = COALESCE(EXCLUDED.num_pages, papers.num_pages),
-        is_explicitly_saved = CASE
-          WHEN EXCLUDED.is_explicitly_saved = true THEN true
-          ELSE papers.is_explicitly_saved
-        END,
         user_id = EXCLUDED.user_id
       RETURNING *;
     `;
@@ -195,11 +191,9 @@ export const dbService = {
   },
 
   async deletePaper(uri: string) {
-    // Only set is_explicitly_saved to false instead of deleting the record
-    // This preserves the paper record for any notes that reference it
+    // Actually delete the paper - notes will cascade delete due to foreign key
     return await sql`
-      UPDATE papers 
-      SET is_explicitly_saved = false 
+      DELETE FROM papers 
       WHERE uri = ${uri} 
       RETURNING *;
     `;
