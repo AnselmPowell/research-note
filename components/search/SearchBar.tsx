@@ -720,7 +720,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
           {/* Prompt to add topic if none exist */}
             <div className="mb-1 animate-fade-in border-gray-100 dark:border-gray-800 pb-1">
-              <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <div className="text-md font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                  {searchBarState.additionalTopics.length === 0 && searchBarState.urls.length === 0 && (
                    <span>Add a </span>
                   )}
@@ -761,7 +761,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Search Questions</h3>
+              <h3 className="text-md font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Search Questions</h3>
               <div className="group relative">
                 <Info size={14} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help transition-colors" />
                 <div className="absolute left-0 ml-6 top-1/2 -translate-y-1/2 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-50">
