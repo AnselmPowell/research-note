@@ -282,7 +282,7 @@ const App: React.FC = () => {
               <span className="text-gray-900 dark:text-gray-100">Research</span>
               <span className="text-scholar-600 dark:text-scholar-400">Notes</span>
             </div>
-            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">No.1 academic research gatherer</p>
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">The #1 tool for students to find meaningful quotes and insights from academic papers in minutes.</p>
           </div>
           <div className="w-full max-w-3xl mb-8 relative z-20">
             <SearchBar centered={true} onSearch={handleSearchTrigger} />
