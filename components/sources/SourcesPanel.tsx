@@ -15,16 +15,16 @@ export const SourcesPanel: React.FC = () => {
     const [uploadMode, setUploadMode] = useState<'search' | 'url' | 'menu'>('search');
     const [urlInput, setUrlInput] = useState('');
     const [showUploadMenu, setShowUploadMenu] = useState(false);
-    
+
     // Multiple file upload state
-    const [uploadProgress, setUploadProgress] = useState<{current: number; total: number; currentFileName: string} | null>(null);
-    
+    const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; currentFileName: string } | null>(null);
+
     // Selection state for bulk operations
     const [selectedPaperUris, setSelectedPaperUris] = useState<string[]>([]);
 
     // Show all papers - memoize this computation
-    const sourcePapers = useMemo(() => 
-        savedPapers, 
+    const sourcePapers = useMemo(() =>
+        savedPapers,
         [savedPapers]
     );
 
@@ -45,19 +45,7 @@ export const SourcesPanel: React.FC = () => {
             .map(({ paper }) => paper);
     }, [sourcePapers, searchQuery]);
 
-    const handleToggleButton = useCallback(async (e: React.MouseEvent, paper: any) => {
-        e.stopPropagation();
-        const wasSelected = isPdfInContext(paper.uri);
 
-        if (!wasSelected) {
-            const isLoaded = loadedPdfs.some(p => p.uri === paper.uri);
-            if (!isLoaded) {
-                const result = await loadPdfFromUrl(paper.uri, paper.title);
-                if (result && !result.success) return;
-            }
-        }
-        togglePdfContext(paper.uri, paper.title);
-    }, [isPdfInContext, loadedPdfs, loadPdfFromUrl, togglePdfContext]);
 
     const handleOpenPaper = useCallback(async (uri: string, title: string) => {
         try {
@@ -99,7 +87,7 @@ export const SourcesPanel: React.FC = () => {
             // Process files sequentially for better user feedback
             for (let i = 0; i < pdfFiles.length; i++) {
                 const file = pdfFiles[i];
-                
+
                 setUploadProgress({
                     current: i + 1,
                     total: pdfFiles.length,
@@ -120,10 +108,10 @@ export const SourcesPanel: React.FC = () => {
                         publishedDate: new Date().toISOString(),
                         numPages: loadedPdf.numPages
                     };
-                    
+
                     // Save to database/localStorage
                     await savePaper(paperData);
-                    
+
                     // FIXED: Also add to AgentResearcher context for consistency
                     togglePdfContext(paperData.uri, paperData.title);
                 }
@@ -152,24 +140,24 @@ export const SourcesPanel: React.FC = () => {
             if (result.success && result.pdf) {
                 // Use the PDF object directly from the result (eliminates stale closure issue)
                 const loadedPdf = result.pdf;
-                
+
                 // Create paper data using the returned PDF
                 const paperData = {
                     uri: loadedPdf.uri,
-                    pdfUri: loadedPdf.uri, 
+                    pdfUri: loadedPdf.uri,
                     title: loadedPdf.metadata?.title || 'Untitled Document',
                     authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
                     summary: loadedPdf.metadata?.subject || '',  // Include subject as summary
                     publishedDate: new Date().toISOString(),
                     numPages: loadedPdf.numPages
                 };
-                
+
                 // Save to database/localStorage
                 await savePaper(paperData);
-                
+
                 // FIXED: Also add to AgentResearcher context for consistency
                 togglePdfContext(paperData.uri, paperData.title);
-                
+
                 setUrlInput('');
                 setUploadMode('search');
                 setShowUploadMenu(false);
@@ -188,13 +176,13 @@ export const SourcesPanel: React.FC = () => {
         if (confirm(`Remove "${title}" from sources?`)) {
             try {
                 await deletePaper(uri);
-                
+
                 // Also remove from LibraryContext if loaded to maintain consistency
                 const isLoaded = loadedPdfs.some(p => p.uri === uri);
                 if (isLoaded) {
                     removePdf(uri); // Remove from loaded PDFs and context
                 }
-                
+
                 // Remove from selection if selected
                 setSelectedPaperUris(prev => prev.filter(u => u !== uri));
             } catch (error) {
@@ -203,23 +191,75 @@ export const SourcesPanel: React.FC = () => {
         }
     };
 
-    const handleSelectAll = useCallback(() => {
-        if (selectedPaperUris.length === filteredPapers.length && selectedPaperUris.length > 0) {
+    const handleSelectAll = useCallback(async () => {
+        const allSelected = selectedPaperUris.length === filteredPapers.length && selectedPaperUris.length > 0;
+
+        if (allSelected) {
+            // Deselect all: Remove from selection and AI context
+            for (const paper of filteredPapers) {
+                if (isPdfInContext(paper.uri)) {
+                    togglePdfContext(paper.uri, paper.title);
+                }
+            }
             setSelectedPaperUris([]);
         } else {
-            setSelectedPaperUris(filteredPapers.map(p => p.uri));
-        }
-    }, [selectedPaperUris.length, filteredPapers]);
+            // Select all: Add to selection and AI context
+            const urisToSelect: string[] = [];
 
-    const handleToggleSelect = useCallback((uri: string) => {
-        setSelectedPaperUris(prev => 
-            prev.includes(uri) ? prev.filter(u => u !== uri) : [...prev, uri]
-        );
-    }, []);
+            for (const paper of filteredPapers) {
+                // Ensure PDF is loaded
+                const isLoaded = loadedPdfs.some(p => p.uri === paper.uri);
+                if (!isLoaded) {
+                    const result = await loadPdfFromUrl(paper.uri, paper.title);
+                    if (!result.success) continue; // Skip failed loads
+                }
+
+                // Add to AI context if not already there
+                if (!isPdfInContext(paper.uri)) {
+                    togglePdfContext(paper.uri, paper.title);
+                }
+
+                urisToSelect.push(paper.uri);
+            }
+
+            setSelectedPaperUris(urisToSelect);
+        }
+    }, [selectedPaperUris.length, filteredPapers, isPdfInContext, togglePdfContext, loadedPdfs, loadPdfFromUrl]);
+
+    const handleToggleSelect = useCallback(async (uri: string, title: string) => {
+        const isCurrentlySelected = selectedPaperUris.includes(uri);
+
+        if (isCurrentlySelected) {
+            // Unchecking: Remove from both selection and AI context
+            setSelectedPaperUris(prev => prev.filter(u => u !== uri));
+            if (isPdfInContext(uri)) {
+                togglePdfContext(uri, title);
+            }
+        } else {
+            // Checking: Add to selection and AI context
+            setSelectedPaperUris(prev => [...prev, uri]);
+
+            // Ensure PDF is loaded before adding to context
+            const isLoaded = loadedPdfs.some(p => p.uri === uri);
+            if (!isLoaded) {
+                const result = await loadPdfFromUrl(uri, title);
+                if (result && !result.success) {
+                    // If loading failed, don't add to selection
+                    setSelectedPaperUris(prev => prev.filter(u => u !== uri));
+                    return;
+                }
+            }
+
+            // Add to AI context
+            if (!isPdfInContext(uri)) {
+                togglePdfContext(uri, title);
+            }
+        }
+    }, [selectedPaperUris, isPdfInContext, togglePdfContext, loadedPdfs, loadPdfFromUrl]);
 
     const handleBulkDelete = async () => {
         if (selectedPaperUris.length === 0) return;
-        
+
         if (confirm(`Remove ${selectedPaperUris.length} source${selectedPaperUris.length > 1 ? 's' : ''} from your library?`)) {
             try {
                 for (const uri of selectedPaperUris) {
@@ -372,13 +412,12 @@ export const SourcesPanel: React.FC = () => {
                             onClick={handleSelectAll}
                             className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 hover:text-scholar-600 transition-colors"
                         >
-                            <div className={`w-4 h-4 rounded border-2 transition-colors flex items-center justify-center ${
-                                selectedPaperUris.length === filteredPapers.length && selectedPaperUris.length > 0
-                                    ? 'bg-scholar-600 border-scholar-600' 
-                                    : selectedPaperUris.length > 0
-                                        ? 'bg-scholar-600/50 border-scholar-600'
-                                        : 'border-gray-400 dark:border-gray-500'
-                            }`}>
+                            <div className={`w-4 h-4 rounded border-2 transition-colors flex items-center justify-center ${selectedPaperUris.length === filteredPapers.length && selectedPaperUris.length > 0
+                                ? 'bg-scholar-600 border-scholar-600'
+                                : selectedPaperUris.length > 0
+                                    ? 'bg-scholar-600/50 border-scholar-600'
+                                    : 'border-gray-400 dark:border-gray-500'
+                                }`}>
                                 {selectedPaperUris.length === filteredPapers.length && selectedPaperUris.length > 0 ? (
                                     <Check size={10} className="text-white" />
                                 ) : selectedPaperUris.length > 0 ? (
@@ -386,12 +425,12 @@ export const SourcesPanel: React.FC = () => {
                                 ) : null}
                             </div>
                             <span className="font-medium">
-                                {selectedPaperUris.length > 0 
-                                    ? `${selectedPaperUris.length} selected` 
+                                {selectedPaperUris.length > 0
+                                    ? `${selectedPaperUris.length} selected`
                                     : 'Select all'}
                             </span>
                         </button>
-                        
+
                         {selectedPaperUris.length > 0 && (
                             <button
                                 onClick={handleBulkDelete}
@@ -425,26 +464,26 @@ export const SourcesPanel: React.FC = () => {
                         )}
                     </div>
                 ) : (
-                    
+
                     <div className="space-y-2">
                         {filteredPapers.map(paper => {
                             const isInContext = isPdfInContext(paper.uri);
-                            const isSelected = selectedPaperUris.includes(paper.uri);
+                            const isSelected = selectedPaperUris.includes(paper.uri) || isInContext; // Show as selected if in AI context
                             const isDownloading = downloadingUris.has(paper.uri);
                             return (
                                 <div
                                     key={paper.uri}
                                     className={`p-2.5 bg-cream dark:bg-dark-card rounded-lg border transition-all duration-200 group cursor-pointer hover:z-[9999] hover:relative hover:shadow-xl hover:scale-[1.02] ${isSelected
-                                            ? 'border-scholar-500 ring-1 ring-scholar-500 shadow-sm '
-                                            : isInContext
-                                                ? 'border-scholar-300 dark:border-scholar-700'
-                                                : 'border-gray-200 dark:border-gray-700 hover:border-scholar-300 dark:hover:border-scholar-700'
+                                        ? 'border-scholar-500 ring-1 ring-scholar-500 shadow-sm '
+                                        : isInContext
+                                            ? 'border-scholar-300 dark:border-scholar-700'
+                                            : 'border-gray-200 dark:border-gray-700 hover:border-scholar-300 dark:hover:border-scholar-700'
                                         }`}
                                     onClick={() => handleOpenPaper(paper.uri, paper.title)}
                                 >
                                     <div className="flex items-start gap-2">
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); handleToggleSelect(paper.uri); }}
+                                            onClick={(e) => { e.stopPropagation(); handleToggleSelect(paper.uri, paper.title); }}
                                             disabled={isDownloading}
                                             className={`mt-0.5 flex-shrink-0 transition-colors ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-300 dark:text-gray-600 hover:text-gray-400'
                                                 }`}
