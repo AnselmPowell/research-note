@@ -33,6 +33,13 @@ const ALL_SUGGESTIONS = [
   "Basics of Financial Literacy"
 ];
 
+const ResearchNoteLogo: React.FC<{ className?: string }> = ({ className = "" }) => (
+  <div className={`font-bold tracking-tight ${className}`}>
+    <span className="text-gray-900 dark:text-gray-100">Research</span>
+    <span className="text-scholar-600 dark:text-scholar-400">Notes</span>
+  </div>
+);
+
 const App: React.FC = () => {
   const { isAuthenticated, isLoading: authLoading, user, signOut } = useAuth();
   const [configError, setConfigError] = useState<string | null>(null);
@@ -243,20 +250,27 @@ const App: React.FC = () => {
       <AgentResearcher />
 
       <div className="flex-none pt-4 pb-2 px-6 flex items-start justify-center relative z-40">
+        {!isLibraryOpen && (
+          <div className="absolute left-6 top-6 z-40">
+            <ResearchNoteLogo className="text-2xl" />
+          </div>
+        )}
         {showHeaderSearch && (
           <div className="w-full max-w-3xl relative animate-fade-in">
             <SearchBar centered={true} onSearch={handleSearchTrigger} />
           </div>
         )}
-        <div className="absolute right-2 top-4 flex items-center gap-3 pr-5">
-          <LayoutControls />
-        </div>
+        {!isLibraryOpen && (
+          <div className="absolute right-2 top-4 flex items-center gap-3 pr-5">
+            <LayoutControls />
+          </div>
+        )}
       </div>
 
       {allColumnsClosed ? (
         <main className={`flex-grow flex flex-col items-center justify-center px-4 -mt-20 transition-all duration-500 ease-in-out ${isHomeExiting ? 'opacity-0 scale-95' : 'animate-slide-up'}`}>
           <div className="mb-10 text-center select-none">
-            <div className="text-6xl sm:text-7xl lg:text-8xl font-light tracking-tight mb-4">
+            <div className="text-6xl sm:text-7xl lg:text-8xl font-semibold tracking-tight mb-4">
               <span className="text-gray-900 dark:text-gray-100">Research</span>
               <span className="text-scholar-600 dark:text-scholar-400">Notes</span>
             </div>

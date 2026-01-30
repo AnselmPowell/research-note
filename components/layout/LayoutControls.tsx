@@ -29,13 +29,17 @@ const DesktopButton = ({ col, icon: Icon, label, tooltipIcon, isActive, onToggle
         : 'text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
         }`}
     >
-      <Icon size={20} />
+      <Icon size={24} />
       <Tooltip text={label} icon={tooltipIcon} />
     </button>
   );
 };
 
-export const LayoutControls: React.FC = () => {
+interface LayoutControlsProps {
+  inSidebar?: boolean;
+}
+
+export const LayoutControls: React.FC<LayoutControlsProps> = ({ inSidebar = false }) => {
   const {
     columnVisibility,
     toggleColumn,
@@ -77,7 +81,7 @@ export const LayoutControls: React.FC = () => {
   return (
     <div className="relative z-50" ref={menuRef}>
       {/* Desktop View: Row of buttons */}
-      <div className="hidden md:flex items-center gap-1 bg-white/60 dark:bg-dark-card/60 backdrop-blur-md rounded-xl p-1 shadow-sm border border-gray-200/50 dark:border-gray-700/50">
+      <div className="hidden md:flex items-center gap-2">
         <DesktopButton col="left" icon={FolderOpen} label="Sources" tooltipIcon={FolderOpen} isActive={columnVisibility.left} onToggle={handleToggle} />
         <DesktopButton col="middle" icon={BookOpenText} label="Deep Research" tooltipIcon={BookOpenText} isActive={columnVisibility.middle} onToggle={handleToggle} />
         <DesktopButton col="right" icon={FileText} label="Paper View" tooltipIcon={FileText} isActive={columnVisibility.right} onToggle={handleToggle} />
@@ -87,16 +91,19 @@ export const LayoutControls: React.FC = () => {
       <div className="md:hidden">
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className={`p-2.5 backdrop-blur-sm rounded-xl shadow-sm border transition-all ${isMobileMenuOpen
-            ? 'bg-white dark:bg-gray-800 border-scholar-200 dark:border-scholar-900 text-scholar-600'
-            : 'bg-white/80 dark:bg-dark-card/80 border-gray-200/50 dark:border-gray-700/50 text-gray-600 dark:text-gray-300'
-            }`}
+          className={`p-2.5 rounded-xl transition-all ${
+            isMobileMenuOpen
+              ? 'bg-white dark:bg-gray-800 border border-scholar-200 dark:border-scholar-900 text-scholar-600 shadow-sm'
+              : inSidebar
+                ? 'bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 shadow-sm'
+                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
+          }`}
         >
-          <Menu size={22} />
+          <Menu size={24} />
         </button>
 
         {isMobileMenuOpen && (
-          <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 overflow-hidden animate-fade-in origin-top-right ring-1 ring-black/5">
+          <div className={`absolute ${inSidebar ? 'left-0' : 'right-0'} top-full mt-2 w-52 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 overflow-hidden animate-fade-in ${inSidebar ? 'origin-top-left' : 'origin-top-right'} ring-1 ring-black/5`}>
             <div className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-gray-800">
               Layout Options
             </div>

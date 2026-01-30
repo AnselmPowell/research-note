@@ -23,8 +23,16 @@ import { useUI, LibraryView } from '../../contexts/UIContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { dataMigrationService } from '../../utils/dataMigrationService';
 import { NotesManager } from './NotesManager';
+import { LayoutControls } from '../layout/LayoutControls';
 
 // --- SUBCOMPONENTS ---
+
+const ResearchNoteLogo: React.FC<{ className?: string }> = ({ className = "" }) => (
+  <div className={`font-bold tracking-tight ${className}`}>
+    <span className="text-gray-900 dark:text-gray-100">Research</span>
+    <span className="text-scholar-600 dark:text-scholar-400">Notes</span>
+  </div>
+);
 
 const NavItem: React.FC<{
   icon: any,
@@ -63,8 +71,13 @@ const SidebarUserProfile: React.FC<{
   resetCallbacks?: (() => void)[];
 }> = ({ onShowAuthModal, resetCallbacks = [] }) => {
   const { isAuthenticated, user, signOut } = useAuth();
-  const { toggleDarkMode, darkMode } = useUI();
+  const { toggleDarkMode, darkMode, isLibraryOpen } = useUI();
   const [isOpen, setIsOpen] = useState(false);
+
+  // Auto-close popup when sidebar opens/closes
+  useEffect(() => {
+    setIsOpen(false);
+  }, [isLibraryOpen]);
 
   // Generate user initials from name
   const getUserInitials = (name: string): string => {
@@ -115,7 +128,7 @@ const SidebarUserProfile: React.FC<{
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute left-2 md:left-4 bottom-full mb-2 w-[calc(100vw-1rem)] md:w-64 max-w-[280px] bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 z-50">
+          <div className="absolute left-0 right-0 bottom-full mb-2 mx-2 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-2 z-50">
             {/* User info section */}
             {isAuthenticated ? (
               <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
@@ -207,8 +220,7 @@ export const SidebarNav: React.FC<{
   resetCallbacks?: (() => void)[];
 }> = ({ onClose, onShowAuthModal, resetCallbacks }) => {
   const { savedNotes, savedPapers } = useDatabase();
-  const { libraryActiveView, setLibraryActiveView, openColumn } = useUI();
-  const [searchQuery, setSearchQuery] = useState('');
+  const { libraryActiveView, setLibraryActiveView, openColumn, columnVisibility } = useUI();
 
   const handleSelect = (view: LibraryView) => {
     setLibraryActiveView(view);
@@ -218,36 +230,38 @@ export const SidebarNav: React.FC<{
 
   return (
     <div className="w-full flex flex-col bg-white dark:bg-dark-card h-full">
-      <div className="px-3 md:px-4 pt-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl px-4 py-2.5 shadow-sm">
-            <Search size={18} className="text-gray-400 mr-2" />
-            <input
-              className="w-full bg-transparent text-sm outline-none text-gray-900 dark:text-white"
-              placeholder="Filter library..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-            />
-          </div>
+      {/* Header: Logo and Close Button */}
+      <div className="px-3 md:px-4 pt-6 pb-4">
+        <div className="flex items-center justify-between">
+          <ResearchNoteLogo className="text-2xl" />
           {onClose && (
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-400 hover:text-gray-600 transition-colors">
-              <PanelLeftClose size={20} />
+            <button onClick={onClose} className="p-2 pt-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-400 hover:text-gray-600 transition-colors">
+              <PanelLeftClose size={26} />
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Controls Section */}
+      <div className="px-3 md:px-4 pt-0 ml-0.5">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex-1">
+            <LayoutControls inSidebar={true} />
+          </div>
         </div>
 
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar px-0.5 md:px-1">
+      <div className="flex-1 -mt-4 overflow-y-auto custom-scrollbar px-0.5 md:px-1">
         <div className="mb-1">
-          <NavItem icon={LayoutList} label="All Notes" count={savedNotes.length} isActive={libraryActiveView === 'all'} onClick={() => handleSelect('all')} iconColor="text-gray-700" />
-          <NavItem icon={FileText} label="Papers" count={savedPapers.length} isActive={libraryActiveView === 'papers'} onClick={() => handleSelect('papers')} iconColor="text-scholar-500" />
+          <NavItem icon={LayoutList} label="All Notes" count={savedNotes.length} isActive={columnVisibility.library && libraryActiveView === 'all'} onClick={() => handleSelect('all')} iconColor="text-gray-700" />
+          <NavItem icon={FileText} label="Papers" count={savedPapers.length} isActive={columnVisibility.library && libraryActiveView === 'papers'} onClick={() => handleSelect('papers')} iconColor="text-scholar-500" />
 
           <div className="h-px bg-gray-100 dark:bg-gray-800 mx-6 my-2 opacity-50"></div>
 
-          <NavItem icon={Clock} label="Recently Added" count={savedNotes.filter(n => (new Date().getTime() - new Date(n.created_at || 0).getTime()) < 86400000).length} isActive={libraryActiveView === 'recent'} onClick={() => handleSelect('recent')} iconColor="text-gray-600" />
-          <NavItem icon={Flag} label="Flagged" count={savedNotes.filter(n => n.is_flagged).length} isActive={libraryActiveView === 'flagged'} onClick={() => handleSelect('flagged')} iconColor="text-red-700" />
-          <NavItem icon={Star} label="Favorites" count={savedNotes.filter(n => n.is_starred).length} isActive={libraryActiveView === 'starred'} onClick={() => handleSelect('starred')} iconColor="text-orange-500" />
+          <NavItem icon={Clock} label="Recently Added" count={savedNotes.filter(n => (new Date().getTime() - new Date(n.created_at || 0).getTime()) < 86400000).length} isActive={columnVisibility.library && libraryActiveView === 'recent'} onClick={() => handleSelect('recent')} iconColor="text-gray-600" />
+          <NavItem icon={Flag} label="Flagged" count={savedNotes.filter(n => n.is_flagged).length} isActive={columnVisibility.library && libraryActiveView === 'flagged'} onClick={() => handleSelect('flagged')} iconColor="text-red-700" />
+          <NavItem icon={Star} label="Favorites" count={savedNotes.filter(n => n.is_starred).length} isActive={columnVisibility.library && libraryActiveView === 'starred'} onClick={() => handleSelect('starred')} iconColor="text-orange-500" />
         </div>
 
         <div className="mt-4 px-3 md:px-4">
