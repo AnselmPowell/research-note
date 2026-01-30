@@ -274,7 +274,7 @@ const App: React.FC = () => {
           className={`flex-grow flex flex-col items-center justify-center px-4 -mt-20 transition-all duration-500 ease-in-out ${
             isHomeExiting ? 'opacity-0 scale-95' : 'animate-slide-up'
           } ${
-            activeSearchMode === 'deep' && isDeepSearchBarExpanded ? '-mt-32' : ''
+            activeSearchMode === 'deep' && isDeepSearchBarExpanded ? '-mt-72' : ''
           }`}
         >
           <div className="mb-10 text-center select-none">

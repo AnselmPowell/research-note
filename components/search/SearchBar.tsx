@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown, Check, Globe, Sparkles, BookOpenText, Link, ChevronUp, Plus, ArrowRight, Upload, ArrowUpRight, X, AlertTriangle, Loader2, Square, Clock, Trash2 } from 'lucide-react';
+import { Search, ChevronDown, Check, Globe, Sparkles, BookOpenText, Link, ChevronUp, Plus, ArrowRight, Upload, ArrowUpRight, X, AlertTriangle, Loader2, Square, Clock, Trash2, Info, Lightbulb } from 'lucide-react';
 import { EditableTag } from '../ui/EditableTag';
 import { DeepResearchQuery, TagData, SearchMode } from '../../types';
 import { useResearch } from '../../contexts/ResearchContext';
@@ -273,7 +273,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     } else {
       setShowHistory(false);
     }
-    
+
     // Auto-expand deep research menu when typing
     if (mode === 'deep' && value.trim().length > 0) {
       setIsExpanded(true);
@@ -433,7 +433,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
     const validUrls = searchBarState.urls.map(u => typeof u === 'string' ? u : u.value);
     const deepQuery: DeepResearchQuery = { topics: allTopics, urls: validUrls, questions: finalQuestions };
-    
+
     // Close the search bar before triggering the action to prevent UI overlap
     setIsExpanded(false);
 
@@ -717,6 +717,23 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
       {mode === 'deep' && isExpanded && (
         <div className="absolute top-full left-0 right-0 mt-3 bg-white dark:bg-dark-card rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-5 animate-slide-up z-40 origin-top">
+
+          {/* Prompt to add topic if none exist */}
+            <div className="mb-1 animate-fade-in border-gray-100 dark:border-gray-800 pb-1">
+              <div className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                 {searchBarState.additionalTopics.length === 0 && searchBarState.urls.length === 0 && (
+                   <span>Add a </span>
+                  )}
+                topic or subject
+              </div>
+                  
+              {(searchBarState.additionalTopics.length === 0 && searchBarState.urls.length === 0  ) && searchBarState.mainInput.trim().length > 0 && (
+                <div className="text-xs text-scholar-600 dark:text-scholar-400 mt-1 flex items-center gap-1">
+                  Press Enter ↵ to add topic
+                </div>
+              ) }
+            </div>
+
           {(searchBarState.additionalTopics.length > 0 || searchBarState.urls.length > 0) && (
             <div className="flex flex-wrap gap-2 mb-4 w-full animate-fade-in border-b border-gray-50 dark:border-gray-800 pb-4">
               {searchBarState.additionalTopics.map((t, i) => (
@@ -743,7 +760,15 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           </div>
 
           <div className="space-y-3">
-            <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Search Queries</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Search Questions</h3>
+              <div className="group relative">
+                <Info size={14} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help transition-colors" />
+                <div className="absolute left-0 ml-6 top-1/2 -translate-y-1/2 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-50">
+                  For best results ask a specific question. The more similar questions the better.
+                </div>
+              </div>
+            </div>
             <div className="flex items-center px-4 py-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 focus-within:border-scholar-500 focus-within:bg-white dark:focus-within:bg-gray-900 transition-all shadow-sm">
               <Search size={18} className="text-gray-400 mr-3 flex-shrink-0" />
               <input ref={questionInputRef} type="text" value={searchBarState.questionInput} onChange={(e) => updateSearchBar({ questionInput: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && addQuestion()} placeholder="What information are you looking for?" className="flex-1 bg-transparent text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 focus:outline-none min-w-0" />
@@ -758,37 +783,45 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             )}
           </div>
 
-          <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
-            <button onClick={() => { clearSearchBar(); }} className="text-xs font-semibold text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">Clear all</button>
-            <button
-              onClick={isDeepLoading ? handleStopResearch : startDeepResearch}
-              disabled={!canStartDeep && !isDeepLoading}
-              className={`
+          <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 gap-4">
+            <button onClick={() => { clearSearchBar(); }} className="text-xs font-semibold text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors whitespace-nowrap">Clear all</button>
+
+            <div className="flex items-center gap-4 flex-1 justify-end">
+              <div className="hidden md:flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-full border border-gray-100 dark:border-gray-700">
+                <Lightbulb size={12} className="text-amber-500 fill-amber-500" />
+                <span>Ask up to 3 specific questions to get the best results.</span>
+              </div>
+
+              <button
+                onClick={isDeepLoading ? handleStopResearch : startDeepResearch}
+                disabled={!canStartDeep && !isDeepLoading}
+                className={`
                     flex items-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-sm shadow-md transition-all group
                     ${isDeepLoading
-                  ? 'bg-white text-gray-800 border border-gray-300 hover:text-red-600 hover:border-red-300'
-                  : 'bg-scholar-600 hover:bg-scholar-700 text-white hover:shadow-lg hover:-translate-y-0.5 disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed'
-                }
+                    ? 'bg-white text-gray-800 border border-gray-300 hover:text-red-600 hover:border-red-300'
+                    : 'bg-scholar-600 hover:bg-scholar-700 text-white hover:shadow-lg hover:-translate-y-0.5 disabled:bg-gray-200 dark:disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed'
+                  }
                 `}
-            >
-              {isDeepLoading ? (
-                <>
-                  <div className="relative w-4 h-4 flex items-center justify-center">
+              >
+                {isDeepLoading ? (
+                  <>
+                    <div className="relative w-4 h-4 flex items-center justify-center">
 
-                    <Square size={14} fill="currentColor" className="absolute opacity-100 group-hover:opacity-100 transition-opacity duration-200" />
-                  </div>
-                  <span className="group-hover:text-red-600">Stop Research</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles size={16} />
-                  Start Research
-                </>
-              )}
-            </button>
+                      <Square size={14} fill="currentColor" className="absolute opacity-100 group-hover:opacity-100 transition-opacity duration-200" />
+                    </div>
+                    <span className="group-hover:text-red-600">Stop Research</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={16} />
+                    Start Research
+                  </>
+                )}
+              </button>
+            </div>
+            </div>
           </div>
-        </div>
       )}
-    </div>
-  );
+        </div>
+      );
 };
