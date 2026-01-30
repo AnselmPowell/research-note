@@ -86,12 +86,15 @@ interface ResearchContextType {
   clearDeepResearchResults: () => void;
   pendingDeepResearchQuery: DeepResearchQuery | null;
   setPendingDeepResearchQuery: (query: DeepResearchQuery | null) => void;
+  // New: track deep search bar expansion state for UI layout
+  isDeepSearchBarExpanded: boolean;
+  setIsDeepSearchBarExpanded: (expanded: boolean) => void;
 }
 
 const ResearchContext = createContext<ResearchContextType | undefined>(undefined);
 
 export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeSearchMode, setActiveSearchMode] = useState<SearchMode>('web');
+  const [activeSearchMode, setActiveSearchMode] = useState<SearchMode>('deep');
 
   const [searchState, setSearchState] = useState<SearchState>({
     query: '',
@@ -213,6 +216,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [shouldOpenPdfViewer, setShouldOpenPdfViewer] = useState(false);
   const [navigationHandled, setNavigationHandled] = useState(false);
   const [pendingDeepResearchQuery, setPendingDeepResearchQuery] = useState<DeepResearchQuery | null>(null);
+  const [isDeepSearchBarExpanded, setIsDeepSearchBarExpanded] = useState(false);
 
   // Auto-save deep research results whenever they change (debounced to prevent excessive writes)
   useEffect(() => {
@@ -300,11 +304,12 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setUploadedPaperStatuses({});
     setShouldOpenPdfViewer(false);
     setNavigationHandled(false);
+    setIsDeepSearchBarExpanded(false); // Reset deep search bar expansion
 
     // Clear persisted search results
     localStorageService.clearWebSearchResults();
     localStorageService.clearDeepResearchResults();
-  }, [resetSearch, clearSearchBar]);
+  }, [resetSearch, clearSearchBar, setIsDeepSearchBarExpanded]);
 
   const performWebSearch = async (query: string) => {
     setActiveSearchMode('web');
@@ -642,7 +647,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       uploadedPaperStatuses, updateUploadedPaperStatus,
       navigationHandled, setNavigationHandled, setProcessedPdfs,
       clearWebSearchResults, clearDeepResearchResults,
-      pendingDeepResearchQuery, setPendingDeepResearchQuery
+      pendingDeepResearchQuery, setPendingDeepResearchQuery,
+      isDeepSearchBarExpanded, setIsDeepSearchBarExpanded
     }}>
       {children}
     </ResearchContext.Provider>

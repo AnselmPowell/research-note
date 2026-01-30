@@ -89,7 +89,9 @@ const App: React.FC = () => {
     updateSearchBar,
     resetAllResearchData,
     clearWebSearchResults,
-    setPendingDeepResearchQuery
+    setPendingDeepResearchQuery,
+    activeSearchMode,
+    isDeepSearchBarExpanded
   } = useResearch();
 
   const { loadedPdfs, downloadingUris, loadPdfFromUrl, setActivePdf, isPdfInContext, togglePdfContext, failedUris, resetLibrary } = useLibrary();
@@ -268,7 +270,13 @@ const App: React.FC = () => {
       </div>
 
       {allColumnsClosed ? (
-        <main className={`flex-grow flex flex-col items-center justify-center px-4 -mt-20 transition-all duration-500 ease-in-out ${isHomeExiting ? 'opacity-0 scale-95' : 'animate-slide-up'}`}>
+        <main 
+          className={`flex-grow flex flex-col items-center justify-center px-4 -mt-20 transition-all duration-500 ease-in-out ${
+            isHomeExiting ? 'opacity-0 scale-95' : 'animate-slide-up'
+          } ${
+            activeSearchMode === 'deep' && isDeepSearchBarExpanded ? '-mt-32' : ''
+          }`}
+        >
           <div className="mb-10 text-center select-none">
             <div className="text-6xl sm:text-7xl lg:text-8xl font-semibold tracking-tight mb-4">
               <span className="text-gray-900 dark:text-gray-100">Research</span>

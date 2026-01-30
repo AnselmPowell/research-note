@@ -39,7 +39,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     shouldOpenPdfViewer, // New: navigation intent
     navigationHandled, // New: track if navigation done
     setNavigationHandled, // New: mark navigation as handled
-    setProcessedPdfs // New: clear processed PDFs after handling
+    setProcessedPdfs, // New: clear processed PDFs after handling
+    isDeepSearchBarExpanded,
+    setIsDeepSearchBarExpanded
   } = useResearch();
 
   const { setColumnVisibility, openColumn } = useUI();
@@ -47,8 +49,11 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
   const [mode, setMode] = useState<SearchMode>(initialMode || activeSearchMode);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(mode === 'deep');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Use context state for deep search bar expansion
+  const isExpanded = isDeepSearchBarExpanded;
+  const setIsExpanded = setIsDeepSearchBarExpanded;
 
   // History Dropdown State
   const [showHistory, setShowHistory] = useState(false);
@@ -60,7 +65,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       setIsExpanded(false);
     }
     // Removed automatic expansion for deep mode
-  }, [activeSearchMode]);
+  }, [activeSearchMode, setIsExpanded]);
 
   // If initialQuery passed (e.g. from props fallback), sync it to context if context is empty
   useEffect(() => {
@@ -89,7 +94,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     if (isDeepLoading && mode === 'deep' && isExpanded) {
       setIsExpanded(false);
     }
-  }, [isDeepLoading, mode, isExpanded]);
+  }, [isDeepLoading, mode, isExpanded, setIsExpanded]);
 
   // Handle PDF loading and navigation when PDFs are processed
   useEffect(() => {
