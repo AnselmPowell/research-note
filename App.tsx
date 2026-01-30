@@ -250,7 +250,7 @@ const App: React.FC = () => {
       <AgentResearcher />
 
       <div className="flex-none pt-4 pb-2 px-6 flex items-start justify-center relative z-40">
-        {!isLibraryOpen && (
+        {!isLibraryOpen && !allColumnsClosed && (
           <div className="absolute left-6 top-6 z-40">
             <ResearchNoteLogo className="text-2xl" />
           </div>
