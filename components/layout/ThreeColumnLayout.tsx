@@ -246,7 +246,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         {showLeft && (
           <div
             style={{ width: getColumnWidth('left') }}
-            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-75 ease-out shadow-sm min-w-[320px]`}
+            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 transition-[width] duration-75 ease-out shadow-sm min-w-[320px] relative`}
           >
             <RenderHeader title="Sources" icon={FolderOpen} colKey="left" onClose={() => toggleColumn('left')} isLocked={columnLocks.left} />
             <div className="flex-1 overflow-y-auto custom-scrollbar">{sourcesContent}</div>

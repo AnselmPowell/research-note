@@ -425,6 +425,7 @@ export const SourcesPanel: React.FC = () => {
                         )}
                     </div>
                 ) : (
+                    
                     <div className="space-y-2">
                         {filteredPapers.map(paper => {
                             const isInContext = isPdfInContext(paper.uri);
@@ -433,11 +434,11 @@ export const SourcesPanel: React.FC = () => {
                             return (
                                 <div
                                     key={paper.uri}
-                                    className={`p-2.5 bg-white dark:bg-gray-800 rounded-lg border transition-all group cursor-pointer ${isSelected
-                                            ? 'border-scholar-500 ring-1 ring-scholar-500 shadow-sm bg-scholar-50/50 dark:bg-scholar-900/20'
+                                    className={`p-2.5 bg-cream dark:bg-dark-card rounded-lg border transition-all duration-200 group cursor-pointer hover:z-[9999] hover:relative hover:shadow-xl hover:scale-[1.02] ${isSelected
+                                            ? 'border-scholar-500 ring-1 ring-scholar-500 shadow-sm '
                                             : isInContext
                                                 ? 'border-scholar-300 dark:border-scholar-700'
-                                                : 'border-gray-200 dark:border-gray-700 hover:shadow-md hover:border-scholar-300 dark:hover:border-scholar-700'
+                                                : 'border-gray-200 dark:border-gray-700 hover:border-scholar-300 dark:hover:border-scholar-700'
                                         }`}
                                     onClick={() => handleOpenPaper(paper.uri, paper.title)}
                                 >
