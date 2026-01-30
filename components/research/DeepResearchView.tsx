@@ -440,6 +440,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
               isSelected={selectedNoteIds.includes(note.uniqueId)}
               onSelect={() => handleSelectNote(note.uniqueId)}
               sourceTitle={note.sourcePaper.title}
+              sourcePaper={note.sourcePaper}  // ADD: Pass full paper data for rich metadata
               showScore={true}
             />
           ))
@@ -711,7 +712,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
               <div className="mt-4 pl-0 sm:pl-4 border-l-0 sm:border-l-2 border-gray-100 dark:border-gray-800 space-y-3">
                 {notes.map((note, idx) => {
                   const noteId = getNoteId(paper.id, note.pageNumber, idx);
-                  return <ResearchCardNote key={noteId} id={noteId} note={note} isSelected={selectedNoteIds.includes(noteId)} onSelect={() => onSelectNote(noteId)} sourceTitle={paper.title} />;
+                  return <ResearchCardNote key={noteId} id={noteId} note={note} isSelected={selectedNoteIds.includes(noteId)} onSelect={() => onSelectNote(noteId)} sourceTitle={paper.title} sourcePaper={paper} />;
                 })}
               </div>
             )}
@@ -739,7 +740,8 @@ const ResearchCardNote: React.FC<{
   onSelect: () => void;
   sourceTitle?: string;
   showScore?: boolean;
-}> = React.memo(({ id, note, isSelected, onSelect, sourceTitle, showScore }) => {
+  sourcePaper?: ArxivPaper;  // ADD: Full paper metadata for rich note saving
+}> = React.memo(({ id, note, isSelected, onSelect, sourceTitle, showScore, sourcePaper }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [justCopied, setJustCopied] = useState(false);
 
@@ -747,6 +749,48 @@ const ResearchCardNote: React.FC<{
   const { isNoteSaved, deleteNote, saveNote, savedNotes } = useDatabase();
   const { setSearchHighlight, loadPdfFromUrl, setActivePdf } = useLibrary();
   const { setColumnVisibility } = useUI();
+
+  // Helper function for smart paper metadata extraction with multiple fallbacks
+  const createPaperMetadata = useCallback((
+    note: DeepResearchNote, 
+    sourcePaper?: ArxivPaper, 
+    sourceTitle?: string
+  ) => {
+    // Priority 1: Use sourcePaper prop if available (most complete data)
+    if (sourcePaper) {
+      return {
+        uri: sourcePaper.pdfUri,
+        pdfUri: sourcePaper.pdfUri,
+        title: sourcePaper.title,
+        summary: sourcePaper.summary || '',
+        authors: sourcePaper.authors || [],
+        publishedDate: sourcePaper.publishedDate,
+      };
+    }
+    
+    // Priority 2: Check if note has sourcePaper attached (from "Most Relevant Notes" view)
+    if ('sourcePaper' in note && (note as any).sourcePaper) {
+      const paper = (note as any).sourcePaper as ArxivPaper;
+      return {
+        uri: paper.pdfUri,
+        pdfUri: paper.pdfUri,
+        title: paper.title,
+        summary: paper.summary || '',
+        authors: paper.authors || [],
+        publishedDate: paper.publishedDate,
+      };
+    }
+    
+    // Priority 3: Fallback to minimal data (maintains backward compatibility)
+    return {
+      uri: note.pdfUri,
+      pdfUri: note.pdfUri,
+      title: sourceTitle || 'Untitled Paper',
+      summary: '',
+      authors: [],
+      publishedDate: new Date().toISOString(),
+    };
+  }, []);
 
   const isInContext = isNoteInContext(note);
   const isSaved = isNoteSaved(note.pdfUri, note.quote);
@@ -768,7 +812,8 @@ const ResearchCardNote: React.FC<{
     console.log('[Note Card] Save toggle clicked:', {
       noteUri: note.pdfUri,
       isSaved,
-      sourceTitle
+      sourceTitle,
+      hasSourcePaper: !!sourcePaper
     });
 
     if (isSaved) {
@@ -778,16 +823,10 @@ const ResearchCardNote: React.FC<{
         deleteNote(savedNote.id);
       }
     } else {
-      console.log('[Note Card] Saving note with paper metadata');
-      // Include more complete paper metadata when saving note
-      const paperMetadata = {
-        uri: note.pdfUri,
-        pdfUri: note.pdfUri, // Keep both for compatibility
-        title: sourceTitle || 'Untitled Paper',
-        summary: '', // We don't have summary in this context
-        authors: [], // We don't have authors in this context
-        publishedDate: new Date().toISOString(),
-      };
+      console.log('[Note Card] Saving note with complete paper metadata');
+      // FIXED: Use smart metadata extraction instead of hardcoded empty values
+      const paperMetadata = createPaperMetadata(note, sourcePaper, sourceTitle);
+      console.log('[Note Card] Paper metadata being saved:', paperMetadata);
       saveNote(note, paperMetadata);
     }
   };
