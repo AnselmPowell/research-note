@@ -131,6 +131,10 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [isSelectMenuOpen, setIsSelectMenuOpen] = useState(false);
 
+  // Clear Confirmation Modal State
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [isClearingResults, setIsClearingResults] = useState(false);
+
   // Sync: Switch tab based on active search mode (keeps SearchBar and View in sync)
   useEffect(() => {
     if (activeSearchMode === 'web' || activeSearchMode === 'deep') {
@@ -425,6 +429,17 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     setIsSelectMenuOpen(false);
   }, [content, sortBy, selectAllArxivPapers]);
 
+  // Handle clear all results confirmation
+  const handleConfirmClear = useCallback(async () => {
+    setIsClearingResults(true);
+    try {
+      clearDeepResearchResults();
+      setShowClearModal(false);
+    } finally {
+      setIsClearingResults(false);
+    }
+  }, [clearDeepResearchResults]);
+
   return (
     <div className="p-3 sm:p-6 font-sans max-w-4xl mx-auto min-h-[500px] relative" style={{ containerType: 'inline-size' }}>
       <style>{`
@@ -470,7 +485,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                     title="Selection options"
                   >
                     <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${selectedArxivIds.size === content.length ? 'bg-scholar-600 border-scholar-600' :
-                        selectedArxivIds.size > 0 ? 'bg-scholar-100 dark:bg-scholar-900/30 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
+                      selectedArxivIds.size > 0 ? 'bg-scholar-100 dark:bg-scholar-900/30 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
                       }`}>
                       {selectedArxivIds.size === content.length ? <Check size={16} color="white" strokeWidth={3} /> :
                         selectedArxivIds.size > 0 ? <Minus size={16} className="text-scholar-600 dark:text-scholar-400" strokeWidth={3} /> : null}
@@ -581,11 +596,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
               <div>
                 {researchPhase !== 'searching' && (
                   <button
-                    onClick={() => {
-                      if (confirm(`Clear all ${activeTab === 'web' ? 'web search' : 'deep research'} results?`)) {
-                        clearDeepResearchResults();
-                      }
-                    }}
+                    onClick={() => setShowClearModal(true)}
                     className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                     title="Clear all results"
                   >
@@ -868,62 +879,77 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
           </div>
         )}
 
-        {/* Pagination Bar */}
+        {/* Pagination Bar - NotesManager Style */}
         {activeTab === 'deep' && !isBlurred && totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 py-8 mt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in">
-            <button
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage(prev => prev - 1)}
-              className="p-2 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-600 dark:text-gray-300"
-              title="Previous page"
-            >
-              <ChevronLeft size={20} />
-            </button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-8 mt-12 sm:mt-16 mb-12 pagination-controls border-t border-gray-100 dark:border-gray-800 pt-8">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => {
+                  setCurrentPage(prev => Math.max(1, prev - 1));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                disabled={currentPage === 1}
+                className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-dark-card hover:bg-scholar-50 dark:hover:bg-scholar-900/20 hover:border-scholar-200 dark:hover:border-scholar-800 disabled:opacity-30 disabled:hover:bg-transparent shadow-sm transition-all"
+                title="Previous page"
+              >
+                <ChevronLeft size={20} className="text-gray-600 dark:text-gray-300" />
+              </button>
 
-            {Array.from({ length: totalPages }).map((_, i) => {
-              const pageNum = i + 1;
-              // Show first, last, current, and pages around current
-              const showPage = pageNum === 1 || pageNum === totalPages ||
-                Math.abs(pageNum - currentPage) <= 1;
-              const showEllipsis = (pageNum === 2 && currentPage > 3) ||
-                (pageNum === totalPages - 1 && currentPage < totalPages - 2);
+              <span className="text-sm font-bold text-gray-500 dark:text-gray-400 font-mono tracking-widest uppercase">
+                PAGE {currentPage} <span className="text-gray-300 dark:text-gray-700 mx-2">/</span> {totalPages}
+              </span>
 
-              if (!showPage && !showEllipsis) return null;
-
-              if (showEllipsis) {
-                return (
-                  <span key={`ellipsis-${pageNum}`} className="px-2 text-gray-400">...</span>
-                );
-              }
-
-              return (
-                <button
-                  key={pageNum}
-                  onClick={() => {
-                    setCurrentPage(pageNum);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className={`min-w-[36px] h-9 px-3 text-sm font-bold rounded-lg transition-all ${currentPage === pageNum
-                      ? 'bg-scholar-600 text-white shadow-md'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400'
-                    }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
-
-            <button
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage(prev => prev + 1)}
-              className="p-2 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-600 dark:text-gray-300"
-              title="Next page"
-            >
-              <ChevronRight size={20} />
-            </button>
+              <button
+                onClick={() => {
+                  setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                disabled={currentPage === totalPages}
+                className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-dark-card hover:bg-scholar-50 dark:hover:bg-scholar-900/20 hover:border-scholar-200 dark:hover:border-scholar-800 disabled:opacity-30 disabled:hover:bg-transparent shadow-sm transition-all"
+                title="Next page"
+              >
+                <ChevronRight size={20} className="text-gray-600 dark:text-gray-300" />
+              </button>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Clear All Confirmation Modal */}
+      {showClearModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-transparent" onClick={() => !isClearingResults && setShowClearModal(false)} />
+
+          <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-xl shadow-2xl ring-1 ring-gray-900/5 dark:ring-white/10 p-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Clear All Research Results?
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                This will remove all {activeTab === 'web' ? 'web search' : 'deep research'} results and any unsaved notes. This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowClearModal(false)}
+                disabled={isClearingResults}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmClear}
+                disabled={isClearingResults}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2"
+              >
+                {isClearingResults ? <Loader2 size={16} className="animate-spin" /> : null}
+                Clear All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingDeepResearchQuery && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
