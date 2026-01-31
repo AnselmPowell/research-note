@@ -10,8 +10,19 @@ const GOOGLE_SEARCH_CX = config.googleSearchCx;
 // OpenAI Fallback Configuration
 const OPENAI_API_KEY = config.openaiApiKey;
 
-// Initialize Gemini AI
-const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+// Initialize Gemini AI with graceful degradation
+let ai: GoogleGenAI | null = null;
+
+try {
+  if (config.geminiApiKey && config.geminiApiKey !== '') {
+    ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+  } else {
+    console.warn('[GeminiService] API key missing - AI features will be limited');
+  }
+} catch (error) {
+  console.error('[GeminiService] Failed to initialize Gemini AI:', error);
+  ai = null;
+}
 
 // Helper for delays
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -95,6 +106,91 @@ async function callOpenAI(prompt: string): Promise<any> {
 /**
  * Uses Gemini to generate 5 distinct, effective search queries for finding PDFs
  */ 
+export const enhanceMetadataWithAI = async (
+  firstFourPagesText: string,
+  currentMetadata: { title: string; author: string; subject: string },
+  signal?: AbortSignal
+): Promise<{ title: string; author: string; subject: string }> => {
+  
+  // Check abort before starting
+  if (signal?.aborted) throw new Error('Aborted');
+  
+  const prompt = `You are analyzing the first 4 pages of a research paper to extract missing metadata.
+
+Current metadata:
+- Title: ${currentMetadata.title}
+- Author: ${currentMetadata.author} 
+- Subject: ${currentMetadata.subject}
+
+Text from first 4 pages:
+${firstFourPagesText}
+
+Extract the title, author(s), and subject/abstract from this text. Return as JSON:
+{
+  "title": "exact paper title found in the text",
+  "author": "main author or first author listed", 
+  "subject": "brief abstract or subject description"
+}
+
+If you cannot find clear information for any field, return the current value for that field.`;
+
+  try {
+    if (!ai) {
+      console.warn('[MetadataEnhancement] Gemini AI not available - using fallback OpenAI');
+      throw new Error('Gemini AI not initialized');
+    }
+    
+    // Check abort before AI call
+    if (signal?.aborted) throw new Error('Aborted');
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: { responseMimeType: "application/json" }
+    });
+    
+    // Check abort after AI call
+    if (signal?.aborted) throw new Error('Aborted');
+    
+    const text = response.text;
+    if (text) {
+      const enhanced = JSON.parse(cleanJson(text));
+      return {
+        title: enhanced.title || currentMetadata.title,
+        author: enhanced.author || currentMetadata.author,
+        subject: enhanced.subject || currentMetadata.subject
+      };
+    }
+  } catch (error: any) {
+    if (error.message === 'Aborted') throw error; // Re-throw abort
+    
+    console.warn(`[MetadataEnhancement] Gemini failed. Switching to OpenAI.`);
+    
+    // Try OpenAI fallback
+    try {
+      if (signal?.aborted) throw new Error('Aborted');
+      
+      if (OPENAI_API_KEY) {
+        const result = await callOpenAI(prompt);
+        
+        if (signal?.aborted) throw new Error('Aborted');
+        
+        return {
+          title: result.title || currentMetadata.title,
+          author: result.author || currentMetadata.author,
+          subject: result.subject || currentMetadata.subject
+        };
+      }
+    } catch (err: any) {
+      if (err.message === 'Aborted') throw err;
+      console.error('[MetadataEnhancement] OpenAI fallback failed:', err);
+    }
+  }
+
+  // Fallback: return current metadata if all AI calls fail
+  return currentMetadata;
+};
+
 export const generateSearchVariations = async (originalQuery: string): Promise<string[]> => {
   const model = "gemini-3-flash-preview";
   const prompt = `You are a research assistant. The user is looking for PDF documents/papers about: "${originalQuery}".
@@ -103,6 +199,11 @@ export const generateSearchVariations = async (originalQuery: string): Promise<s
   Return ONLY the queries as a JSON array of strings.`;
 
   try {
+    if (!ai) {
+      console.warn('[GeminiService] Gemini AI not available - using fallback OpenAI');
+      throw new Error('Gemini AI not initialized');
+    }
+    
     const response = await ai.models.generateContent({
       model: model,
       contents: prompt,
@@ -117,14 +218,26 @@ export const generateSearchVariations = async (originalQuery: string): Promise<s
     console.warn(`[Search Vars] Gemini failed. Switching to OpenAI.`);
   }
 
+  // Fallback to OpenAI or simple variations if both fail
   try {
-     const result = await callOpenAI(prompt);
-     if (Array.isArray(result)) return result;
-     if (result.queries && Array.isArray(result.queries)) return result.queries;
-     return [];
+     if (OPENAI_API_KEY) {
+       const result = await callOpenAI(prompt);
+       if (Array.isArray(result)) return result;
+       if (result.queries && Array.isArray(result.queries)) return result.queries;
+     }
   } catch (err) {
-     return [];
+     // If both AI services fail, return simple variations
+     console.warn('[Search Vars] Both AI services failed - using simple fallback');
   }
+
+  // Simple fallback - return variations of the original query
+  return [
+    `${originalQuery} research`,
+    `${originalQuery} study`,
+    `${originalQuery} analysis`,
+    `${originalQuery} paper`,
+    `${originalQuery} academic`
+  ];
 };
 
 /**
@@ -171,6 +284,11 @@ export const generateArxivSearchTerms = async (topics: string[], questions: stri
   `;
 
   try {
+    if (!ai) {
+      console.warn('[ArXiv Gen] Gemini AI not available - using fallback');
+      throw new Error('Gemini AI not initialized');
+    }
+    
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
@@ -186,11 +304,15 @@ export const generateArxivSearchTerms = async (topics: string[], questions: stri
   }
 
   try {
-    const result = await callOpenAI(prompt);
-    return validateArxivResult(result, fallback);
+    if (OPENAI_API_KEY) {
+      const result = await callOpenAI(prompt);
+      return validateArxivResult(result, fallback);
+    }
   } catch (error) {
-    return fallback;
+    console.warn('[ArXiv Gen] OpenAI also failed - using fallback terms');
   }
+
+  return fallback;
 };
 
 function validateArxivResult(result: any, fallback: ArxivSearchStructured): ArxivSearchStructured {
@@ -212,6 +334,11 @@ export const generateInsightQueries = async (userQuestions: string, contextQuery
   Return ONLY the 5 phrases as a JSON array of strings.`;
 
   try {
+    if (!ai) {
+      console.warn('[Insight Gen] Gemini AI not available - using fallback');
+      throw new Error('Gemini AI not initialized');
+    }
+    
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
@@ -226,13 +353,17 @@ export const generateInsightQueries = async (userQuestions: string, contextQuery
   }
 
   try {
-     const result = await callOpenAI(prompt);
-     if (Array.isArray(result)) return result;
-     if (result.queries && Array.isArray(result.queries)) return result.queries;
-     return [userQuestions];
+     if (OPENAI_API_KEY) {
+       const result = await callOpenAI(prompt);
+       if (Array.isArray(result)) return result;
+       if (result.queries && Array.isArray(result.queries)) return result.queries;
+     }
   } catch (e) {
-     return [userQuestions];
+     console.warn('[Insight Gen] OpenAI also failed - using simple fallback');
   }
+
+  // Simple fallback if both AI services fail
+  return [userQuestions];
 };
 
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
@@ -244,6 +375,11 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
 }
 
 async function getEmbedding(text: string, taskType: string = "RETRIEVAL_DOCUMENT", retries = 3): Promise<number[]> {
+  if (!ai || !config.geminiApiKey) {
+    console.warn('[Embeddings] Gemini AI not available - returning empty vector');
+    return [];
+  }
+
   const cacheKey = `${taskType}:${text.trim()}`;
   if (embeddingCache.has(cacheKey)) {
     return embeddingCache.get(cacheKey)!;
@@ -279,6 +415,11 @@ async function getEmbedding(text: string, taskType: string = "RETRIEVAL_DOCUMENT
 
 async function getBatchEmbeddings(texts: string[], taskType: string = "RETRIEVAL_DOCUMENT"): Promise<number[][]> {
   if (texts.length === 0) return [];
+  
+  if (!ai || !config.geminiApiKey) {
+    console.warn('[Batch Embeddings] Gemini AI not available - returning empty vectors');
+    return texts.map(() => []);
+  }
   
   const results: number[][] = new Array(texts.length).fill([]);
   const uncachedIndices: number[] = [];
@@ -482,6 +623,11 @@ export const extractNotesFromPages = async (
   referenceList?: string[], 
   onStreamUpdate?: (notes: DeepResearchNote[]) => void
 ): Promise<DeepResearchNote[]> => {
+  if (!ai && !OPENAI_API_KEY) {
+    console.warn('[Note Extraction] No AI services available - cannot extract notes');
+    return [];
+  }
+
   const BATCH_SIZE = 8; 
   const CONCURRENCY = 3;
 
@@ -579,6 +725,11 @@ Abstract: ${paperAbstract || "Not available"}\n\n ############`
 
     for(let attempt = 0; attempt < 3; attempt++) {
         try {
+            if (!ai) {
+              console.warn('[Note Extraction] Gemini AI not available - using fallback OpenAI');
+              throw new Error('Gemini AI not initialized');
+            }
+            
             const response = await ai.models.generateContent({
                 model: "gemini-3-flash-preview",
                 contents: prompt,

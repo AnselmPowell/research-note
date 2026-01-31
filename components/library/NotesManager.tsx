@@ -1,37 +1,35 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { 
-  Search, 
-  Filter, 
-  Trash2, 
-  Copy, 
+  Square, 
+  Check, 
+  ChevronDown, 
+  ChevronUp, 
   Star, 
   Flag, 
   Edit3, 
-  Check, 
-  Square, 
+  Trash2, 
+  Search, 
+  Filter, 
+  Copy, 
   X,
-  Library,
-  LayoutGrid,
+  BookText,
   LayoutList,
   FileText,
-  Lightbulb,
-  BookOpenText,
-  TextSearch,
-  AlertTriangle,
-  Loader2,
-  ChevronDown,
-  ChevronUp,
-  FileJson,
-  Link as LinkIcon,
-  ArrowUpDown,
-  Search as SearchIcon,
+  Table as TableIcon,
+  Library,
   Bookmark,
-  Sparkles,
-  BookText
+  ArrowUpDown,
+  TextSearch,
+  BookOpenText,
+  Lightbulb,
+  FileJson,
+  Loader2
 } from 'lucide-react';
 import { useDatabase } from '../../database/DatabaseContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
+import { PapersTable } from './PapersTable';
+import { NotesTable } from './NotesTable';
 
 interface NotesManagerProps {
   activeView: string;
@@ -69,7 +67,9 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     setActivePdf, 
     setSearchHighlight,
     isPdfInContext,
-    togglePdfContext
+    togglePdfContext,
+    downloadingUris,
+    failedUris
   } = useLibrary();
 
   const { setColumnVisibility } = useUI();
@@ -86,18 +86,33 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     }
   }, [activeView]);
 
-  const [paperSubFilter, setPaperSubFilter] = useState<'all' | 'saved' | 'noted'>('all');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  // FIXED: Sync UI selection with AgentResearcher context on mount and context changes
+  // This ensures the checkbox state reflects the actual AgentResearcher context
+  useEffect(() => {
+    if (activeTab === 'papers') {
+      // Find papers that are in AgentResearcher context but not in UI selection
+      const papersInContext = savedPapers.filter(paper => isPdfInContext(paper.uri));
+      const papersInContextUris = papersInContext.map(p => p.uri);
+      
+      // Update UI selection to match AgentResearcher context
+      setUiSelectedPaperUris(papersInContextUris);
+    }
+  }, [activeTab, savedPapers, isPdfInContext]);
+
+  const [paperSubFilter, setPaperSubFilter] = useState<'all' | 'noted'>('all');
+  const [viewMode, setViewMode] = useState<'list' | 'table'>('table');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [localFilters, setLocalFilters] = useState({
     source: 'all',
+    query: 'all',
     flagged: false
   });
   const [sortColumn, setSortColumn] = useState('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [selectedNoteIds, setSelectedNoteIds] = useState<number[]>([]);
   const [selectedPaperUris, setSelectedPaperUris] = useState<string[]>([]);
+  const [uiSelectedPaperUris, setUiSelectedPaperUris] = useState<string[]>([]); // NEW: UI-only selection
   const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set());
   const [expandedPapers, setExpandedPapers] = useState<Set<string>>(new Set());
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
@@ -162,12 +177,22 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     setDeleteModal(prev => ({ ...prev, isProcessing: true }));
     try {
       if (deleteModal.paperUri === 'bulk') {
-          for (const uri of selectedPaperUris) {
+          // FIXED: Use uiSelectedPaperUris instead of selectedPaperUris for bulk delete
+          for (const uri of uiSelectedPaperUris) {
               await deletePaper(uri);
+              // FIXED: Also remove from AgentResearcher context when deleting
+              if (isPdfInContext(uri)) {
+                const paper = paperByUri.get(uri);
+                togglePdfContext(uri, paper?.title);
+              }
           }
-          setSelectedPaperUris([]);
+          setUiSelectedPaperUris([]); // Clear UI selection after delete
       } else if (deleteModal.paperUri) {
         await deletePaper(deleteModal.paperUri);
+        // FIXED: Also remove from AgentResearcher context when deleting single paper
+        if (isPdfInContext(deleteModal.paperUri)) {
+          togglePdfContext(deleteModal.paperUri, deleteModal.paperTitle);
+        }
       } else {
         for (const id of deleteModal.ids) {
           await deleteNote(id);
@@ -181,6 +206,26 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     }
   };
 
+ 
+  const paperByUri = useMemo(() => 
+    new Map(savedPapers.map(paper => [paper.uri, paper])), 
+    [savedPapers]
+  );
+
+  const notesCountByPaperUri = useMemo(() => {
+    const map = new Map<string, number>();
+    savedNotes.forEach(note => {
+      map.set(note.paper_uri, (map.get(note.paper_uri) || 0) + 1);
+    });
+    return map;
+  }, [savedNotes]);
+
+  // PERFORMANCE OPTIMIZATION: Memoized Set for papers with notes (O(1) lookup instead of O(n) Set creation)
+  const papersWithNotesSet = useMemo(() => 
+    new Set(savedNotes.map(n => n.paper_uri)), 
+    [savedNotes]
+  );
+
   const filteredNotes = useMemo(() => {
     let base = [...savedNotes];
     if (activeView === 'starred') base = base.filter(n => n.is_starred);
@@ -190,6 +235,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
       base = base.filter(n => new Date(n.created_at || 0).getTime() > oneDayAgo);
     }
     if (localFilters.source !== 'all') base = base.filter(n => n.paper_uri === localFilters.source);
+    if (localFilters.query !== 'all') base = base.filter(n => n.related_question === localFilters.query);
     if (localFilters.flagged) base = base.filter(n => n.is_flagged);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -200,21 +246,28 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
       if (sortColumn === 'createdAt') {
         valA = new Date(a.created_at || 0).getTime();
         valB = new Date(b.created_at || 0).getTime();
+      } else if (sortColumn === 'publishedYear') {
+  
+        const paperA = paperByUri.get(a.paper_uri);
+        const paperB = paperByUri.get(b.paper_uri);
+        const yearA = paperA?.created_at || paperA?.published || paperA?.publishedDate ? new Date(paperA.created_at || paperA.published || paperA.publishedDate).getFullYear() : 0;
+        const yearB = paperB?.created_at || paperB?.published || paperB?.publishedDate ? new Date(paperB.created_at || paperB.published || paperB.publishedDate).getFullYear() : 0;
+        valA = yearA;
+        valB = yearB;
       } else {
         valA = a.content; valB = b.content;
       }
       return sortDirection === 'asc' ? (valA < valB ? -1 : 1) : (valA > valB ? -1 : 1);
     });
     return base;
-  }, [savedNotes, activeView, searchQuery, localFilters, sortColumn, sortDirection]);
+  }, [savedNotes, savedPapers, activeView, searchQuery, localFilters, sortColumn, sortDirection, paperByUri]); // FIXED: Added missing dependencies
 
   const filteredPapers = useMemo(() => {
     let base = [...savedPapers];
     
-    if (paperSubFilter === 'saved') {
-        base = base.filter(p => p.is_explicitly_saved);
-    } else if (paperSubFilter === 'noted') {
-        base = base.filter(p => savedNotes.some(n => n.paper_uri === p.uri));
+    if (paperSubFilter === 'noted') {
+      // PERFORMANCE OPTIMIZATION: Use memoized Set instead of creating new Set on each render
+      base = base.filter(p => papersWithNotesSet.has(p.uri));
     }
 
     if (searchQuery) {
@@ -223,39 +276,131 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     }
     
     base.sort((a, b) => {
-      const notesA = savedNotes.filter(n => n.paper_uri === a.uri).length;
-      const notesB = savedNotes.filter(n => n.paper_uri === b.uri).length;
+
+      const notesA = notesCountByPaperUri.get(a.uri) || 0;
+      const notesB = notesCountByPaperUri.get(b.uri) || 0;
       if (notesA > 0 && notesB === 0) return -1;
       if (notesB > 0 && notesA === 0) return 1;
-      const valA = new Date(a.created_at || 0).getTime();
-      const valB = new Date(b.created_at || 0).getTime();
+      
+      // Apply the selected sort column
+      let valA, valB;
+      if (sortColumn === 'publishedYear') {
+        const yearA = a.created_at || a.published || a.publishedDate ? new Date(a.created_at || a.published || a.publishedDate).getFullYear() : 0;
+        const yearB = b.created_at || b.published || b.publishedDate ? new Date(b.created_at || b.published || b.publishedDate).getFullYear() : 0;
+        valA = yearA;
+        valB = yearB;
+      } else {
+        // Default to creation date for 'createdAt' and any other values
+        valA = new Date(a.created_at || 0).getTime();
+        valB = new Date(b.created_at || 0).getTime();
+      }
       return sortDirection === 'asc' ? valA - valB : valB - valA;
     });
     return base;
-  }, [savedPapers, savedNotes, searchQuery, sortDirection, paperSubFilter]);
+  }, [savedPapers, savedNotes, searchQuery, sortDirection, sortColumn, paperSubFilter, notesCountByPaperUri, papersWithNotesSet]);
 
   const paginatedNotes = filteredNotes.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const paginatedPapers = filteredPapers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const handleToggleExpand = (id: number) => {
+  const handleToggleExpand = useCallback((id: number) => {
     setExpandedNotes(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  };
+  }, []);
 
-  const handleTogglePaperExpand = (uri: string) => {
+  const handleLocateNote = useCallback((note: any) => {
+      const paper = paperByUri.get(note.paper_uri);
+      const cleanedQuote = note.content.replace(/^[\W\d]+|[\W\d]+$/g, '').trim();
+      
+      loadPdfFromUrl(note.paper_uri, paper?.title);
+      setActivePdf(note.paper_uri);
+      setSearchHighlight(cleanedQuote);
+      setColumnVisibility(prev => ({ ...prev, right: true }));
+  }, [paperByUri, loadPdfFromUrl, setActivePdf, setSearchHighlight, setColumnVisibility]);
+
+  const handleTogglePaperExpand = useCallback((uri: string) => {
     setExpandedPapers(prev => {
       const next = new Set(prev);
       if (next.has(uri)) next.delete(uri); else next.add(uri);
       return next;
     });
-  };
+  }, []);
 
-  const handleNoteSelect = (id: number) => {
+  const handleSelectAllNotes = useCallback(() => {
+    if (selectedNoteIds.length === paginatedNotes.length && selectedNoteIds.length > 0) {
+      setSelectedNoteIds([]);
+    } else {
+      setSelectedNoteIds(paginatedNotes.map(note => note.id));
+    }
+  }, [selectedNoteIds, paginatedNotes]); // FIXED: Include full selectedNoteIds array, not just length
+
+  const handleSelectAllPapers = useCallback(async () => {
+    const isCurrentlyAllSelected = uiSelectedPaperUris.length === paginatedPapers.length && uiSelectedPaperUris.length > 0;
+    const willSelectAll = !isCurrentlyAllSelected;
+    
+    if (willSelectAll) {
+      // Selecting all papers
+      const paperUrisToSelect = paginatedPapers.map(paper => paper.uri);
+      setUiSelectedPaperUris(paperUrisToSelect);
+      
+      // FIXED: Add all papers to AgentResearcher context
+      for (const paper of paginatedPapers) {
+        const isInContext = isPdfInContext(paper.uri);
+        if (!isInContext) {
+          togglePdfContext(paper.uri, paper.title);
+          // Load PDF for context (but don't await all - do in background)
+          loadPdfFromUrl(paper.uri, paper.title);
+        }
+      }
+    } else {
+      // Deselecting all papers
+      const currentlySelected = [...uiSelectedPaperUris];
+      setUiSelectedPaperUris([]);
+      
+      // FIXED: Remove all currently selected papers from AgentResearcher context
+      for (const paperUri of currentlySelected) {
+        const isInContext = isPdfInContext(paperUri);
+        if (isInContext) {
+          const paper = paperByUri.get(paperUri);
+          togglePdfContext(paperUri, paper?.title);
+        }
+      }
+    }
+  }, [uiSelectedPaperUris, paginatedPapers, isPdfInContext, togglePdfContext, loadPdfFromUrl, paperByUri]); // FIXED: Include full uiSelectedPaperUris array, not just length
+
+  const handleUiPaperSelect = useCallback(async (paperUri: string) => {
+    // Determine new UI selection state
+    const isCurrentlySelected = uiSelectedPaperUris.includes(paperUri);
+    const willBeSelected = !isCurrentlySelected;
+    
+    // Update UI selection state
+    setUiSelectedPaperUris(prev => 
+      isCurrentlySelected 
+        ? prev.filter(uri => uri !== paperUri)
+        : [...prev, paperUri]
+    );
+    
+    // FIXED: Make AgentResearcher context follow UI selection state
+    const paper = paperByUri.get(paperUri);
+    if (paper) {
+      const isInContext = isPdfInContext(paperUri);
+      
+      if (willBeSelected && !isInContext) {
+        // Selecting: Add to context if not already there
+        togglePdfContext(paperUri, paper.title);
+        await loadPdfFromUrl(paperUri, paper.title);
+      } else if (!willBeSelected && isInContext) {
+        // Deselecting: Remove from context if currently there
+        togglePdfContext(paperUri, paper.title);
+      }
+    }
+  }, [uiSelectedPaperUris, paperByUri, isPdfInContext, togglePdfContext, loadPdfFromUrl]);
+
+  const handleNoteSelect = useCallback((id: number) => {
     setSelectedNoteIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
+  }, []);
 
   const handlePaperSelect = async (paper: any) => {
     const wasInContext = isPdfInContext(paper.uri);
@@ -266,27 +411,37 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     }
   };
 
-  const handleBulkCopy = (mode: 'raw' | 'full') => {
+  const handleBulkCopy = useCallback((mode: 'raw' | 'full') => {
     const selected = savedNotes.filter(n => selectedNoteIds.includes(n.id));
     let text = '';
     if (mode === 'raw') {
       text = selected.map(n => `"${n.content}"`).join('\n\n');
     } else {
       text = selected.map(n => {
-        const paper = savedPapers.find(p => p.uri === n.paper_uri);
+        const paper = paperByUri.get(n.paper_uri);
         return formatFullNote(n, paper);
       }).join('\n\n========================\n\n');
     }
     navigator.clipboard.writeText(text);
     setSelectedNoteIds([]);
     setShowBulkCopyMenu(false);
-  };
+  }, [savedNotes, selectedNoteIds, paperByUri]);
 
   const paperCounts = useMemo(() => ({
       all: savedPapers.length,
-      saved: savedPapers.filter(p => p.is_explicitly_saved).length,
-      noted: savedPapers.filter(p => savedNotes.some(n => n.paper_uri === p.uri)).length
+      noted: Array.from(new Set(savedNotes.map(n => n.paper_uri))).length 
   }), [savedPapers, savedNotes]);
+
+  const uniqueQueries = useMemo(() => {
+
+    const uniqueSet = new Set<string>();
+    savedNotes.forEach(note => {
+      if (note.related_question && note.related_question.trim().length > 0) {
+        uniqueSet.add(note.related_question);
+      }
+    });
+    return Array.from(uniqueSet).sort();
+  }, [savedNotes]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-cream dark:bg-dark-bg font-sans notes-manager-container" style={{ containerType: 'inline-size' }}>
@@ -298,52 +453,89 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
           .pagination-controls { flex-direction: column; gap: 1rem; }
           .notes-grid { grid-template-columns: 1fr !important; }
           .tab-button { padding-left: 1.25rem !important; padding-right: 1.25rem !important; }
+          .action-bar-text { display: none !important; }
+          .action-bar-button { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+          .filter-label { font-size: 11px !important; }
+          .filter-input { font-size: 14px !important; padding: 0.625rem !important; }
+          .paper-pill { font-size: 11px !important; padding: 0.375rem 0.75rem !important; }
         }
         @container (max-width: 650px) {
           .notes-grid { grid-template-columns: 1fr !important; }
+          .filters-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 640px) {
+          .filter-container { padding: 1rem !important; }
+          .filter-grid { gap: 1rem !important; }
         }
       `}</style>
       
-      <div className="flex-1 overflow-auto custom-scrollbar">
-        <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
+      {/* STICKY HEADER - OUTSIDE SCROLL CONTAINER */}
+      <div className="sticky top-0 z-20 bg-cream/95 dark:bg-dark-bg/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4">
           
-          <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6 justify-between items-center">
-            <div className="flex -mb-px">
+          {/* PRIMARY HEADER ROW */}
+          <div className="flex justify-between items-center py-4 border-b border-gray-200 dark:border-gray-800">
+            
+            {/* LEFT: TABS WITH SELECT ALL */}
+            <div className="flex items-center -mb-px gap-2">
+              
+        
+
+              {/* EXISTING TAB BUTTONS */}
               <button 
-                onClick={() => { setActiveTab('notes'); setCurrentPage(1); }}
-                className={`tab-button px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'notes' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
-                title="Notes"
+                onClick={() => { 
+                  setActiveTab('notes'); 
+                  setCurrentPage(1); 
+                  // FIXED: Clear AgentResearcher context when switching away from papers tab
+                  const currentlySelected = [...uiSelectedPaperUris];
+                  setUiSelectedPaperUris([]); 
+                  // Remove papers from AgentResearcher context
+                  for (const paperUri of currentlySelected) {
+                    if (isPdfInContext(paperUri)) {
+                      const paper = paperByUri.get(paperUri);
+                      togglePdfContext(paperUri, paper?.title);
+                    }
+                  }
+                }}
+                className={`tab-button px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'notes' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
               >
                 <LayoutList size={18} className="flex-shrink-0" />
                 <span className="tab-label">
-                  {activeView === 'all' || activeView == 'papers'  ? 'All Notes' : activeView.charAt(0).toUpperCase() + activeView.slice(1)}
+                  {activeView === 'all' || activeView == 'papers' ? 'All Notes' : activeView.charAt(0).toUpperCase() + activeView.slice(1)}
                 </span>
               </button>
+              
               <button 
-                onClick={() => { setActiveTab('papers'); setCurrentPage(1); }}
-                className={`tab-button px-6 py-4 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === 'papers' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
-                title="Papers"
+                onClick={() => { setActiveTab('papers'); setCurrentPage(1); setSelectedNoteIds([]); }}
+                className={`tab-button px-6 py-4 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === 'papers' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
               >
                 <FileText size={18} className="flex-shrink-0" />
                 <span className="tab-label">Papers</span>
               </button>
             </div>
 
+            {/* RIGHT: VIEW TOGGLES AND FILTERS */}
             <div className="flex items-center gap-2">
-              {activeTab === 'notes' && (
-                <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
-                    <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600' : 'text-gray-400 hover:text-scholar-600'}`}>
-                      <LayoutGrid size={18} />
-                    </button>
-                    <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600' : 'text-gray-400 hover:text-scholar-600'}`}>
-                      <LayoutList size={18} />
-                    </button>
-                </div>
-              )}
+              <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
+                <button 
+                  onClick={() => setViewMode('table')} 
+                  className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400' : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
+                  title="Table View"
+                >
+                  <TableIcon size={18} />
+                </button>
+                <button 
+                  onClick={() => setViewMode('list')} 
+                  className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400' : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
+                  title="List View"
+                >
+                  <LayoutList size={18} />
+                </button>
+              </div>
 
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition-all ${showFilters ? 'bg-scholar-50 border-scholar-200 text-scholar-600' : 'bg-white/60 border-gray-100 text-gray-500 hover:border-scholar-200 hover:text-scholar-600'}`}
+                className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition-all ${showFilters ? 'bg-scholar-50 dark:bg-scholar-900/30 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400' : 'bg-white/60 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
               >
                 <Filter size={18} className="flex-shrink-0" />
                 <span className="tab-label">Filters</span>
@@ -351,24 +543,114 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
             </div>
           </div>
 
+          {/* ACTION BAR ROW - ONLY WHEN ITEMS SELECTED */}
+          {((activeTab === 'notes' && selectedNoteIds.length > 0) || (activeTab === 'papers' && uiSelectedPaperUris.length > 0)) && (
+            <div className="flex items-center justify-between py-3 gap-4 border-t border-gray-100 dark:border-gray-700/50 bg-cream/30 dark:bg-dark-card/30 rounded-b-xl -mx-4 px-4">
+              
+              {/* LEFT: SELECTION INFO */}
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={activeTab === 'notes' ? handleSelectAllNotes : handleSelectAllPapers}
+                  className="p-2.5 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  title={(activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) || (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length) ? 'Clear selection' : 'Select all on page'}
+                >
+                  <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${
+                    (activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) || 
+                    (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length)
+                      ? 'bg-scholar-600 border-scholar-600' 
+                      : 'border-gray-400 dark:border-gray-500'
+                  }`}>
+                    {((activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) || 
+                      (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length)) && (
+                      <Check size={16} className="text-white" />
+                    )}
+                  </div>
+                </button>
+                <div>
+                  <span className="text-lg font-bold text-gray-700 dark:text-gray-300">
+                    {activeTab === 'notes' ? selectedNoteIds.length : uiSelectedPaperUris.length}
+                  </span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 opacity-80 ml-1">
+                    Selected
+                  </span>
+                </div>
+              </div>
+
+              {/* RIGHT: ACTIONS */}
+              <div className="flex items-center gap-2">
+                
+                {/* COPY ACTIONS - NOTES ONLY */}
+                {activeTab === 'notes' && (
+                  <div className="relative" ref={bulkCopyRef}>
+                    <button 
+                      onClick={() => setShowBulkCopyMenu(!showBulkCopyMenu)}
+                      className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                    >
+                      <Copy size={16} />
+                      <span className="action-bar-text">Copy</span>
+                      <ChevronDown size={14} className={`text-gray-400 transition-transform ${showBulkCopyMenu ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {showBulkCopyMenu && (
+                      <div className="absolute bottom-full mb-2 right-0 w-52 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50">
+                        <button onClick={() => handleBulkCopy('raw')} className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-white hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
+                          <FileText size={16} className="text-gray-400" />
+                          Copy Quotes Only
+                        </button>
+                        <button onClick={() => handleBulkCopy('full')} className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-white hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
+                          <FileJson size={16} className="text-scholar-600 dark:text-scholar-400" />
+                          Copy Full Quotes
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* DELETE ACTION */}
+                <button 
+                  onClick={() => {
+                    if (activeTab === 'notes') {
+                      openDeleteNoteModal(selectedNoteIds);
+                    } else {
+                      // Use UI selection for papers
+                      const totalNotes = savedNotes.filter(n => uiSelectedPaperUris.includes(n.paper_uri)).length;
+                      setDeleteModal({
+                        isOpen: true,
+                        ids: [],
+                        paperUri: 'bulk',
+                        paperTitle: `${uiSelectedPaperUris.length} selected papers`,
+                        notesCount: totalNotes,
+                        isProcessing: false
+                      });
+                    }
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors action-bar-button"
+                >
+                  <Trash2 size={16} />
+                  <span className="action-bar-text">Delete</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* SCROLL CONTAINER - BELOW STICKY HEADER */}
+      <div className="flex-1 overflow-auto custom-scrollbar">
+        <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
+
           {/* Paper Sub-Filters (Pills) */}
           {activeTab === 'papers' && (
               <div className="flex items-center gap-2 mb-6 px-1 animate-fade-in overflow-x-auto no-scrollbar">
                   <button 
                     onClick={() => setPaperSubFilter('all')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border ${paperSubFilter === 'all' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border paper-pill ${paperSubFilter === 'all' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 dark:text-scholar-400 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
                   >
                       All <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${paperSubFilter === 'all' ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-800'}`}>{paperCounts.all}</span>
                   </button>
                   <button 
-                    onClick={() => setPaperSubFilter('saved')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border ${paperSubFilter === 'saved' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
-                  >
-                      <Bookmark size={14} /> Saved <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${paperSubFilter === 'saved' ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-800'}`}>{paperCounts.saved}</span>
-                  </button>
-                  <button 
                     onClick={() => setPaperSubFilter('noted')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border ${paperSubFilter === 'noted' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border paper-pill ${paperSubFilter === 'noted' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 dark:text-scholar-400 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
                   >
                       <Bookmark size={14} /> With Notes <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${paperSubFilter === 'noted' ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-800'}`}>{paperCounts.noted}</span>
                   </button>
@@ -376,21 +658,21 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
           )}
 
           {showFilters && (
-            <div className="bg-white/60 dark:bg-dark-card/60 backdrop-blur-md border border-white dark:border-gray-700 rounded-2xl p-4 sm:p-6 mb-8 shadow-scholar animate-fade-in">
-              <div className="flex flex-col gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-6 filters-grid">
+            <div className="bg-white/60 dark:bg-dark-card/60 backdrop-blur-md border border-white dark:border-gray-700 rounded-2xl p-4 sm:p-6 mb-8 shadow-scholar animate-fade-in filter-container">
+              <div className="flex flex-col gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-5 sm:gap-6 filters-grid filter-grid">
                 <div className="sm:col-span-2 space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Keywords</label>
+                  <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Keywords</label>
                   <div className="relative group">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-scholar-600 transition-colors" />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-scholar-600 dark:group-focus-within:text-scholar-400 transition-colors" />
                     <input 
-                      className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl pl-11 pr-10 py-2.5 text-sm outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all"
+                      className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl pl-11 pr-10 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-scholar-400 outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all filter-input"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder={`Search...`}
                     />
                     {searchQuery && (
                       <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
-                        <X size={14} className="text-gray-400" />
+                        <X size={14} className="text-gray-400 dark:text-scholar-400" />
                       </button>
                     )}
                   </div>
@@ -398,9 +680,9 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
                 {activeTab === 'notes' && (
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Source Paper</label>
+                    <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Source Paper</label>
                     <select 
-                      className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none"
+                      className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none filter-input"
                       value={localFilters.source}
                       onChange={(e) => setLocalFilters({...localFilters, source: e.target.value})}
                     >
@@ -410,15 +692,42 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                   </div>
                 )}
 
+                {activeTab === 'notes' && uniqueQueries.length > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Research Query</label>
+                    <select 
+                      className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none filter-input"
+                      value={localFilters.query}
+                      onChange={(e) => setLocalFilters({...localFilters, query: e.target.value})}
+                    >
+                      <option value="all">All Queries</option>
+                      {uniqueQueries.map(query => <option key={query} value={query}>{query}</option>)}
+                    </select>
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Sort</label>
-                  <button 
-                    onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
-                    className="w-full flex items-center justify-between gap-3 px-4 py-2.5 bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors text-sm font-bold shadow-sm"
+                  <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Sort</label>
+                  <select 
+                    className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none filter-input"
+                    value={`${sortColumn}-${sortDirection}`}
+                    onChange={(e) => {
+                      const [column, direction] = e.target.value.split('-');
+                      setSortColumn(column);
+                      setSortDirection(direction as 'asc' | 'desc');
+                    }}
                   >
-                    <span className="truncate">{sortDirection === 'asc' ? 'Oldest' : 'Newest'}</span>
-                    <ArrowUpDown size={14} className="flex-shrink-0" />
-                  </button>
+                    <option value="createdAt-desc">Newest Added</option>
+                    <option value="createdAt-asc">Oldest Added</option>
+                    <option value="publishedYear-desc">Newest Published</option>
+                    <option value="publishedYear-asc">Oldest Published</option>
+                    {activeTab === 'notes' && (
+                      <>
+                        <option value="content-asc">Content A-Z</option>
+                        <option value="content-desc">Content Z-A</option>
+                      </>
+                    )}
+                  </select>
                 </div>
               </div>
             </div>
@@ -426,142 +735,138 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
           {activeTab === 'notes' ? (
             <>
-              {selectedNoteIds.length > 0 && (
-                <div className="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 sm:p-5 bg-scholar-600 text-white rounded-2xl shadow-scholar-lg animate-slide-up ring-4 ring-scholar-100/50">
-                  <div className="flex items-center gap-4 w-full sm:w-auto">
-                    <button onClick={() => setSelectedNoteIds([])} className="hover:bg-white/20 p-2 rounded-xl transition-colors">
-                      <Check size={26} strokeWidth={3} />
-                    </button>
-                    <div>
-                      <span className="text-xl font-black block leading-none">{selectedNoteIds.length}</span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Selected</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 sm:gap-3 ml-0 sm:ml-auto w-full sm:w-auto justify-end">
-                     <div className="relative flex-1 sm:flex-none" ref={bulkCopyRef}>
-                        <button 
-                          onClick={() => setShowBulkCopyMenu(!showBulkCopyMenu)}
-                          className="w-full flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-white/20 hover:bg-white/30 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm"
-                        >
-                          <Copy size={18} /> 
-                          Copy
-                          <ChevronDown size={14} className={`transition-transform ${showBulkCopyMenu ? 'rotate-180' : ''}`} />
-                        </button>
-                        
-                        {showBulkCopyMenu && (
-                          <div className="absolute bottom-full mb-3 right-0 w-56 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 py-1.5 overflow-hidden z-50 text-gray-900 dark:text-white animate-fade-in">
-                            <button onClick={() => handleBulkCopy('raw')} className="w-full text-left px-5 py-3 text-sm font-medium hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
-                              <FileText size={16} className="text-gray-400" /> Copy Quotes Only
-                            </button>
-                            <button onClick={() => handleBulkCopy('full')} className="w-full text-left px-5 py-3 text-sm font-medium hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
-                              <FileJson size={16} className="text-scholar-600" /> Copy Full Quotes
-                            </button>
-                          </div>
-                        )}
-                     </div>
-                     <button onClick={() => openDeleteNoteModal(selectedNoteIds)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-red-500/80 hover:bg-red-600 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm"><Trash2 size={18} /> Delete</button>
-                  </div>
-                </div>
-              )}
-
-              <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4 notes-grid" : "space-y-1 sm:space-y-2"}>
-                {paginatedNotes.length > 0 ? paginatedNotes.map((note) => (
-                  <NoteCard
-                    key={note.id}
-                    note={note}
-                    viewMode={viewMode}
-                    isSelected={selectedNoteIds.includes(note.id)}
-                    isExpanded={expandedNotes.has(note.id)}
-                    isEditing={editingNoteId === note.id}
-                    onSelect={() => handleNoteSelect(note.id)}
-                    onCardClick={() => handleToggleExpand(note.id)}
-                    onToggleStar={() => toggleStar(note.id, !note.is_starred)}
-                    onToggleFlag={() => toggleFlag(note.id, !note.is_flagged)}
-                    onEdit={() => setEditingNoteId(note.id)}
+              {viewMode === 'table' ? (
+                 <NotesTable 
+                    notes={paginatedNotes}
+                    papers={savedPapers}
+                    selectedIds={selectedNoteIds}
+                    expandedIds={expandedNotes}
+                    expandedId={null} // Manager controls set
+                    sortColumn={sortColumn}
+                    sortDirection={sortDirection}
+                    onSort={(col) => { 
+                       if (sortColumn === col) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                       else { setSortColumn(col); setSortDirection('asc'); }
+                    }}
+                    onSelect={handleNoteSelect}
+                    onExpand={handleToggleExpand}
+                    onDelete={(id) => openDeleteNoteModal([id])}
+                    onToggleStar={(id, s) => toggleStar(id, s)}
+                    onToggleFlag={(id, f) => toggleFlag(id, f)}
+                    onEdit={setEditingNoteId}
                     onSaveEdit={async (id, content) => { await updateNote(id, content); setEditingNoteId(null); }}
                     onCancelEdit={() => setEditingNoteId(null)}
-                    onDelete={() => openDeleteNoteModal([note.id])}
-                    paper={savedPapers.find(p => p.uri === note.paper_uri)}
-                  />
-                )) : (
-                  <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
-                     <Library size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300" />
-                     <h3 className="text-xl sm:text-2xl font-bold text-gray-800">No notes found</h3>
-                     <p className="text-xs sm:text-sm max-w-xs leading-relaxed">Save meaningful insights from your research to populate this section.</p>
-                  </div>
-                )}
-              </div>
-            </>
-          ) : (
-            <>
-              {selectedPaperUris.length > 0 && (
-                <div className="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 sm:p-5 bg-scholar-600 text-white rounded-2xl shadow-scholar-lg animate-slide-up ring-4 ring-scholar-100/50">
-                  <div className="flex items-center gap-4 w-full sm:w-auto">
-                    <button onClick={() => setSelectedPaperUris([])} className="hover:bg-white/20 p-2 rounded-xl transition-colors">
-                      <Check size={26} strokeWidth={3} />
-                    </button>
-                    <div>
-                      <span className="text-xl font-black block leading-none">{selectedPaperUris.length}</span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Papers Selected</span>
+                    editingId={editingNoteId}
+                    onViewPdf={handleLocateNote}
+                 />
+              ) : (
+                <div className="space-y-1 sm:space-y-2">
+                  {paginatedNotes.length > 0 ? paginatedNotes.map((note) => (
+                    <NoteCard
+                      key={note.id}
+                      note={note}
+                      viewMode={'list'} // Always list if not table
+                      isSelected={selectedNoteIds.includes(note.id)}
+                      isExpanded={expandedNotes.has(note.id)}
+                      isEditing={editingNoteId === note.id}
+                      onSelect={() => handleNoteSelect(note.id)}
+                      onCardClick={() => handleToggleExpand(note.id)}
+                      onToggleStar={() => toggleStar(note.id, !note.is_starred)}
+                      onToggleFlag={() => toggleFlag(note.id, !note.is_flagged)}
+                      onEdit={() => setEditingNoteId(note.id)}
+                      onSaveEdit={async (id, content) => { await updateNote(id, content); setEditingNoteId(null); }}
+                      onCancelEdit={() => setEditingNoteId(null)}
+                      onDelete={() => openDeleteNoteModal([note.id])}
+                      paper={paperByUri.get(note.paper_uri)}
+                    />
+                  )) : (
+                    <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
+                       <Library size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300 dark:text-gray-600" />
+                       <h3 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">No notes found</h3>
+                       <p className="text-xs sm:text-sm max-w-xs leading-relaxed text-gray-500 dark:text-gray-400">Save meaningful insights from your research to populate this section.</p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 ml-auto w-full sm:w-auto justify-end">
-                     <button 
-                        onClick={handleBulkDeletePapers} 
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-4 px-6 py-2.5 bg-red-500/80 hover:bg-red-600 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-sm"
-                     >
-                        <Trash2 size={18} /> Delete All
-                     </button>
-                  </div>
+                  )}
                 </div>
               )}
-
-              <div className="space-y-4">
-                {paginatedPapers.length > 0 ? paginatedPapers.map((paper) => (
-                  <LibraryPaperCard 
-                    key={paper.uri}
-                    paper={paper}
-                    isSelected={isPdfInContext(paper.uri)}
-                    isExpanded={expandedPapers.has(paper.uri)}
-                    onSelect={() => handlePaperSelect(paper)}
-                    onToggleExpand={() => handleTogglePaperExpand(paper.uri)}
-                    notes={savedNotes.filter(n => n.paper_uri === paper.uri)}
-                    onDelete={() => openDeletePaperModal(paper)}
-                  />
-                )) : (
-                    <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
-                      <FileText size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300" />
-                      <h3 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">No papers match this filter</h3>
-                      <p className="text-xs sm:text-sm max-w-xs leading-relaxed dark:text-scholar-400">Try changing your sub-filter or search query.</p>
-                    </div>
-                )}
-              </div>
+            </> 
+          ) : (
+            <>
+              {viewMode === 'table' ? (
+                <PapersTable 
+                   papers={paginatedPapers}
+                   selectedUris={uiSelectedPaperUris}
+                   expandedUris={expandedPapers}
+                   sortColumn={sortColumn}
+                   sortDirection={sortDirection}
+                   onSort={(col) => {
+                      if (sortColumn === col) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                      else { setSortColumn(col); setSortDirection('asc'); }
+                   }}
+                   onSelect={(paper) => {
+                     // FIXED: Use handleUiPaperSelect to add to AgentResearcher context
+                     handleUiPaperSelect(paper.uri);
+                   }}
+                   onExpand={handleTogglePaperExpand}
+                   onDelete={openDeletePaperModal}
+                   onView={(p) => {
+                      loadPdfFromUrl(p.uri, p.title);
+                      setActivePdf(p.uri);
+                      setColumnVisibility(prev => ({ ...prev, right: true }));
+                   }}
+                   getNotesCount={(uri) => notesCountByPaperUri.get(uri) || 0}
+                   isDownloading={(uri) => downloadingUris.has(uri)}
+                   isFailed={(uri) => failedUris.has(uri)}
+                />
+              ) : (
+                <div className="space-y-4">
+                  {paginatedPapers.length > 0 ? paginatedPapers.map((paper) => (
+                    <LibraryPaperCard 
+                      key={paper.uri}
+                      paper={paper}
+                      isSelected={uiSelectedPaperUris.includes(paper.uri)}
+                      isExpanded={expandedPapers.has(paper.uri)}
+                      onSelect={() => handleUiPaperSelect(paper.uri)}
+                      onToggleExpand={() => handleTogglePaperExpand(paper.uri)}
+                      notes={savedNotes.filter(n => n.paper_uri === paper.uri)}
+                      onDelete={() => openDeletePaperModal(paper)}
+                    />
+                  )) : (
+                      <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
+                        <FileText size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300 dark:text-gray-600" />
+                        <h3 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">No papers match this filter</h3>
+                        <p className="text-xs sm:text-sm max-w-xs leading-relaxed text-gray-500 dark:text-gray-400">Try changing your sub-filter or search query.</p>
+                      </div>
+                  )}
+                </div>
+              )}
             </>
           )}
 
           {(activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) > PAGE_SIZE && (
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-8 mt-12 sm:mt-16 mb-12 pagination-controls">
-               <div className="flex items-center gap-3 w-full sm:w-auto">
+               <div className="flex items-center gap-4">
                  <button 
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
                   disabled={currentPage === 1} 
-                  className="flex-1 sm:flex-none px-8 py-2.5 rounded-2xl font-bold text-gray-500 bg-white/40 border border-gray-100 hover:border-scholar-200 hover:text-scholar-600 disabled:opacity-30 transition-all text-sm shadow-sm"
+                  className="px-6 py-2 rounded-xl font-bold text-gray-500 dark:text-gray-400 bg-white/40 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400 disabled:opacity-30 transition-all text-sm shadow-sm"
                  >
                    Previous
                  </button>
+                 
+                 <div className="flex items-center gap-2">
+                   <span className="text-xs font-black text-scholar-600 dark:text-scholar-400 uppercase tracking-tighter">Page</span>
+                   <span className="text-lg font-bold text-gray-900 dark:text-white">{currentPage}</span>
+                   <span className="text-xs font-black text-gray-300 dark:text-scholar-400 uppercase tracking-tighter">of</span>
+                   <span className="text-lg font-bold text-gray-400 dark:text-scholar-400">{Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE)}</span>
+                 </div>
+
                  <button 
                   onClick={() => setCurrentPage(p => Math.min(Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE), p + 1))} 
                   disabled={currentPage === Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE)} 
-                  className="flex-1 sm:flex-none px-8 py-2.5 rounded-2xl font-bold text-gray-500 bg-white/40 border border-gray-100 hover:border-scholar-200 hover:text-scholar-600 disabled:opacity-30 transition-all text-sm shadow-sm"
+                  className="px-6 py-2 rounded-xl font-bold text-gray-500 dark:text-gray-400 bg-white/40 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400 disabled:opacity-30 transition-all text-sm shadow-sm"
                  >
                    Next
                  </button>
-               </div>
-               <div className="flex items-center gap-2">
-                 <span className="text-xs font-black text-scholar-600 uppercase tracking-tighter">Page</span>
-                 <span className="text-lg font-bold text-gray-900 dark:text-white">{currentPage}</span>
-                 <span className="text-xs font-black text-gray-300 dark:text-scholar-400 uppercase tracking-tighter">of</span>
-                 <span className="text-lg font-bold text-gray-400 dark:text-scholar-400">{Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE)}</span>
                </div>
             </div>
           )}
@@ -569,40 +874,40 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
       </div>
 
       {deleteModal.isOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 animate-fade-in">
-          <div className="absolute inset-0 bg-scholar-900/20 backdrop-blur-sm" onClick={() => !deleteModal.isProcessing && setDeleteModal(prev => ({ ...prev, isOpen: false }))} />
-          <div className="relative w-full max-w-md bg-white dark:bg-dark-card rounded-[1.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden animate-slide-up border border-gray-100 dark:border-gray-800">
-            <div className="p-6 sm:p-10 text-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-red-50 dark:bg-red-900/20 rounded-2xl sm:rounded-3xl flex items-center justify-center mx-auto mb-6 sm:mb-8 transform rotate-3">
-                <AlertTriangle size={32} className="sm:w-[40px] sm:h-[40px] text-red-600" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white mb-3 sm:mb-4 leading-tight uppercase tracking-tight">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-transparent" onClick={() => !deleteModal.isProcessing && setDeleteModal(prev => ({ ...prev, isOpen: false }))} />
+          
+          <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-xl shadow-2xl ring-1 ring-gray-900/5 dark:ring-white/10 p-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                 {deleteModal.paperUri 
-                  ? (deleteModal.notesCount ? `Delete Paper & Insights?` : 'Delete Paper?') 
+                  ? (deleteModal.notesCount ? 'Delete Paper & Insights?' : 'Delete Paper?') 
                   : 'Remove Insight?'}
-              </h2>
-              <p className="text-gray-500 dark:text-gray-400 leading-relaxed font-medium text-xs sm:text-sm">
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
                 {deleteModal.paperUri 
                    ? (deleteModal.notesCount 
-                      ? `CAUTION: Deleting "${deleteModal.paperTitle}" will also erase ${deleteModal.notesCount} associated notes.` 
-                      : `Are you sure you want to delete this paper?`)
-                   : `Are you sure you want to delete this specific insight?`}
+                      ? `This will remove "${deleteModal.paperTitle}" and ${deleteModal.notesCount} notes.` 
+                      : `Are you sure you want to remove this paper from your library?`)
+                   : `This action cannot be undone.`}
               </p>
             </div>
-            <div className="p-4 sm:p-6 bg-gray-50 dark:bg-gray-800/50 flex flex-col sm:flex-row gap-3 sm:gap-4">
+
+            <div className="grid grid-cols-2 gap-3">
               <button 
                 onClick={() => setDeleteModal(prev => ({ ...prev, isOpen: false }))}
                 disabled={deleteModal.isProcessing}
-                className="flex-1 px-8 py-3 sm:py-4 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 text-xs sm:text-sm uppercase tracking-widest"
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleConfirmDelete}
                 disabled={deleteModal.isProcessing}
-                className="flex-1 px-8 py-3 sm:py-4 bg-red-600 text-white font-bold rounded-xl sm:rounded-2xl shadow-lg hover:bg-red-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50 text-xs sm:text-sm uppercase tracking-widest"
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2"
               >
-                {deleteModal.isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />} Confirm
+                {deleteModal.isProcessing ? <Loader2 size={16} className="animate-spin" /> : null}
+                Delete
               </button>
             </div>
           </div>
@@ -615,11 +920,10 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 function LibraryPaperCard({ paper, isSelected, isExpanded, onSelect, onToggleExpand, notes, onDelete }) {
   const { loadPdfFromUrl, setActivePdf, setSearchHighlight, downloadingUris, failedUris } = useLibrary();
   const { setColumnVisibility, setLibraryExpanded, setLibraryOpen } = useUI();
-  const { deleteNote, toggleStar, toggleFlag, updateNote, isPaperSaved } = useDatabase();
+  const { deleteNote, toggleStar, toggleFlag, updateNote } = useDatabase();
 
   const isDownloading = downloadingUris.has(paper.uri);
   const isFailed = failedUris.has(paper.uri);
-  const isActuallySaved = isPaperSaved(paper.uri);
 
   const handleOpenPdf = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -651,10 +955,10 @@ function LibraryPaperCard({ paper, isSelected, isExpanded, onSelect, onToggleExp
           <div className="pt-1 mr-2 sm:mr-4">
             <button 
                 onClick={(e) => { e.stopPropagation(); onSelect(); }} 
-                className={`hover:text-scholar-600 transition-colors opacity-100 sm:group-hover/paper:opacity-100 ${isSelected ? 'text-scholar-600' : 'text-gray-300 dark:text-scholar-400 sm:opacity-0'}`}
+                className={`hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors opacity-100 sm:group-hover/paper:opacity-100 ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-300 dark:text-gray-500 sm:opacity-0'}`}
             > 
-             {isDownloading ? <Loader2 size={24} className="animate-spin text-scholar-600" />
-              : isSelected ? <Check size={24} className="text-scholar-600" /> : <Square size={24} />
+             {isDownloading ? <Loader2 size={24} className="animate-spin text-scholar-600 dark:text-scholar-400" />
+              : isSelected ? <Check size={24} className="text-scholar-600 dark:text-scholar-400" /> : <Square size={24} />
               }
             </button>
           </div>
@@ -672,11 +976,6 @@ function LibraryPaperCard({ paper, isSelected, isExpanded, onSelect, onToggleExp
                     <button onClick={handleOpenPdf} className="flex items-center gap-1 text-xs font-bold text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30 px-2 py-1 rounded-md transition-colors border border-scholar-100 dark:border-scholar-800">
                       <BookText size={12} /> View
                     </button>
-                    {isActuallySaved && (
-                        <span className="bg-scholar-100 dark:bg-scholar-900/30 text-scholar-700 dark:text-scholar-400 text-[8px] font-black uppercase px-2 py-1 rounded-md flex items-center gap-1 border border-scholar-200 dark:border-scholar-800">
-                            <Bookmark size={10} fill="currentColor" /> Saved
-                        </span>
-                    )}
                     <button 
                         onClick={(e) => { e.stopPropagation(); onDelete(); }} 
                         className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-all"
@@ -688,7 +987,7 @@ function LibraryPaperCard({ paper, isSelected, isExpanded, onSelect, onToggleExp
                </div>
             </div>
 
-            <h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white leading-snug mb-2 cursor-pointer hover:text-scholar-600 transition-colors" onClick={handleOpenPdf}>
+            <h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white leading-snug mb-2 cursor-pointer hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors" onClick={handleOpenPdf}>
               {paper.title}
             </h3>
 
@@ -848,7 +1147,7 @@ function NoteCard({
           <div className="pt-0.5 sm:pt-1 flex-shrink-0">
              <button 
                 onClick={(e) => { handleActionClick(e); onSelect(); }} 
-                className={`transition-all transform hover:scale-110 opacity-100 sm:group-hover:opacity-100 ${isSelected ? 'text-scholar-600' : 'text-gray-300 dark:text-scholar-400 sm:opacity-0 hover:text-scholar-600'}`}
+                className={`transition-all transform hover:scale-110 opacity-100 sm:group-hover:opacity-100 ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-300 dark:text-gray-500 sm:opacity-0 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
              >
                 {isSelected ? <Check size={18} className="stroke-[3px] sm:w-[22px] sm:h-[22px]" /> : <Square size={18} className="sm:w-[22px] sm:h-[22px]" />}
              </button>
@@ -858,7 +1157,7 @@ function NoteCard({
              {sourceTitle && viewMode === 'list' && (
                <div className="mb-2 sm:mb-3 pb-1.5 sm:pb-2 border-b border-gray-50 dark:border-gray-700 group/title flex items-center gap-2" onClick={handleOpenPdf}>
                  <FileText size={10} className="sm:w-[12px] sm:h-[12px] text-gray-400 dark:text-scholar-400" />
-                 <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest truncate group-hover/title:text-scholar-600 transition-colors">
+                 <span className="text-[9px] sm:text-[10px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest truncate group-hover/title:text-scholar-600 dark:group-hover/title:text-scholar-400 transition-colors">
                     {sourceTitle}
                  </span>
                </div>
@@ -922,9 +1221,9 @@ function NoteCard({
             >
               <Flag size={14} className="sm:w-[18px] sm:h-[18px]" fill={note.is_flagged ? "currentColor" : "none"} />
             </button>
-            <button onClick={onEdit} className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center text-gray-400 dark:text-scholar-400 hover:bg-gray-50 hover:text-scholar-600 transition-all" title="Edit"><Edit3 size={14} className="sm:w-[18px] sm:h-[18px]" /></button>
+            <button onClick={onEdit} className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center text-gray-400 dark:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-scholar-600 dark:hover:text-scholar-400 transition-all" title="Edit"><Edit3 size={14} className="sm:w-[18px] sm:h-[18px]" /></button>
 
-             <button onClick={handleViewPdfWithHighlight} className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center text-gray-400 dark:text-scholar-400 hover:bg-red-50 hover:text-scholar-600 transition-all"><TextSearch size={14}  className="sm:w-[18px] sm:h-[18px]" /></button>
+             <button onClick={handleViewPdfWithHighlight} className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center text-gray-400 dark:text-scholar-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-scholar-600 dark:hover:text-scholar-400 transition-all"><TextSearch size={14}  className="sm:w-[18px] sm:h-[18px]" /></button>
             
             <div className="relative" ref={copyMenuRef}>
               <button 
@@ -940,7 +1239,7 @@ function NoteCard({
                      <FileText size={12} className="sm:w-[14px] sm:h-[14px] text-gray-400" /> Copy Text
                    </button>
                    <button onClick={handleCopyFull} className="w-full text-left px-3 sm:px-4 py-2 text-[9px] sm:text-xs font-bold uppercase tracking-widest hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-2 sm:gap-3 transition-colors">
-                     <FileJson size={12} className="sm:w-[14px] sm:h-[14px] text-scholar-600" /> Citation
+                     <FileJson size={12} className="sm:w-[14px] sm:h-[14px] text-scholar-600 dark:text-scholar-400" /> Citation
                    </button>
                 </div>
               )}

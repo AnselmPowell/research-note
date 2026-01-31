@@ -96,24 +96,21 @@ export const dbService = {
     }
   },
 
-  async savePaper(paper: any, isExplicit: boolean = true, userId?: string) {
+  async savePaper(paper: any, userId?: string) {
     const uri = paper.pdfUri || paper.uri;
     const title = paper.title || "Untitled";
     const abstract = paper.summary || paper.abstract || "";
     const authors = paper.authors || [];
     const numPages = paper.num_pages || paper.numPages || null;
     
-    // Use EXCLUDED.is_explicitly_saved OR papers.is_explicitly_saved
-    // If it was already true, it stays true. If it's becoming true now, we update it.
     return await sql`
-      INSERT INTO papers (uri, title, abstract, authors, num_pages, is_explicitly_saved, user_id)
-      VALUES (${uri}, ${title}, ${abstract}, ${JSON.stringify(authors)}, ${numPages}, ${isExplicit}, ${userId})
+      INSERT INTO papers (uri, title, abstract, authors, num_pages, user_id)
+      VALUES (${uri}, ${title}, ${abstract}, ${JSON.stringify(authors)}, ${numPages}, ${userId})
       ON CONFLICT (uri) DO UPDATE SET
         title = EXCLUDED.title,
         abstract = EXCLUDED.abstract,
         num_pages = COALESCE(EXCLUDED.num_pages, papers.num_pages),
-        is_explicitly_saved = papers.is_explicitly_saved OR EXCLUDED.is_explicitly_saved,
-        user_id = COALESCE(papers.user_id, EXCLUDED.user_id)
+        user_id = EXCLUDED.user_id
       RETURNING *;
     `;
   },
@@ -168,9 +165,9 @@ export const dbService = {
 
   async getAllLibraryData(userId?: string) {
     if (userId) {
-      // Return user-specific data
-      const papers = await sql`SELECT * FROM papers WHERE user_id = ${userId} OR user_id IS NULL ORDER BY created_at DESC;`;
-      const notes = await sql`SELECT * FROM notes WHERE user_id = ${userId} OR user_id IS NULL ORDER BY created_at DESC;`;
+      // Return ONLY user-specific data (no legacy NULL user_id papers)
+      const papers = await sql`SELECT * FROM papers WHERE user_id = ${userId} ORDER BY created_at DESC;`;
+      const notes = await sql`SELECT * FROM notes WHERE user_id = ${userId} ORDER BY created_at DESC;`;
       return { papers, notes };
     }
     
@@ -182,19 +179,24 @@ export const dbService = {
 
   // User-specific data retrieval methods
   async getUserPapers(userId: string) {
-    return await sql`SELECT * FROM papers WHERE user_id = ${userId} OR user_id IS NULL ORDER BY created_at DESC;`;
+    return await sql`SELECT * FROM papers WHERE user_id = ${userId} ORDER BY created_at DESC;`;
   },
 
   async getUserNotes(userId: string) {
-    return await sql`SELECT * FROM notes WHERE user_id = ${userId} OR user_id IS NULL ORDER BY created_at DESC;`;
+    return await sql`SELECT * FROM notes WHERE user_id = ${userId} ORDER BY created_at DESC;`;
   },
 
   async getUserFolders(userId: string) {
-    return await sql`SELECT * FROM folders WHERE user_id = ${userId} OR user_id IS NULL ORDER BY id ASC;`;
+    return await sql`SELECT * FROM folders WHERE user_id = ${userId} ORDER BY id ASC;`;
   },
 
   async deletePaper(uri: string) {
-    return await sql`DELETE FROM papers WHERE uri = ${uri};`;
+    // Actually delete the paper - notes will cascade delete due to foreign key
+    return await sql`
+      DELETE FROM papers 
+      WHERE uri = ${uri} 
+      RETURNING *;
+    `;
   },
 
   async deleteNotePermanently(id: number) {

@@ -591,6 +591,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 </button>
             )}
 
+            {/* Control hint text when controls are hidden */}
+            {!isUiVisible && (
+                <div className="fixed bottom-5 w-auto text-lg text-gray-400 dark:text-gray-500 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm px-3 py-2  dark:border-gray-600/50 animate-fade-in pointer-events-none z-[30]">
+                    Hover here for controls
+                </div>
+            )}
+
             <div className={`fixed bottom-4 w-auto bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-full shadow-xl px-4 py-2 flex items-center justify-center space-x-2 sm:space-x-4 z-[60] transition-all duration-300 transform ${isUiVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'}`}>
                 <button
                     onClick={onNewFile}

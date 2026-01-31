@@ -159,7 +159,7 @@
       right: -1px;
       height: 85%; /* Control highlight height */
       transform: translateY(-50%);
-      background-color: rgba(96, 165, 250, 0.3);
+      background-color: rgba(96, 165, 250, 0.1); /* Light blue highlight */
       border-radius: 2px;
       opacity: 0;
       transition: opacity 0.1s ease-in-out;
@@ -178,12 +178,12 @@
 
     /* Custom style for browser's native text selection highlight */
     ::selection {
-      background-color: rgba(96, 165, 250, 0.5); /* Slightly darker than paragraph hover */
+      background-color: rgba(96, 165, 250, 0.6); /* Slightly darker than paragraph hover */
       /* REMOVED GLOBAL transparent color to fix inputs */
     }
 
     ::-moz-selection { /* Firefox */
-      background-color: rgba(96, 165, 250, 0.5);
+      background-color: rgba(96, 165, 250, 0.6);
     }
     
     /* Scoped selection for PDF Text Layer to keep transparent text invisible over canvas */
@@ -228,12 +228,12 @@
 
     /* Styles for Search Highlighting */
     .search-highlight {
-      background-color: rgba(255, 229, 0, 0.5); /* Yellow */
+      background-color: rgba(255, 229, 0, 0.2); /* Yellow */
     }
     .search-highlight-active {
-      background-color: rgba(255, 165, 0, 0.6); /* Orange */
+      background-color: rgba(255, 165, 0, 0.3); /* Orange */
       z-index: 10;
-      border-bottom: 2px solid rgba(255, 0, 0, 0.5);
+      border-bottom: 2px solid rgba(255, 0, 0, 0.4);
     }
     </style>
   </head>

@@ -12,15 +12,23 @@ export const localStorageService = {
   savePaper: (paper: any): void => {
     try {
       const papers = localStorageService.getLocalPapers();
-      const existingIndex = papers.findIndex(p => p.uri === paper.uri);
+      const uri = paper.uri || paper.pdfUri; // Handle both uri and pdfUri
+      const existingIndex = papers.findIndex(p => p.uri === uri);
+      
+      const paperData = {
+        ...paper,
+        uri: uri, // Ensure consistent URI field
+        created_at: paper.created_at || new Date().toISOString()
+      };
       
       if (existingIndex >= 0) {
-        papers[existingIndex] = { ...papers[existingIndex], ...paper, is_explicitly_saved: true };
+        papers[existingIndex] = { ...papers[existingIndex], ...paperData };
       } else {
-        papers.unshift({ ...paper, is_explicitly_saved: true });
+        papers.unshift(paperData);
       }
       
       localStorage.setItem('anonymous_papers', JSON.stringify(papers));
+      console.log('[LocalStorage] Paper saved:', uri);
     } catch (error) {
       console.error('[LocalStorage] Failed to save paper:', error);
     }
@@ -39,8 +47,15 @@ export const localStorageService = {
   deletePaper: (uri: string): void => {
     try {
       const papers = localStorageService.getLocalPapers();
-      const filtered = papers.filter(p => p.uri !== uri);
-      localStorage.setItem('anonymous_papers', JSON.stringify(filtered));
+      const filteredPapers = papers.filter(p => p.uri !== uri);
+      localStorage.setItem('anonymous_papers', JSON.stringify(filteredPapers));
+      
+      // Also delete all notes associated with this paper (cascade delete)
+      const notes = localStorageService.getLocalNotes();
+      const filteredNotes = notes.filter(n => n.paper_uri !== uri);
+      localStorage.setItem('anonymous_notes', JSON.stringify(filteredNotes));
+      
+      console.log('[LocalStorage] Paper deleted:', uri);
     } catch (error) {
       console.error('[LocalStorage] Failed to delete paper:', error);
     }
@@ -91,15 +106,23 @@ export const localStorageService = {
   savePaperMetadata: (paper: any): void => {
     try {
       const papers = localStorageService.getLocalPapers();
-      const existingIndex = papers.findIndex(p => p.uri === paper.uri || p.uri === paper.pdfUri);
+      const uri = paper.uri || paper.pdfUri; // Handle both uri and pdfUri
+      const existingIndex = papers.findIndex(p => p.uri === uri);
+      
+      const paperData = {
+        ...paper,
+        uri: uri, // Ensure consistent URI field
+        created_at: paper.created_at || new Date().toISOString()
+      };
       
       if (existingIndex >= 0) {
-        papers[existingIndex] = { ...papers[existingIndex], ...paper };
+        papers[existingIndex] = { ...papers[existingIndex], ...paperData };
       } else {
-        papers.push({ ...paper, is_explicitly_saved: false });
+        papers.push(paperData);
       }
       
       localStorage.setItem('anonymous_papers', JSON.stringify(papers));
+      console.log('[LocalStorage] Paper metadata saved:', uri);
     } catch (error) {
       console.error('[LocalStorage] Failed to save paper metadata:', error);
     }
@@ -243,6 +266,79 @@ export const localStorageService = {
       });
     } catch (error) {
       console.error('[LocalStorage] Failed to clear data:', error);
+    }
+  },
+
+  // Web Search Results Persistence
+  saveWebSearchResults: (query: string, results: any): void => {
+    try {
+      const data = {
+        query,
+        results,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('web_search_results', JSON.stringify(data));
+      console.log('[LocalStorage] Web search results saved');
+    } catch (error) {
+      console.error('[LocalStorage] Failed to save web search results:', error);
+    }
+  },
+
+  getWebSearchResults: (): { query: string; results: any; timestamp: string } | null => {
+    try {
+      const data = localStorage.getItem('web_search_results');
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('[LocalStorage] Failed to load web search results:', error);
+      return null;
+    }
+  },
+
+  clearWebSearchResults: (): void => {
+    try {
+      localStorage.removeItem('web_search_results');
+      console.log('[LocalStorage] Web search results cleared');
+    } catch (error) {
+      console.error('[LocalStorage] Failed to clear web search results:', error);
+    }
+  },
+
+  // Deep Research Results Persistence
+  saveDeepResearchResults: (data: {
+    arxivKeywords: string[];
+    arxivCandidates: any[];
+    filteredCandidates: any[];
+    deepResearchResults: any[];
+    searchBarState: any;
+  }): void => {
+    try {
+      const saveData = {
+        ...data,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('deep_research_results', JSON.stringify(saveData));
+      console.log('[LocalStorage] Deep research results saved');
+    } catch (error) {
+      console.error('[LocalStorage] Failed to save deep research results:', error);
+    }
+  },
+
+  getDeepResearchResults: (): any | null => {
+    try {
+      const data = localStorage.getItem('deep_research_results');
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('[LocalStorage] Failed to load deep research results:', error);
+      return null;
+    }
+  },
+
+  clearDeepResearchResults: (): void => {
+    try {
+      localStorage.removeItem('deep_research_results');
+      console.log('[LocalStorage] Deep research results cleared');
+    } catch (error) {
+      console.error('[LocalStorage] Failed to clear deep research results:', error);
     }
   },
 

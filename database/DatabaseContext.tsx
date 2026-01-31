@@ -90,38 +90,52 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [user, isAuthenticated]); // Re-run when auth state changes
 
   const savePaper = async (paper: any) => {
+    console.log('[DB Context] Saving paper:', paper.pdfUri || paper.uri);
     if (user && isAuthenticated) {
       // Save to database for authenticated users
-      await dbService.savePaper(paper, true, user.id);
+      await dbService.savePaper(paper, user.id);
     } else {
       // Save to localStorage for anonymous users
       localStorageService.savePaper(paper);
     }
     await refreshData();
+    console.log('[DB Context] Paper saved successfully');
   };
 
   const deletePaper = async (uri: string) => {
+    console.log('[DB Context] Deleting paper:', uri);
     if (user && isAuthenticated) {
       await dbService.deletePaper(uri);
     } else {
       localStorageService.deletePaper(uri);
     }
     await refreshData();
+    console.log('[DB Context] Paper deleted successfully');
   };
 
   const saveNote = async (note: DeepResearchNote, paperMetadata?: any) => {
+    console.log('[DB Context] Saving note for paper:', note.pdfUri);
     let result;
     
     if (user && isAuthenticated) {
-      // Save to database for authenticated users
-      if (paperMetadata) await dbService.savePaper(paperMetadata, false, user.id);
+      // Auto-save paper when saving note (ensure paper exists)
+      if (paperMetadata) {
+        console.log('[DB Context] Auto-saving paper metadata:', paperMetadata);
+        await dbService.savePaper(paperMetadata, user.id);
+      }
       result = await dbService.saveNote(note, user.id);
     } else {
       // Save to localStorage for anonymous users
       result = localStorageService.saveNote(note, paperMetadata);
+      // For localStorage, also auto-save the paper
+      if (paperMetadata) {
+        console.log('[DB Context] Auto-saving paper metadata to localStorage:', paperMetadata);
+        localStorageService.savePaper(paperMetadata);
+      }
     }
     
     await refreshData();
+    console.log('[DB Context] Note saved successfully');
     return result;
   };
 
@@ -180,7 +194,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const isPaperSaved = useCallback((uri: string) => 
-    savedPapers.some(p => p.uri === uri && p.is_explicitly_saved), [savedPapers]);
+    savedPapers.some(p => p.uri === uri), [savedPapers]);
 
   const isNoteSaved = useCallback((paperUri: string, content: string) => 
     savedNotes.some(n => n.paper_uri === paperUri && n.content === content), [savedNotes]);

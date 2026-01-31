@@ -1,16 +1,16 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ArxivPaper, DeepResearchNote, ResearchPhase, LoadedPdf } from '../../types';
 import { useResearch } from '../../contexts/ResearchContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
 import { useDatabase } from '../../database/DatabaseContext';
-import { 
-  Loader2, 
-  FileText, 
+import { WebSearchView } from '../websearch/WebSearchView';
+import {
+  Loader2,
+  FileText,
   BookText,
-  ChevronDown, 
-  ChevronUp, 
+  ChevronDown,
+  ChevronUp,
   BookOpenText,
   Copy,
   Check,
@@ -30,7 +30,13 @@ import {
   User,
   LayoutList,
   ChevronsDown,
-  ChevronsUp
+  ChevronsUp,
+  X,
+  AlertTriangle,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  Minus
 } from 'lucide-react';
 
 interface DeepResearchViewProps {
@@ -39,14 +45,20 @@ interface DeepResearchViewProps {
   candidates: ArxivPaper[];
   generatedKeywords: string[];
   onViewPdf?: (paper: ArxivPaper) => void;
+  // Web search data
+  webSearchSources?: any[];
+  webSearchLoading?: boolean;
+  webSearchError?: string | null;
 }
 
 type SortOption = 'most-relevant-notes' | 'relevant-papers' | 'newest-papers';
-type TabType = 'results' | 'uploaded';
+type TabType = 'web' | 'deep';
+
+const ITEMS_PER_PAGE = 15;
 
 const getNoteId = (paperId: string, page: number, index: number) => `${paperId}-p${page}-i${index}`;
 
-const StatusTicker: React.FC<{ keywords: string[] }> = ({ keywords }) => {
+const StatusTicker: React.FC<{ keywords: string[] }> = React.memo(({ keywords }) => {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -67,80 +79,149 @@ const StatusTicker: React.FC<{ keywords: string[] }> = ({ keywords }) => {
       </p>
     </div>
   );
-};
+});
 
-export const DeepResearchView: React.FC<DeepResearchViewProps> = ({ 
+export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   researchPhase,
-  status, 
+  status,
   candidates,
   generatedKeywords,
-  onViewPdf
+  onViewPdf,
+  webSearchSources = [],
+  webSearchLoading = false,
+  webSearchError = null
 }) => {
-  const { loadedPdfs, isPdfInContext, togglePdfContext } = useLibrary();
-  const { 
-    selectedArxivIds, 
-    selectAllArxivPapers, 
+  const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, downloadingUris, failedUris } = useLibrary();
+  const {
+    selectedArxivIds,
+    selectAllArxivPapers,
     clearArxivSelection,
     isDeepResearching,
     deepResearchResults,
     searchBarState,
-    analyzeLoadedPdfs
+    analyzeLoadedPdfs,
+    showUploadedTab,
+    setShowUploadedTab,
+    uploadedPaperStatuses,
+    clearDeepResearchResults,
+    pendingDeepResearchQuery,
+    setPendingDeepResearchQuery,
+    performDeepResearch,
+    activeSearchMode,
+    setActiveSearchMode
   } = useResearch();
 
   // State Management
-  const [activeTab, setActiveTab] = useState<TabType>('results');
+  const [activeTab, setActiveTab] = useState<TabType>('web');
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>('relevant-papers');
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [allNotesExpanded, setAllNotesExpanded] = useState(true);
 
-  // Sync: Reset to Results tab when a new search starts from the top search bar
+  // Filter State
+  const [showFilters, setShowFilters] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [localFilters, setLocalFilters] = useState({
+    paper: 'all',
+    query: 'all',
+    hasNotes: false
+  });
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isSelectMenuOpen, setIsSelectMenuOpen] = useState(false);
+
+  // Clear Confirmation Modal State
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [isClearingResults, setIsClearingResults] = useState(false);
+
+  // Sync: Switch tab based on active search mode (keeps SearchBar and View in sync)
+  useEffect(() => {
+    if (activeSearchMode === 'web' || activeSearchMode === 'deep') {
+      setActiveTab(activeSearchMode);
+    }
+  }, [activeSearchMode]);
+
+  // Sync: Switch to Deep Research tab when deep research starts
   useEffect(() => {
     if (researchPhase === 'initializing') {
-      setActiveTab('results');
+      setActiveTab('deep');
     }
   }, [researchPhase]);
 
-  // Auto-switch to uploaded tab if files exist and we are idle with no results
+  // Sync: Switch to Web Search tab when web search starts
   useEffect(() => {
-    if (loadedPdfs.length > 0 && researchPhase === 'idle' && !isDeepResearching && candidates.length === 0) {
-        setActiveTab('uploaded');
+    if (webSearchLoading) {
+      setActiveTab('web');
     }
-  }, [loadedPdfs.length, researchPhase, isDeepResearching, candidates.length]);
+  }, [webSearchLoading]);
 
-  const handleSelectNote = (id: string) => {
-    setSelectedNoteIds(prev => 
+  // Auto-switch to deep research tab when ArXiv candidates are available DURING ACTIVE RESEARCH
+  // Don't auto-switch when just loading persisted 'completed' results from localStorage
+  useEffect(() => {
+    const activeResearchPhases = ['initializing', 'searching', 'filtering', 'extracting'];
+    if (candidates.length > 0 && activeResearchPhases.includes(researchPhase)) {
+      setActiveTab('deep');
+    }
+  }, [candidates.length, researchPhase]);
+
+  const handleSelectNote = useCallback((id: string) => {
+    setSelectedNoteIds(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
-  };
+  }, []);
 
   const isBlurred = researchPhase === 'filtering';
   const isSearching = researchPhase === 'searching' || researchPhase === 'initializing';
-  
-  // Mapping LoadedPdf -> ArxivPaper shape for Component Reuse
-  const mappedUploadedPapers = useMemo(() => {
-    return loadedPdfs.map(pdf => {
-      const paper: ArxivPaper = {
-        id: pdf.uri,
-        title: pdf.metadata.title || pdf.file.name,
-        summary: pdf.text,
-        authors: [pdf.metadata.author || 'Uploaded Document'],
-        pdfUri: pdf.uri,
-        publishedDate: new Date().toISOString(),
-        notes: deepResearchResults.filter(n => n.pdfUri === pdf.uri),
-        analysisStatus: isDeepResearching ? 'processing' : 'completed'
-      };
-      return paper;
-    });
-  }, [loadedPdfs, deepResearchResults, isDeepResearching]);
 
-  const currentTabCandidates = activeTab === 'results' ? candidates : mappedUploadedPapers;
+  // Tab-specific data: web search sources for 'web' tab, ArXiv candidates for 'deep' tab
+  const currentTabCandidates = activeTab === 'web' ? [] : candidates; // Web search uses different rendering
+  const currentWebSources = activeTab === 'web' ? webSearchSources : [];
 
   const totalNotes = useMemo(() => currentTabCandidates.reduce((acc, paper) => acc + (paper.notes?.length || 0), 0), [currentTabCandidates]);
 
+  // STEP 1: Filter papers based on criteria
+  const filteredPapers = useMemo(() => {
+    let base = [...currentTabCandidates];
+
+    // Filter 1: Text search across titles, abstracts, and notes
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      base = base.filter(paper => {
+        const titleMatch = paper.title.toLowerCase().includes(q);
+        const abstractMatch = paper.summary?.toLowerCase().includes(q);
+        const notesMatch = paper.notes?.some(note =>
+          note.quote.toLowerCase().includes(q) ||
+          note.justification?.toLowerCase().includes(q)
+        );
+        return titleMatch || abstractMatch || notesMatch;
+      });
+    }
+
+    // Filter 2: Specific paper
+    if (localFilters.paper !== 'all') {
+      base = base.filter(p => p.id === localFilters.paper);
+    }
+
+    // Filter 3: Specific research query
+    if (localFilters.query !== 'all') {
+      base = base.filter(p =>
+        p.notes?.some(note => note.relatedQuestion === localFilters.query)
+      );
+    }
+
+    // Filter 4: Only papers with notes
+    if (localFilters.hasNotes) {
+      base = base.filter(p => p.notes && p.notes.length > 0);
+    }
+
+    return base;
+  }, [currentTabCandidates, searchQuery, localFilters]);
+
+  // STEP 2: Sort the filtered results
   const content = useMemo(() => {
     if (sortBy === 'most-relevant-notes') {
-      const allNotes = currentTabCandidates.flatMap(paper => 
+      const allNotes = filteredPapers.flatMap(paper =>
         (paper.notes || []).map((note, idx) => ({
           ...note,
           sourcePaper: paper,
@@ -149,228 +230,765 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
       );
       return allNotes.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
     } else if (sortBy === 'newest-papers') {
-      return [...currentTabCandidates].sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
+      return [...filteredPapers].sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
     } else {
-      return [...currentTabCandidates].sort((a, b) => {
-          const activeStatuses = ['downloading', 'processing', 'completed', 'failed', 'stopped'];
-          const aActive = a.analysisStatus && activeStatuses.includes(a.analysisStatus) ? 1 : 0;
-          const bActive = b.analysisStatus && activeStatuses.includes(b.analysisStatus) ? 1 : 0;
-          if (aActive !== bActive) return bActive - aActive;
-          const aHasNotes = (a.notes && a.notes.length > 0) ? 1 : 0;
-          const bHasNotes = (b.notes && b.notes.length > 0) ? 1 : 0;
-          if (aHasNotes !== bHasNotes) return bHasNotes - aHasNotes;
-          return (b.relevanceScore || 0) - (a.relevanceScore || 0);
+      return [...filteredPapers].sort((a, b) => {
+        // First priority: Papers currently being processed move to top
+        const aIsProcessing = ['downloading', 'processing', 'extracting'].includes(a.analysisStatus || '');
+        const bIsProcessing = ['downloading', 'processing', 'extracting'].includes(b.analysisStatus || '');
+        if (aIsProcessing !== bIsProcessing) return bIsProcessing ? 1 : -1;
+
+        // Second priority: Selected papers during research (with any analysis status) come first
+        const aIsSelected = selectedArxivIds.has(a.id);
+        const bIsSelected = selectedArxivIds.has(b.id);
+        if (aIsSelected !== bIsSelected) return bIsSelected ? 1 : -1;
+
+        // Third priority: Papers with active analysis status
+        const activeStatuses = ['downloading', 'processing', 'extracting', 'completed', 'failed', 'stopped'];
+        const aActive = a.analysisStatus && activeStatuses.includes(a.analysisStatus) ? 1 : 0;
+        const bActive = b.analysisStatus && activeStatuses.includes(b.analysisStatus) ? 1 : 0;
+        if (aActive !== bActive) return bActive - aActive;
+
+        // Fourth priority: Papers with notes
+        const aHasNotes = (a.notes && a.notes.length > 0) ? 1 : 0;
+        const bHasNotes = (b.notes && b.notes.length > 0) ? 1 : 0;
+        if (aHasNotes !== bHasNotes) return bHasNotes - aHasNotes;
+
+        // Fifth priority: Relevance score
+        return (b.relevanceScore || 0) - (a.relevanceScore || 0);
       });
     }
-  }, [currentTabCandidates, sortBy]);
+  }, [filteredPapers, sortBy, selectedArxivIds]);
 
-  const handleSelectAllPapers = () => {
-    if (activeTab === 'results') {
-        if (selectedArxivIds.size === candidates.length) {
-          clearArxivSelection();
-        } else {
-          selectAllArxivPapers(candidates.map(p => p.id));
-        }
-    } else {
-        const allSelected = mappedUploadedPapers.every(p => isPdfInContext(p.id));
-        mappedUploadedPapers.forEach(p => {
-            const inContext = isPdfInContext(p.id);
-            if (allSelected || !inContext) {
-                togglePdfContext(p.id, p.title);
-            }
-        });
+  // Pagination: Reset to page 1 when filters or sorting change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, localFilters, sortBy]);
+
+  // Pagination: Slice content for current page
+  const paginatedContent = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return content.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [content, currentPage]);
+
+  const totalPages = Math.ceil(content.length / ITEMS_PER_PAGE);
+
+  // Generate paper dropdown options based on current filter context
+  // Excludes the paper filter itself to show what papers are available given other active filters
+  const uniquePapers = useMemo(() => {
+    let base = [...currentTabCandidates];
+
+    // Apply text search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      base = base.filter(paper => {
+        const titleMatch = paper.title.toLowerCase().includes(q);
+        const abstractMatch = paper.summary?.toLowerCase().includes(q);
+        const notesMatch = paper.notes?.some(note =>
+          note.quote.toLowerCase().includes(q) ||
+          note.justification?.toLowerCase().includes(q)
+        );
+        return titleMatch || abstractMatch || notesMatch;
+      });
     }
-  };
 
-  const handleStartLocalResearch = () => {
-      const checkedPdfs = loadedPdfs.filter(p => isPdfInContext(p.uri));
-      const questions = searchBarState.questions.join('\n') || searchBarState.questionInput;
-      if (checkedPdfs.length > 0 && questions) {
-          analyzeLoadedPdfs(checkedPdfs, questions);
+    // Apply "has notes" filter
+    if (localFilters.hasNotes) {
+      base = base.filter(p => p.notes && p.notes.length > 0);
+    }
+
+    // Apply query filter (but NOT paper filter - that's what we're generating options for)
+    if (localFilters.query !== 'all') {
+      base = base.filter(p =>
+        p.notes?.some(note => note.relatedQuestion === localFilters.query)
+      );
+    }
+
+    // Extract and sort unique papers
+    return base
+      .map(p => ({ id: p.id, title: p.title }))
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [currentTabCandidates, searchQuery, localFilters.hasNotes, localFilters.query]);
+
+  // Generate query dropdown options based on current filter context
+  // Excludes the query filter itself to show what queries are available given other active filters
+  const uniqueQueries = useMemo(() => {
+    let base = [...currentTabCandidates];
+
+    // Apply text search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      base = base.filter(paper => {
+        const titleMatch = paper.title.toLowerCase().includes(q);
+        const abstractMatch = paper.summary?.toLowerCase().includes(q);
+        const notesMatch = paper.notes?.some(note =>
+          note.quote.toLowerCase().includes(q) ||
+          note.justification?.toLowerCase().includes(q)
+        );
+        return titleMatch || abstractMatch || notesMatch;
+      });
+    }
+
+    // Apply "has notes" filter
+    if (localFilters.hasNotes) {
+      base = base.filter(p => p.notes && p.notes.length > 0);
+    }
+
+    // Apply paper filter (but NOT query filter - that's what we're generating options for)
+    if (localFilters.paper !== 'all') {
+      base = base.filter(p => p.id === localFilters.paper);
+    }
+
+    // Extract unique queries and sort
+    const queries = new Set<string>();
+    base.forEach(paper => {
+      paper.notes?.forEach(note => {
+        if (note.relatedQuestion) queries.add(note.relatedQuestion);
+      });
+    });
+
+    return Array.from(queries).sort();
+  }, [currentTabCandidates, searchQuery, localFilters.hasNotes, localFilters.paper]);
+
+  const handleResetFilters = useCallback(() => {
+    setSearchQuery('');
+    setLocalFilters({
+      paper: 'all',
+      query: 'all',
+      hasNotes: false
+    });
+  }, []);
+
+  // Auto-reset invalid filter selections when dropdown options change
+  // This prevents showing a selected paper/query that's been filtered out
+  useEffect(() => {
+    // If selected paper is no longer in the available options, reset it
+    if (localFilters.paper !== 'all') {
+      const paperExists = uniquePapers.some(p => p.id === localFilters.paper);
+      if (!paperExists) {
+        setLocalFilters(prev => ({ ...prev, paper: 'all' }));
       }
-  };
+    }
+  }, [uniquePapers, localFilters.paper]);
 
-  if (isSearching) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[500px] p-8 space-y-6 animate-fade-in">
-        <div className="relative">
-          <div className="w-20 h-20 border-4 border-scholar-100 dark:border-scholar-900 border-t-scholar-600 dark:border-t-scholar-500 rounded-full animate-spin"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-             <BookOpenText size={24} className="text-scholar-600 dark:text-scholar-500 animate-pulse" />
-          </div>
-        </div>
-        <div className="text-center space-y-3 max-w-md mx-auto">
-          <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Deep Research in Progress</h3>
-          <p className="text-gray-500 dark:text-gray-400 leading-relaxed animate-pulse">{status || "Analyzing topics..."}</p>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    // If selected query is no longer in the available options, reset it
+    if (localFilters.query !== 'all') {
+      const queryExists = uniqueQueries.includes(localFilters.query);
+      if (!queryExists) {
+        setLocalFilters(prev => ({ ...prev, query: 'all' }));
+      }
+    }
+  }, [uniqueQueries, localFilters.query]);
+
+  const handleSelectAllPapers = useCallback(() => {
+    // Only handle ArXiv candidates selection
+    if (selectedArxivIds.size === candidates.length) {
+      clearArxivSelection();
+    } else {
+      selectAllArxivPapers(candidates.map(p => p.id));
+    }
+  }, [selectedArxivIds.size, candidates, clearArxivSelection, selectAllArxivPapers]);
+
+  // Select all papers on current page
+  const handleSelectPage = useCallback(() => {
+    const pagePaperIds = sortBy === 'most-relevant-notes'
+      ? Array.from(new Set(paginatedContent.map(n => (n as any).sourcePaper.id)))
+      : (paginatedContent as ArxivPaper[]).map(p => p.id);
+
+    // Check if everything on page is already selected
+    const allPageSelected = pagePaperIds.every(id => selectedArxivIds.has(id));
+
+    if (allPageSelected) {
+      // Deselect only these papers
+      pagePaperIds.forEach(id => {
+        if (selectedArxivIds.has(id)) {
+          clearArxivSelection();
+          // Re-add all except page items
+          const remainingIds = Array.from(selectedArxivIds).filter(sid => !pagePaperIds.includes(sid));
+          if (remainingIds.length > 0) {
+            selectAllArxivPapers(remainingIds);
+          }
+        }
+      });
+    } else {
+      // Add all page items to selection
+      const currentSelection = Array.from(selectedArxivIds);
+      const newSelection = Array.from(new Set([...currentSelection, ...pagePaperIds]));
+      selectAllArxivPapers(newSelection);
+    }
+    setIsSelectMenuOpen(false);
+  }, [paginatedContent, selectedArxivIds, sortBy, selectAllArxivPapers, clearArxivSelection]);
+
+  // Select all papers in current filtered/sorted results
+  const handleSelectAllTotal = useCallback(() => {
+    const allIds = sortBy === 'most-relevant-notes'
+      ? Array.from(new Set(content.map(n => (n as any).sourcePaper.id)))
+      : (content as ArxivPaper[]).map(p => p.id);
+    selectAllArxivPapers(allIds);
+    setIsSelectMenuOpen(false);
+  }, [content, sortBy, selectAllArxivPapers]);
+
+  // Handle clear all results confirmation
+  const handleConfirmClear = useCallback(async () => {
+    setIsClearingResults(true);
+    try {
+      clearDeepResearchResults();
+      setShowClearModal(false);
+    } finally {
+      setIsClearingResults(false);
+    }
+  }, [clearDeepResearchResults]);
 
   return (
     <div className="p-3 sm:p-6 font-sans max-w-4xl mx-auto min-h-[500px] relative" style={{ containerType: 'inline-size' }}>
       <style>{`
-        @container (max-width: 500px) {
-          .deep-actions-row { flex-direction: column !important; align-items: stretch !important; gap: 0.75rem !important; }
+        @container (max-width: 600px) {
+          .deep-header-row { flex-direction: column !important; gap: 0.75rem !important; align-items: flex-start !important; }
           .deep-tab-label { font-size: 12px !important; }
-          .deep-tab-button { padding-left: 1rem !important; padding-right: 1rem !important; }
+          .deep-tab-button { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+          .deep-actions-right { justify-content: flex-start !important; }
+        }
+        @container (max-width: 400px) {
+          .deep-tab-label { display: none !important; }
+          .deep-sort-text { display: none !important; }
         }
       `}</style>
 
       {isBlurred && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center h-[80vh] pointer-events-none">
-           <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-md p-6 sm:p-8 rounded-2xl shadow-scholar-lg border border-white/20 dark:border-gray-700/50 text-center max-w-md mx-4 animate-fade-in-up">
-              <div className="mb-6 flex justify-center">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-scholar-200 border-t-scholar-600 rounded-full animate-spin"></div>
-              </div>
-              <StatusTicker keywords={generatedKeywords} />
-              <p className="mt-4 text-sm text-gray-500">{status}</p>
-           </div>
+          <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-md p-6 sm:p-8 rounded-2xl shadow-scholar-lg border border-white/20 dark:border-gray-700/50 text-center max-w-md mx-4 animate-fade-in-up">
+            <div className="mb-6 flex justify-center">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-scholar-200 border-t-scholar-600 rounded-full animate-spin"></div>
+            </div>
+            <StatusTicker keywords={generatedKeywords} />
+            <p className="mt-4 text-sm text-gray-500">{status}</p>
+          </div>
         </div>
       )}
 
       {!isBlurred && (
         <div className="sticky top-0 z-30 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-0 mb-3 -pt-3 -mt-3 -mx-3 sm:-mx-6 px-3 sm:px-6 shadow-sm">
-           
-           {/* TABS ROW */}
-           <div className="flex mb-1">
-              <div className="flex -mb-px">
-                 <button 
-                    onClick={() => { setActiveTab('results'); }}
-                    className={`deep-tab-button px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'results' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
+
+          {/* SINGLE ROW - TABS LEFT, ACTIONS RIGHT */}
+          <div className="flex items-center justify-between py-3 gap-4 deep-header-row">
+
+
+            {/* LEFT SIDE - TABS */}
+            <div className="flex items-center -mb-px">
+              {/* Select All Papers - Dropdown Menu */}
+              {sortBy !== 'most-relevant-notes' && currentTabCandidates.length > 0 && (
+                <div className="relative">
+                  <button
+                    onClick={() => setIsSelectMenuOpen(!isSelectMenuOpen)}
+                    className="flex items-center gap-1 p-2 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                    title="Selection options"
                   >
-                    <Search size={18} className="flex-shrink-0" />
-                    <span className="tab-label deep-tab-label">Search Results</span>
-                  </button>
-                  {loadedPdfs.length > 0 && (
-                    <button 
-                      onClick={() => { setActiveTab('uploaded'); }}
-                      className={`deep-tab-button px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'uploaded' ? 'border-scholar-600 text-scholar-600' : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'}`}
-                    >
-                      <span className="tab-label deep-tab-label">My Uploads({loadedPdfs.length})</span>
-                    </button>
-                  )}
-              </div>
-           </div>
-
-           {/* ACTIONS ROW (Responsive) */}
-           <div className="flex flex-wrap items-center justify-between gap-3 pb-4 deep-actions-row">
-              <div className="flex flex-wrap items-center gap-2">
-                 {sortBy !== 'most-relevant-notes' && currentTabCandidates.length > 0 && (
-                    <button 
-                      onClick={handleSelectAllPapers}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-all flex-shrink-0"
-                    >
-                      <div className={`w-3.5 h-3.5 rounded border transition-colors flex items-center justify-center ${
-                          activeTab === 'results' 
-                            ? selectedArxivIds.size === candidates.length ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
-                            : mappedUploadedPapers.every(p => isPdfInContext(p.id)) ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
+                    <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${selectedArxivIds.size === content.length ? 'bg-scholar-600 border-scholar-600' :
+                      selectedArxivIds.size > 0 ? 'bg-scholar-100 dark:bg-scholar-900/30 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
                       }`}>
-                        {(activeTab === 'results' ? selectedArxivIds.size === candidates.length : mappedUploadedPapers.every(p => isPdfInContext(p.id))) && <Check size={10} className="text-white" />}
-                      </div>
-                      <span>Select all papers ({activeTab === 'results' ? (selectedArxivIds.size > 0 ? `${selectedArxivIds.size}/` : '') + candidates.length : (mappedUploadedPapers.filter(p => isPdfInContext(p.id)).length > 0 ? `${mappedUploadedPapers.filter(p => isPdfInContext(p.id)).length}/` : '') + loadedPdfs.length})</span>
-                    </button>
-                 )}
+                      {selectedArxivIds.size === content.length ? <Check size={16} color="white" strokeWidth={3} /> :
+                        selectedArxivIds.size > 0 ? <Minus size={16} className="text-scholar-600 dark:text-scholar-400" strokeWidth={3} /> : null}
+                    </div>
+                    <ChevronDown size={14} className="opacity-60" />
+                  </button>
 
-                 {sortBy !== 'most-relevant-notes' && currentTabCandidates.some(p => p.notes && p.notes.length > 0) && (
-                    <button 
-                      onClick={() => setAllNotesExpanded(!allNotesExpanded)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-[10px] font-bold uppercase text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-all"
-                    >
-                       {allNotesExpanded ? <ChevronsUp size={14} /> : <ChevronsDown size={14} />}
-                       {allNotesExpanded ? 'Collapse all notes' : 'Expand all notes'}
-                    </button>
-                 )}
+                  {isSelectMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsSelectMenuOpen(false)} />
+                      <div className="absolute left-0 top-full mt-2 w-64 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 py-1.5 animate-fade-in">
+                        <button
+                          onClick={handleSelectPage}
+                          className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <LayoutList size={16} className="text-gray-400" />
+                          <span className="text-sm font-medium text-gray-700 dark:text-white">Select Current Page ({paginatedContent.length})</span>
+                        </button>
+                        <button
+                          onClick={handleSelectAllTotal}
+                          className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <Layers size={16} className="text-gray-400" />
+                          <span className="text-sm font-medium text-gray-700 dark:text-white">Select All Total ({content.length})</span>
+                        </button>
+                        <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1" />
+                        <button
+                          onClick={() => { clearArxivSelection(); setIsSelectMenuOpen(false); }}
+                          className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                        >
+                          <X size={16} className="text-red-500" />
+                          <span className="text-sm font-medium text-red-600 dark:text-red-400">Clear Selection</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              <button
+                onClick={() => { setActiveTab('web'); setActiveSearchMode('web'); }}
+                className={`deep-tab-button px-4 py-1  text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'web' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+              >
+                <Search size={20} className="flex-shrink-0" />
+                <span className="tab-label deep-tab-label">Web Search</span>
+              </button>
+
+              <button
+                onClick={() => { setActiveTab('deep'); setActiveSearchMode('deep'); }}
+                className={`deep-tab-button px-4 py-1 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'deep' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+              >
+                <BookOpenText size={20} className="flex-shrink-0" />
+                <span className="tab-label deep-tab-label">Deep Research</span>
+                {isSearching && activeTab === 'web' && (
+                  <Loader2 size={14} className="animate-spin text-scholar-600 flex-shrink-0" />
+                )}
+              </button>
+            </div>
+
+            {/* RIGHT SIDE - ACTIONS */}
+            <div className="flex items-center gap-2 deep-actions-right">
+
+              {/* Sort Dropdown */}
+              {activeTab === 'deep' && !isBlurred && (currentTabCandidates.length > 0 || totalNotes > 0) && (
+                <div className="relative">
+                  <button
+                    onClick={() => setIsSortOpen(!isSortOpen)}
+                    className="flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                    title="Sort options"
+                  >
+                    <span className="deep-sort-text truncate">
+                      {sortBy === 'most-relevant-notes' && 'Most Relevant Notes'}
+                      {sortBy === 'relevant-papers' && 'Most Relevant Papers'}
+                      {sortBy === 'newest-papers' && 'Newest Papers'}
+                    </span>
+                    <ChevronDown size={20} className={`text-gray-400 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {isSortOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
+                      <div className="absolute right-0 top-[110%] w-full sm:w-56 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 overflow-hidden z-50 animate-fade-in flex flex-col">
+                        <button onClick={() => { setSortBy('most-relevant-notes'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                          <Star size={16} className={sortBy === 'most-relevant-notes' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+                          <span className="text-sm font-medium text-gray-700 dark:text-white">Most Relevant Notes</span>
+                        </button>
+                        <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1"></div>
+                        <button onClick={() => { setSortBy('relevant-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                          <Layers size={16} className={sortBy === 'relevant-papers' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+                          <span className="text-sm font-medium text-gray-700 dark:text-white">Relevant Papers</span>
+                        </button>
+                        <button onClick={() => { setSortBy('newest-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                          <Calendar size={16} className={sortBy === 'newest-papers' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+                          <span className="text-sm font-medium text-gray-700 dark:text-white">Newest Papers</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>)}
+
+            </div>
+          </div>
+
+          {/* Secondary Action Bar - Below Header */}
+          {activeTab === 'deep' && !isBlurred && (currentTabCandidates.length > 0 || totalNotes > 0) && (
+            <div className="flex items-center justify-between mb-4 px-1 animate-fade-in">
+              {/* LEFT SIDE - Clear All */}
+              <div>
+                {researchPhase !== 'searching' && (
+                  <button
+                    onClick={() => setShowClearModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    title="Clear all results"
+                  >
+                    <X size={20} />
+                    <span className="hidden sm:inline">Clear All Results</span>
+                  </button>
+                )}
               </div>
 
-              <div className="relative">
-                 <button onClick={() => setIsSortOpen(!isSortOpen)} className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-all">
-                    <div className="flex items-center gap-2">
-                        <ArrowUpDown size={14} className="text-gray-400" />
-                        <span className="truncate">
-                        {sortBy === 'most-relevant-notes' && 'Most Relevant Notes'}
-                        {sortBy === 'relevant-papers' && 'Most Relevant Papers'}
-                        {sortBy === 'newest-papers' && 'Newest Papers'}
-                        </span>
-                    </div>
-                    <ChevronDown size={14} className={`text-gray-400 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
-                 </button>
-                 {isSortOpen && (
-                   <>
-                   <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
-                   <div className="absolute right-0 top-[110%] w-full sm:w-56 bg-white dark:bg-dark-card rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 overflow-hidden z-50 animate-fade-in flex flex-col">
-                      <button onClick={() => { setSortBy('most-relevant-notes'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                         <Star size={16} className={sortBy === 'most-relevant-notes' ? "text-scholar-600" : "text-gray-400"} />
-                         <span className="text-sm font-medium">Most Relevant Notes</span>
+              {/* RIGHT SIDE - Expand/Collapse and Filter */}
+              <div className="flex items-center gap-2">
+
+
+                {/* Filter Button */}
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`flex items-center gap-2 px-3 py-2.5 text-xs font-bold rounded-lg transition-all ${showFilters || searchQuery || localFilters.paper !== 'all' || localFilters.query !== 'all' || localFilters.hasNotes
+                    ? 'text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  title="Filter options"
+                >
+                  <Filter size={20} />
+                  <span className="deep-sort-text">Filters</span>
+                </button>
+
+                {/* Collapse/Expand All Notes */}
+                {sortBy !== 'most-relevant-notes' && currentTabCandidates.some(p => p.notes && p.notes.length > 0) && (
+                  <button
+                    onClick={() => setAllNotesExpanded(!allNotesExpanded)}
+                    className="p-2.5 text-gray-500 dark:text-gray-400 font-bold hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                    title={allNotesExpanded ? 'Collapse all notes' : 'Expand all notes'}
+                  >
+                    {allNotesExpanded ? <ChevronsUp size={24} /> : <ChevronsDown size={24} />}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Filter Panel */}
+          {showFilters && activeTab === 'deep' && !isBlurred && (
+            <div className="bg-white/60 dark:bg-dark-card/60 backdrop-blur-md border border-white dark:border-gray-700 rounded-2xl p-4 sm:p-6 mb-6 shadow-scholar animate-fade-in">
+              <div className="flex flex-col gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-5 sm:gap-6">
+
+                {/* Search Input */}
+                <div className="sm:col-span-2 space-y-1.5">
+                  <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">
+                    Keywords
+                  </label>
+                  <div className="relative group">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-scholar-600 dark:group-focus-within:text-scholar-400 transition-colors" />
+                    <input
+                      className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl pl-11 pr-10 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-scholar-400 outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search papers, notes, insights..."
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      >
+                        <X size={16} />
                       </button>
-                      <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1"></div>
-                      <button onClick={() => { setSortBy('relevant-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                         <Layers size={16} className={sortBy === 'relevant-papers' ? "text-scholar-600" : "text-gray-400"} />
-                         <span className="text-sm font-medium">Relevant Papers</span>
-                      </button>
-                      <button onClick={() => { setSortBy('newest-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                         <Calendar size={16} className={sortBy === 'newest-papers' ? "text-scholar-600" : "text-gray-400"} />
-                         <span className="text-sm font-medium">Newest Papers</span>
-                      </button>
-                   </div>
-                   </>
-                 )}
-               </div>
-           </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Paper Filter */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">
+                    Source Paper
+                  </label>
+                  <select
+                    value={localFilters.paper}
+                    onChange={(e) => setLocalFilters(prev => ({ ...prev, paper: e.target.value }))}
+                    className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="all">All Papers ({uniquePapers.length})</option>
+                    {uniquePapers.map(p => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Query Filter */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">
+                    Research Query
+                  </label>
+                  <select
+                    value={localFilters.query}
+                    onChange={(e) => setLocalFilters(prev => ({ ...prev, query: e.target.value }))}
+                    className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="all">All Queries ({uniqueQueries.length})</option>
+                    {uniqueQueries.map(q => (
+                      <option key={q} value={q}>{q}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Has Notes Toggle + Reset */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">
+
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setLocalFilters(prev => ({ ...prev, hasNotes: !prev.hasNotes }))}
+                      className={`flex-1 px-2 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${localFilters.hasNotes
+                        ? 'bg-scholar-600 text-white shadow-md'
+                        : 'bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800'
+                        }`}
+                    >
+                      With Notes
+                    </button>
+                    <button
+                      onClick={handleResetFilters}
+                      className="px-2 py-2.5 bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800 rounded-xl text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+                      title="Reset all filters"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       <div className={`space-y-6 transition-all duration-500 ${isBlurred ? 'blur-sm opacity-50 pointer-events-none select-none overflow-hidden h-screen' : 'blur-0 opacity-100'}`}>
-        {!isBlurred && currentTabCandidates.length > 0 && (
-            <div className="text-sm text-gray-500 dark:text-gray-400 font-medium px-1 flex items-center gap-2 mb-2 animate-fade-in">
-                {activeTab === 'results' ? <Search size={14} className="opacity-60" /> : <Upload size={14} className="opacity-60" />}
-                About {currentTabCandidates.length} source{currentTabCandidates.length !== 1 ? 's' : ''} with {totalNotes} note{totalNotes !== 1 ? 's' : ''} found
+        {/* Web Search Tab - Show loading state */}
+        {activeTab === 'web' && webSearchLoading && (
+          <div className="flex flex-col items-center justify-center h-full min-h-[500px] p-8 space-y-6 animate-fade-in">
+            <div className="relative">
+              <div className="w-20 h-20 border-4 border-scholar-100 dark:border-scholar-900 border-t-scholar-600 dark:border-t-scholar-500 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Search size={24} className="text-scholar-600 dark:text-scholar-500 animate-pulse" />
+              </div>
             </div>
+            <div className="text-center space-y-3 max-w-md mx-auto">
+              <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Web Search in Progress</h3>
+              <p className="text-gray-500 dark:text-gray-400 leading-relaxed animate-pulse">Scanning the web...</p>
+            </div>
+          </div>
         )}
 
-        {sortBy === 'most-relevant-notes' ? (
-           (content as any[]).map((note) => (
-              <ResearchCardNote 
-                key={note.uniqueId}
-                id={note.uniqueId}
-                note={note}
-                isSelected={selectedNoteIds.includes(note.uniqueId)}
-                onSelect={() => handleSelectNote(note.uniqueId)}
-                sourceTitle={note.sourcePaper.title}
-                showScore={true}
-              />
-           ))
+        {/* Web Search Tab - Show error state */}
+        {activeTab === 'web' && webSearchError && !webSearchLoading && (
+          <div className="bg-error-50 text-error-600 p-4 rounded-lg text-sm">{webSearchError}</div>
+        )}
+
+        {/* Web Search Tab - Show results */}
+        {activeTab === 'web' && !webSearchLoading && !webSearchError && currentWebSources.length > 0 && (
+          <>
+            <div className="text-sm text-gray-500 dark:text-gray-400 font-medium px-1 flex items-center gap-2 mb-2 animate-fade-in">
+              <Search size={14} className="opacity-60" />
+              {currentWebSources.length} web result{currentWebSources.length !== 1 ? 's' : ''} found
+            </div>
+            <div className="space-y-6">
+              {currentWebSources.map((source: any, idx: number) => (
+                <WebSearchView
+                  key={`${source.uri}-${idx}`}
+                  source={source}
+                  isSelected={isPdfInContext(source.uri)}
+                  isDownloading={downloadingUris.has(source.uri)}
+                  isFailed={failedUris.has(source.uri)}
+                  isResearching={isPdfInContext(source.uri) && isDeepResearching}
+                  researchNotes={deepResearchResults.filter(n => n.pdfUri === source.uri)}
+                  forceExpanded={allNotesExpanded}
+                  onToggle={async () => {
+                    const wasSelected = isPdfInContext(source.uri);
+                    if (!wasSelected) {
+                      // Ensure PDF is loaded before adding to context
+                      const isLoaded = loadedPdfs.some(p => p.uri === source.uri);
+                      if (!isLoaded) {
+                        const result = await loadPdfFromUrl(source.uri, source.title);
+                        // @ts-ignore
+                        if (result && !result.success) return;
+                      }
+                    }
+                    togglePdfContext(source.uri, source.title);
+                  }}
+                  onView={async () => {
+                    // Handled by WebSearchView internally
+                  }}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Web Search Tab - Empty state */}
+        {activeTab === 'web' && !webSearchLoading && !webSearchError && currentWebSources.length === 0 && (
+          <div className="py-24 flex flex-col items-center justify-center text-center opacity-40">
+            <Search size={64} className="mb-6 text-gray-300 dark:text-gray-600" />
+            <h3 className="text-xl font-bold text-gray-800 dark:text-white">No web search results</h3>
+            <p className="text-xs max-w-xs leading-relaxed text-gray-500 dark:text-gray-400">Enter a query in the search bar to find relevant sources.</p>
+          </div>
+        )}
+
+        {/* Deep Research Tab - Show results */}
+        {activeTab === 'deep' && !isBlurred && currentTabCandidates.length > 0 && (
+          <div className="text-sm text-gray-500 dark:text-gray-400 font-medium px-1 flex items-center gap-2 mb-2 animate-fade-in">
+            <BookOpenText size={14} className="opacity-60" />
+            About {currentTabCandidates.length} paper{currentTabCandidates.length !== 1 ? 's' : ''} with {totalNotes} note{totalNotes !== 1 ? 's' : ''} found
+          </div>
+        )}
+
+        {/* Empty state when filters return no results */}
+        {activeTab === 'deep' && !isBlurred && currentTabCandidates.length > 0 && filteredPapers.length === 0 && (
+          <div className="py-16 flex flex-col items-center justify-center text-center opacity-60 animate-fade-in">
+            <TextSearch size={48} className="mb-4 text-gray-300 dark:text-gray-600" />
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2">No papers match your filters</h3>
+            <p className="text-xs max-w-xs leading-relaxed text-gray-500 dark:text-gray-400 mb-4">
+              Try adjusting your search or filter criteria
+            </p>
+            <button
+              onClick={handleResetFilters}
+              className="text-xs font-medium text-scholar-600 dark:text-scholar-400 hover:underline"
+            >
+              Reset all filters
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'deep' && (sortBy === 'most-relevant-notes' ? (
+          (paginatedContent as any[]).map((note) => (
+            <ResearchCardNote
+              key={note.uniqueId}
+              id={note.uniqueId}
+              note={note}
+              isSelected={selectedNoteIds.includes(note.uniqueId)}
+              onSelect={() => handleSelectNote(note.uniqueId)}
+              sourceTitle={note.sourcePaper.title}
+              sourcePaper={note.sourcePaper}  // ADD: Pass full paper data for rich metadata
+              showScore={true}
+            />
+          ))
         ) : (
-           (content as ArxivPaper[]).map((paper) => (
-            <PaperCard 
-              key={paper.id} 
-              paper={paper} 
+          (paginatedContent as ArxivPaper[]).map((paper) => (
+            <PaperCard
+              key={paper.id}
+              paper={paper}
               selectedNoteIds={selectedNoteIds}
               onSelectNote={handleSelectNote}
               forceExpanded={allNotesExpanded}
-              onView={() => activeTab === 'results' ? (onViewPdf && onViewPdf(paper)) : null}
-              isLocal={activeTab === 'uploaded'}
+              onView={() => onViewPdf && onViewPdf(paper)}
+              isLocal={false}
             />
           ))
+        ))}
+
+        {/* Deep Research Tab - Loading state (searching/initializing) */}
+        {activeTab === 'deep' && isSearching && (
+          <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-8 space-y-6 animate-fade-in">
+            <div className="relative">
+              <div className="w-20 h-20 border-4 border-scholar-100 dark:border-scholar-900 border-t-scholar-600 dark:border-t-scholar-500 rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <BookOpenText size={24} className="text-scholar-600 dark:text-scholar-500 animate-pulse" />
+              </div>
+            </div>
+            <div className="text-center space-y-3 max-w-md mx-auto">
+              <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Deep Research in Progress</h3>
+              <p className="text-gray-500 dark:text-gray-400 leading-relaxed animate-pulse">{status || "Analysing topics..."}</p>
+            </div>
+          </div>
         )}
 
-        {activeTab === 'uploaded' && loadedPdfs.length === 0 && (
-            <div className="py-24 flex flex-col items-center justify-center text-center opacity-40">
-                <Upload size={64} className="mb-6 text-gray-300" />
-                <h3 className="text-xl font-bold text-gray-800 dark:text-white">No papers uploaded</h3>
-                <p className="text-xs max-w-xs leading-relaxed dark:text-gray-300">Upload your own PDFs in the search bar to analyze them here.</p>
-            </div>
+        {/* Deep Research Tab - Empty state */}
+        {activeTab === 'deep' && candidates.length === 0 && researchPhase === 'idle' && (
+          <div className="py-24 flex flex-col items-center justify-center text-center opacity-40">
+            <BookOpenText size={64} className="mb-6 text-gray-300 dark:text-gray-600" />
+            <h3 className="text-xl font-bold text-gray-800 dark:text-white">No deep research results</h3>
+            <p className="text-xs max-w-xs leading-relaxed text-gray-500 dark:text-gray-400">Enter topics in the search bar to find academic papers.</p>
+          </div>
         )}
-        
-        {activeTab === 'results' && candidates.length === 0 && researchPhase === 'idle' && (
-             <div className="py-24 flex flex-col items-center justify-center text-center opacity-40">
-                <Search size={64} className="mb-6 text-gray-300" />
-                <h3 className="text-xl font-bold text-gray-800 dark:text-white">No search results</h3>
-                <p className="text-xs max-w-xs leading-relaxed dark:text-gray-300">Enter topics in the search bar to find new academic papers.</p>
+
+        {/* Pagination Bar - NotesManager Style */}
+        {activeTab === 'deep' && !isBlurred && totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-8 mt-12 sm:mt-16 mb-12 pagination-controls border-t border-gray-100 dark:border-gray-800 pt-8">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => {
+                  setCurrentPage(prev => Math.max(1, prev - 1));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                disabled={currentPage === 1}
+                className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-dark-card hover:bg-scholar-50 dark:hover:bg-scholar-900/20 hover:border-scholar-200 dark:hover:border-scholar-800 disabled:opacity-30 disabled:hover:bg-transparent shadow-sm transition-all"
+                title="Previous page"
+              >
+                <ChevronLeft size={20} className="text-gray-600 dark:text-gray-300" />
+              </button>
+
+              <span className="text-sm font-bold text-gray-500 dark:text-gray-400 font-mono tracking-widest uppercase">
+                PAGE {currentPage} <span className="text-gray-300 dark:text-gray-700 mx-2">/</span> {totalPages}
+              </span>
+
+              <button
+                onClick={() => {
+                  setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                disabled={currentPage === totalPages}
+                className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-dark-card hover:bg-scholar-50 dark:hover:bg-scholar-900/20 hover:border-scholar-200 dark:hover:border-scholar-800 disabled:opacity-30 disabled:hover:bg-transparent shadow-sm transition-all"
+                title="Next page"
+              >
+                <ChevronRight size={20} className="text-gray-600 dark:text-gray-300" />
+              </button>
             </div>
+          </div>
         )}
       </div>
-    </div>
+
+      {/* Clear All Confirmation Modal */}
+      {showClearModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-transparent" onClick={() => !isClearingResults && setShowClearModal(false)} />
+
+          <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-xl shadow-2xl ring-1 ring-gray-900/5 dark:ring-white/10 p-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Clear All Research Results?
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                This will remove all {activeTab === 'web' ? 'web search' : 'deep research'} results and any unsaved notes. This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowClearModal(false)}
+                disabled={isClearingResults}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmClear}
+                disabled={isClearingResults}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2"
+              >
+                {isClearingResults ? <Loader2 size={16} className="animate-spin" /> : null}
+                Clear All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingDeepResearchQuery && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-transparent" onClick={() => setPendingDeepResearchQuery(null)} />
+
+          <div className="relative w-full max-w-lg bg-white dark:bg-gray-900 rounded-xl shadow-2xl ring-1 ring-gray-900/5 dark:ring-white/10 p-8 animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center mb-8">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
+                Start New Research Session?
+              </h3>
+              <p className="text-base text-gray-500 dark:text-gray-400 leading-relaxed">
+                Starting a new search will <span className="font-semibold text-gray-900 dark:text-gray-200">permanently clear</span> your current research results and any unsaved notes.
+                <br /><br />
+                Are you sure you want to discard your current progress?
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => setPendingDeepResearchQuery(null)}
+                className="px-6 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"
+              >
+                Go Back
+              </button>
+              <button
+                onClick={() => {
+                  performDeepResearch(pendingDeepResearchQuery);
+                  setPendingDeepResearchQuery(null);
+                }}
+                className="px-6 py-3 text-sm font-bold text-white bg-scholar-600 hover:bg-scholar-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
+              >
+                <Sparkles size={18} />
+                Start New Session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div >
   );
 };
 
@@ -383,58 +1001,94 @@ interface PaperCardProps {
   forceExpanded?: boolean;
 }
 
-const PaperCard: React.FC<PaperCardProps> = ({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true }) => {
+const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const { toggleArxivSelection, selectedArxivIds } = useResearch();
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
-  const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf } = useLibrary();
-  const { setColumnVisibility } = useUI();
-  
+  const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf, failedUrlErrors, downloadingUris } = useLibrary();
+  const { setColumnVisibility, openColumn } = useUI();
+
   const isSelected = isLocal ? isPdfInContext(paper.id) : selectedArxivIds.has(paper.id);
   const isSaved = isPaperSaved(paper.pdfUri);
-  
+
   const isDownloading = paper.analysisStatus === 'downloading';
   const isProcessing = paper.analysisStatus === 'processing';
+  const isExtracting = paper.analysisStatus === 'extracting';
   const isFailed = paper.analysisStatus === 'failed';
   const isCompleted = paper.analysisStatus === 'completed';
   const isStopped = paper.analysisStatus === 'stopped';
 
+  const getStatusText = () => {
+    if (isDownloading) return "Downloading document...";
+    if (isProcessing) return "Reading pages...";
+    if (isExtracting) return "Extracting notes...";
+    return "Analysis Paper...";
+  };
+
   const notes = paper.notes || [];
 
-  // Sync with global toggle
   useEffect(() => {
     if (notes.length > 0) {
       setIsExpanded(forceExpanded);
     }
   }, [forceExpanded]);
 
-  const handleSaveToggle = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (isSaved) {
-          deletePaper(paper.pdfUri);
-      } else {
-          const loaded = loadedPdfs.find(p => p.uri === paper.pdfUri);
-          savePaper({ ...paper, numPages: loaded ? loaded.numPages : undefined });
-      }
-  };
+
 
   const handleSelectionToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isLocal) {
-        togglePdfContext(paper.id, paper.title);
+      togglePdfContext(paper.id, paper.title);
     } else {
-        toggleArxivSelection(paper.id);
+      toggleArxivSelection(paper.id);
     }
   };
 
   const handleOpenPdf = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (isLocal) {
-          setActivePdf(paper.id);
-          setColumnVisibility(prev => ({ ...prev, right: true }));
-      } else if (onView) {
-          onView();
-      }
+    e.stopPropagation();
+    if (isLocal) {
+      setActivePdf(paper.id);
+      setColumnVisibility(prev => ({ ...prev, right: true }));
+    } else if (onView) {
+      onView();
+    }
+  };
+
+  const handleAddToSources = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (isSaved) {
+      // Now does a true delete (paper + cascade deletes notes)
+      deletePaper(paper.pdfUri);
+      return;
+    }
+
+    // Load if needed
+    const loaded = loadedPdfs.find(p => p.uri === paper.pdfUri);
+    let loadedPdf = loaded;
+
+    if (!loaded) {
+      const result = await loadPdfFromUrl(paper.pdfUri, paper.title);
+      // @ts-ignore
+      if (result && !result.success) return;
+
+      // Use the PDF from the result to avoid stale closure issue
+      loadedPdf = result.pdf;
+    }
+
+    // Save using the correct PDF reference
+    const paperData = {
+      ...paper,
+      uri: paper.pdfUri,
+      pdfUri: paper.pdfUri,
+      numPages: loadedPdf ? loadedPdf.numPages : undefined
+    };
+    savePaper(paperData);
+
+    // FIXED: Also add to AgentResearcher context like other workflows do
+    togglePdfContext(paper.pdfUri, paper.title);
+
+    openColumn('left');
   };
 
   return (
@@ -442,71 +1096,91 @@ const PaperCard: React.FC<PaperCardProps> = ({ paper, selectedNoteIds, onSelectN
       <div className={isExpanded ? 'p-1' : ''}>
         <div className="flex items-start">
           <div className="pt-1 mr-2 sm:mr-4">
-            <button onClick={handleSelectionToggle} className={`hover:text-scholar-600 transition-colors opacity-100 sm:group-hover/paper:opacity-100 ${isSelected ? 'text-scholar-600' : 'text-gray-400 sm:opacity-0'}`}> 
-             {(isDownloading || isProcessing) ? <Loader2 size={24} className="animate-spin" />
-              : isSelected ? <Check size={24} className="text-scholar-600" /> : <Square size={24} />}
+            <button onClick={handleSelectionToggle} className={`hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors opacity-100 sm:group-hover/paper:opacity-100 ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-400 dark:text-gray-500 sm:opacity-0'}`}>
+              {(isDownloading || isProcessing) ? <Loader2 size={24} className="animate-spin" />
+                : isSelected ? <Check size={24} className="text-scholar-600 dark:text-scholar-400" /> : <Square size={24} />}
             </button>
           </div>
 
           <div className="flex-grow min-w-0">
             <div className="flex items-center justify-between mb-1">
-               <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                  <span className="font-semibold text-scholar-600 dark:text-scholar-400 uppercase tracking-wider">{isLocal ? 'LOCAL' : new Date(paper.publishedDate).getFullYear()}</span>
-                  <span>•</span>
-                  <span className="truncate max-w-[200px] opacity-70">{paper.authors.slice(0, 2).join(', ')}{paper.authors.length > 2 ? ' et al.' : ''}</span>
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <span className="font-semibold text-scholar-600 dark:text-scholar-400 uppercase tracking-wider">{isLocal ? 'LOCAL' : new Date(paper.publishedDate).getFullYear()}</span>
+                <span>•</span>
+                <span className="truncate max-w-[200px] opacity-70">{paper.authors.slice(0, 2).join(', ')}{paper.authors.length > 2 ? ' et al.' : ''}</span>
 
-                  <div className="flex items-center gap-2 ml-4 opacity-100 sm:opacity-0 sm:group-hover/paper:opacity-100 transition-opacity">
-                    <button onClick={handleOpenPdf} className="flex items-center gap-1 text-xs font-medium text-scholar-700 bg-scholar-50 hover:bg-scholar-100 dark:bg-scholar-900/30 dark:text-scholar-300 px-2 py-1 rounded-md transition-colors">
-                        {isLocal ? <Upload size={12} /> : <BookText size={12} />} {isLocal ? 'Open' : 'View'}
-                    </button>
-                    {!isLocal && (
-                        <button onClick={handleSaveToggle} className={`text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm ${isSaved ? 'bg-scholar-600 text-white hover:bg-scholar-700' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
-                            {isSaved ? <Check size={12} /> : <Library size={12} />}
-                            {isSaved ? 'Saved' : 'Save Paper'}
-                        </button>
+                <div className="flex items-center gap-2 ml-4 opacity-100 sm:opacity-0 sm:group-hover/paper:opacity-100 transition-opacity">
+                  <button onClick={handleOpenPdf} className="text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 ">
+                    <BookText size={12} /> View
+                  </button>
+
+                  <button
+                    onClick={handleAddToSources}
+                    disabled={downloadingUris.has(paper.pdfUri)}
+                    className={`text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm
+                      ${isSaved
+                        ? 'bg-scholar-100 text-scholar-700 border border-scholar-200 hover:bg-scholar-200 dark:bg-scholar-900/40 dark:text-scholar-300 dark:border-scholar-800'
+                        : 'bg-white text-scholar-600 border border-scholar-200 hover:bg-scholar-50 dark:bg-gray-800 dark:text-scholar-400 dark:border-gray-700 dark:hover:bg-gray-700'
+                      }
+                    `}
+                  >
+                    {downloadingUris.has(paper.pdfUri) ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      isSaved ? <Check size={12} /> : <Plus size={12} />
                     )}
-                  </div>
-               </div>
+                    {isSaved ? 'Added' : 'Add to Sources'}
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <h3 className="text-base sm:text-xl font-medium text-gray-900 dark:text-gray-100 leading-snug mb-2 cursor-pointer hover:text-scholar-600 transition-colors" onClick={handleOpenPdf}>
+            <h3 className="text-base sm:text-xl font-medium text-gray-900 dark:text-gray-100 leading-snug mb-2 cursor-pointer hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors" onClick={handleOpenPdf}>
               {paper.title}
             </h3>
 
             <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-2 mb-3">{paper.summary}</p>
 
             <div className="flex items-center justify-between mt-2">
-                <div className="flex items-center gap-3">
-                   {(isDownloading || isProcessing) ? (
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-scholar-600">
-                        <Loader2 size={12} className="animate-spin" />
-                        <span>Analysis in progress...</span>
-                      </div>
-                   ) : notes.length > 0 ? (
-                      <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-1.5 text-md font-medium text-bold text-scholar-600 hover:text-scholar-800 transition-colors">
-                      {notes.length} Note{notes.length !== 1 ? 's' : ''} {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                      </button>
-                   ) : isCompleted ? (
-                      <span className="text-xs text-gray-400 italic">No notes extracted</span>
-                   ) : isStopped ? (
-                      <span className="text-xs text-gray-400 italic flex items-center gap-1"><Square size={12} /> stopped</span>
-                   ) : isFailed ? (
-                       <span className="text-xs text-red-400 italic">Analysis failed</span>
-                   ) : (
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-scholar-600">
-                        <Check size={12} className="text-success-600" />
-                        <span>Ready to analyze</span>
-                    </div>
-                   )}
-                </div>
+              <div className="flex items-center gap-3">
+                {(isDownloading || isProcessing || isExtracting) ? (
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-scholar-600 dark:text-scholar-400">
+                    <Loader2 size={12} className="animate-spin" />
+                    <span className="animate-pulse">{getStatusText()}</span>
+                  </div>
+                ) : notes.length > 0 ? (
+                  <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-1.5 text-md font-medium text-bold text-scholar-600 dark:text-scholar-400 hover:text-scholar-800 dark:hover:text-scholar-300 transition-colors">
+                    {notes.length} Note{notes.length !== 1 ? 's' : ''} {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                  </button>
+                ) : isCompleted ? (
+                  <span className="text-xs text-gray-400 italic">No notes extracted</span>
+                ) : isStopped ? (
+                  <span className="text-xs text-gray-400 italic flex items-center gap-1"><Square size={12} /> stopped</span>
+                ) : isFailed ? (
+                  // New Friendly Error Display
+                  <div className="bg-red-50/50 dark:bg-red-900/10 rounded-lg p-2.5 border border-red-100 dark:border-red-900/20 text-xs w-full max-w-sm">
+                    <span className="font-bold text-red-700 dark:text-red-400 block mb-0.5">
+                      {failedUrlErrors?.[paper.pdfUri]?.reason || "Load Failed"}
+                    </span>
+                    <span className="text-red-600/80 dark:text-red-400/80 leading-snug block">
+                      {failedUrlErrors?.[paper.pdfUri]?.actionableMsg || "Could not access file."}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-scholar-600 dark:text-scholar-400">
+                    <Check size={12} className="text-success-600" />
+                    <span>Ready to analyze</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {isExpanded && notes.length > 0 && (
               <div className="mt-4 pl-0 sm:pl-4 border-l-0 sm:border-l-2 border-gray-100 dark:border-gray-800 space-y-3">
-                 {notes.map((note, idx) => {
-                    const noteId = getNoteId(paper.id, note.pageNumber, idx);
-                    return <ResearchCardNote key={noteId} id={noteId} note={note} isSelected={selectedNoteIds.includes(noteId)} onSelect={() => onSelectNote(noteId)} sourceTitle={paper.title} />;
-                 })}
+                {notes.map((note, idx) => {
+                  const noteId = getNoteId(paper.id, note.pageNumber, idx);
+                  return <ResearchCardNote key={noteId} id={noteId} note={note} isSelected={selectedNoteIds.includes(noteId)} onSelect={() => onSelectNote(noteId)} sourceTitle={paper.title} sourcePaper={paper} />;
+                })}
               </div>
             )}
           </div>
@@ -514,9 +1188,18 @@ const PaperCard: React.FC<PaperCardProps> = ({ paper, selectedNoteIds, onSelectN
       </div>
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison - only re-render if these specific props change
+  return (
+    prevProps.paper.id === nextProps.paper.id &&
+    prevProps.paper.analysisStatus === nextProps.paper.analysisStatus &&
+    prevProps.paper.notes?.length === nextProps.paper.notes?.length &&
+    prevProps.selectedNoteIds === nextProps.selectedNoteIds &&
+    prevProps.forceExpanded === nextProps.forceExpanded &&
+    prevProps.isLocal === nextProps.isLocal
+  );
+});
 
-// Sub-component for individual research notes within DeepResearchView
 const ResearchCardNote: React.FC<{
   id: string;
   note: DeepResearchNote;
@@ -524,14 +1207,57 @@ const ResearchCardNote: React.FC<{
   onSelect: () => void;
   sourceTitle?: string;
   showScore?: boolean;
-}> = ({ id, note, isSelected, onSelect, sourceTitle, showScore }) => {
+  sourcePaper?: ArxivPaper;  // ADD: Full paper metadata for rich note saving
+}> = React.memo(({ id, note, isSelected, onSelect, sourceTitle, showScore, sourcePaper }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [justCopied, setJustCopied] = useState(false);
-  
+
   const { toggleContextNote, isNoteInContext } = useResearch();
   const { isNoteSaved, deleteNote, saveNote, savedNotes } = useDatabase();
   const { setSearchHighlight, loadPdfFromUrl, setActivePdf } = useLibrary();
   const { setColumnVisibility } = useUI();
+
+  // Helper function for smart paper metadata extraction with multiple fallbacks
+  const createPaperMetadata = useCallback((
+    note: DeepResearchNote,
+    sourcePaper?: ArxivPaper,
+    sourceTitle?: string
+  ) => {
+    // Priority 1: Use sourcePaper prop if available (most complete data)
+    if (sourcePaper) {
+      return {
+        uri: sourcePaper.pdfUri,
+        pdfUri: sourcePaper.pdfUri,
+        title: sourcePaper.title,
+        summary: sourcePaper.summary || '',
+        authors: sourcePaper.authors || [],
+        publishedDate: sourcePaper.publishedDate,
+      };
+    }
+
+    // Priority 2: Check if note has sourcePaper attached (from "Most Relevant Notes" view)
+    if ('sourcePaper' in note && (note as any).sourcePaper) {
+      const paper = (note as any).sourcePaper as ArxivPaper;
+      return {
+        uri: paper.pdfUri,
+        pdfUri: paper.pdfUri,
+        title: paper.title,
+        summary: paper.summary || '',
+        authors: paper.authors || [],
+        publishedDate: paper.publishedDate,
+      };
+    }
+
+    // Priority 3: Fallback to minimal data (maintains backward compatibility)
+    return {
+      uri: note.pdfUri,
+      pdfUri: note.pdfUri,
+      title: sourceTitle || 'Untitled Paper',
+      summary: '',
+      authors: [],
+      publishedDate: new Date().toISOString(),
+    };
+  }, []);
 
   const isInContext = isNoteInContext(note);
   const isSaved = isNoteSaved(note.pdfUri, note.quote);
@@ -542,7 +1268,7 @@ const ResearchCardNote: React.FC<{
     setJustCopied(true);
     setTimeout(() => setJustCopied(false), 2000);
   };
-  
+
   const handleContextToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
     toggleContextNote(note);
@@ -550,11 +1276,25 @@ const ResearchCardNote: React.FC<{
 
   const handleSaveToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
+    console.log('[Note Card] Save toggle clicked:', {
+      noteUri: note.pdfUri,
+      isSaved,
+      sourceTitle,
+      hasSourcePaper: !!sourcePaper
+    });
+
     if (isSaved) {
       const savedNote = savedNotes.find(n => n.paper_uri === note.pdfUri && n.content === note.quote);
-      if (savedNote && savedNote.id) deleteNote(savedNote.id);
+      if (savedNote && savedNote.id) {
+        console.log('[Note Card] Deleting note:', savedNote.id);
+        deleteNote(savedNote.id);
+      }
     } else {
-      saveNote(note, { uri: note.pdfUri, title: sourceTitle });
+      console.log('[Note Card] Saving note with complete paper metadata');
+      // FIXED: Use smart metadata extraction instead of hardcoded empty values
+      const paperMetadata = createPaperMetadata(note, sourcePaper, sourceTitle);
+      console.log('[Note Card] Paper metadata being saved:', paperMetadata);
+      saveNote(note, paperMetadata);
     }
   };
 
@@ -568,9 +1308,9 @@ const ResearchCardNote: React.FC<{
   };
 
   return (
-    <div 
+    <div
       className={`relative group/note transition-all duration-300 ease-in-out border rounded-xl overflow-hidden cursor-pointer
-        ${isExpanded ? "bg-white dark:bg-gray-800" : "bg-white/50 dark:bg-dark-card"}
+        ${isExpanded ? "bg-white dark:bg-dark-card" : "bg-white/50 dark:bg-dark-card"}
         ${isSelected ? 'border-scholar-500 ring-1 ring-scholar-500' : 'border-gray-200 dark:border-gray-700 hover:shadow-sm'}
         ${isExpanded ? 'shadow-md ring-1 ring-scholar-100 dark:ring-scholar-900' : ''}
       `}
@@ -579,102 +1319,118 @@ const ResearchCardNote: React.FC<{
       <div className="p-4">
         <div className="flex items-start gap-3">
           <div className="pt-1">
-             <button 
-                onClick={(e) => { e.stopPropagation(); onSelect(); }}
-                className={`transition-all ${isSelected ? 'text-scholar-600' : 'text-gray-300 hover:text-scholar-600'}`}
-             >
-                {isSelected ? <Check size={20} strokeWidth={3} /> : <Square size={20} />}
-             </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onSelect(); }}
+              className={`transition-all ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-300 dark:text-gray-500 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
+            >
+              {isSelected ? <Check size={20} strokeWidth={3} /> : <Square size={20} />}
+            </button>
           </div>
 
           <div className="flex-grow min-w-0">
-             <p className={`text-sm sm:text-base text-gray-800 dark:text-gray-200 leading-relaxed font-serif ${!isExpanded ? 'line-clamp-3' : ''}`}>
-               "{note.quote}"
-             </p>
-             <div className="flex items-center mt-3 gap-2 flex-wrap">
-                <span className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-200 dark:border-gray-700">
-                  PAGE {note.pageNumber}
+            {/* Updated Note Header with faded paper title for "Most Relevant Notes" view */}
+            {sourceTitle && showScore && (
+              <div className="mb-1 text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-tight truncate">
+                {sourceTitle}
+              </div>
+            )}
+            <p className={`text-sm sm:text-base text-gray-800 dark:text-gray-200 leading-relaxed font-serif ${!isExpanded ? 'line-clamp-3' : ''}`}>
+              "{note.quote}"
+            </p>
+            <div className="flex items-center mt-3 gap-2 flex-wrap">
+              <span className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-200 dark:border-gray-700">
+                PAGE {note.pageNumber}
+              </span>
+
+              {isInContext && (
+                <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                  IN CONTEXT
                 </span>
+              )}
 
-                {isInContext && (
-                   <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                     IN CONTEXT
-                   </span>
-                )}
+              {isSaved && (
+                <span className="bg-scholar-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                  SAVED
+                </span>
+              )}
 
-                {isSaved && (
-                   <span className="bg-scholar-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                     SAVED
-                   </span>
-                )}
-
-                {!isExpanded && (
-                   <span className="text-xs text-scholar-600 font-medium ml-auto opacity-0 group-hover/note:opacity-100 transition-opacity">
-                      Details
-                   </span>
-                )}
-             </div>
+              {!isExpanded && (
+                <span className="text-xs text-scholar-600 dark:text-scholar-400 font-medium ml-auto opacity-0 group-hover/note:opacity-100 transition-opacity">
+                  Details
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Actions Menu */}
-        <div 
-           className={`
+        <div
+          className={`
              absolute top-2 right-2 flex items-center gap-1
              transition-all duration-300 
              bg-white dark:bg-gray-800 p-1 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm
              ${isExpanded ? 'opacity-100' : 'opacity-0 -translate-y-2 group-hover/note:opacity-100 group-hover/note:translate-y-0'}
            `}
-           onClick={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
         >
-            <button onClick={handleSaveToggle} className={`p-1.5 rounded-md ${isSaved ? 'text-scholar-600 bg-scholar-50' : 'text-gray-400 hover:bg-gray-100'}`} title="Save to Library">
-             <Plus size={16} />
-           </button>
-           <button onClick={handleContextToggle} className={`p-1.5 rounded-md ${isInContext ? 'text-blue-600 bg-blue-50' : 'text-gray-400 hover:bg-gray-100'}`} title="Add to Context">
-             <BookmarkPlus size={16} />
-           </button>
-           <button onClick={handleViewPdf} className="p-1.5 rounded-md text-gray-400 hover:bg-gray-100 hover:text-scholar-600" title="View in PDF Viewer">
-             <BookText size={16} />
-           </button>
-           <button onClick={handleCopy} className="p-1.5 rounded-md text-gray-400 hover:bg-gray-100" title="Copy text">
-             {justCopied ? <Check size={16} /> : <Copy size={16} />}
-           </button>
+          <button onClick={handleSaveToggle} className={`p-1.5 rounded-md ${isSaved ? 'text-scholar-600 bg-scholar-50 dark:bg-scholar-900/30' : 'text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title="Save to Library">
+            <Plus size={16} />
+          </button>
+          <button onClick={handleContextToggle} className={`p-1.5 rounded-md ${isInContext ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30' : 'text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title="Add to Context">
+            <BookmarkPlus size={16} />
+          </button>
+          <button onClick={handleViewPdf} className="p-1.5 rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-scholar-600 dark:hover:text-scholar-400" title="View in PDF Viewer">
+            <BookText size={16} />
+          </button>
+          <button onClick={handleCopy} className="p-1.5 rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" title="Copy text">
+            {justCopied ? <Check size={16} /> : <Copy size={16} />}
+          </button>
         </div>
 
         {isExpanded && (
-           <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in">
-               {showScore && note.relevanceScore && (
-                  <div className="absolute top-10 right-4 text-right">
-                     <div className="text-lg font-bold text-scholar-600">{Math.round(note.relevanceScore * 100)}%</div>
-                     <div className="text-[10px] text-gray-400 font-bold uppercase">Match</div>
-                  </div>
-               )}
-               {note.justification && (
-                  <div className="bg-scholar-50 dark:bg-scholar-900/20 rounded-xl p-4 border border-scholar-100 dark:border-scholar-800/30 mb-4">
-                     <h4 className="text-scholar-800 dark:text-scholar-400 text-[10px] font-black uppercase mb-2 flex items-center gap-2">
-                        <Lightbulb size={12} className="text-scholar-500" /> Insight
-                     </h4>
-                     <p className="text-gray-700 dark:text-gray-300 text-xs sm:text-sm leading-relaxed">{note.justification}</p>
-                  </div>
-               )}
-                {note.citations && note.citations.length > 0 && (
-                  <div className="mt-4">
-                     <h4 className="text-gray-400 text-[10px] font-black uppercase mb-3 flex items-center gap-2">
-                        <Library size={12} /> References
-                     </h4>
-                     <ul className="space-y-3">
-                        {note.citations.map((cit, idx) => (
-                           <li key={idx} className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 leading-relaxed pl-3 border-l-2 border-scholar-200">
-                              <span className="font-bold text-scholar-700 mr-2 bg-scholar-50 px-1 rounded">{cit.inline}</span>
-                              {cit.full}
-                           </li>
-                        ))}
-                     </ul>
-                  </div>
-               )}
-           </div>
+          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in">
+            {showScore && note.relevanceScore && (
+              <div className="absolute top-6 right-4 text-right">
+                <div className="text-lg font-bold text-scholar-600 dark:text-scholar-400">{Math.round(note.relevanceScore * 100)}%</div>
+              </div>
+            )}
+            {note.justification && (
+              <div className="bg-scholar-50 dark:bg-scholar-900/20 rounded-xl p-4 border border-scholar-100 dark:border-scholar-800/30 mb-4">
+                <h4 className="text-scholar-800 dark:text-scholar-300 text-md font-black uppercase mb-2 flex items-center gap-2">
+                  Justification/Context
+                </h4>
+                <p className="text-gray-700 dark:text-gray-300 text-xs sm:text-sm leading-relaxed">{note.justification}</p>
+                {note.relatedQuestion && (
+                  <p className="text-gray-600 dark:text-gray-400 text-xs mt-3 leading-relaxed">
+                    <span className="font-semibold">Query:</span> {note.relatedQuestion}
+                  </p>
+                )}
+              </div>
+            )}
+            {note.citations && note.citations.length > 0 && (
+              <div className="mt-4">
+                <h4 className="text-gray-400 text-[10px] font-black uppercase mb-3 flex items-center gap-2">
+                  <Library size={12} /> References
+                </h4>
+                <ul className="space-y-3">
+                  {note.citations.map((cit, idx) => (
+                    <li key={idx} className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 leading-relaxed pl-3 border-l-2 border-scholar-200 dark:border-scholar-800">
+                      <span className="font-bold text-scholar-700 dark:text-scholar-400 mr-2 bg-scholar-50 dark:bg-scholar-900/30 px-1 rounded">{cit.inline}</span>
+                      {cit.full}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison - only re-render if these specific props change
+  return (
+    prevProps.id === nextProps.id &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.showScore === nextProps.showScore
+  );
+});

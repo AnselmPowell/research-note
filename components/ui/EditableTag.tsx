@@ -118,7 +118,7 @@ export const EditableTag: React.FC<EditableTagProps> = ({
       >
         {status === 'loading' && <Loader2 size={12} className="animate-spin" />}
         {status === 'invalid' && <AlertCircle size={12} />}
-        {status === 'valid' && type === 'url' && <File size={12} />}
+        {status === 'valid' && type === 'url' && <Check size={12} />}
         
         <span className="truncate">{content}</span>
 

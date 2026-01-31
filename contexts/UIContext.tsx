@@ -42,7 +42,7 @@ const UIContext = createContext<UIContextType | undefined>(undefined);
 
 export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [darkMode, setDarkMode] = useState(false);
-  
+
   const [columnVisibility, setColumnVisibility] = useState({
     left: false,
     middle: false,
@@ -59,7 +59,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   });
 
   const [isHomeExiting, setIsHomeExiting] = useState(false);
-  
+
   // Library State
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isLibraryExpanded, setIsLibraryExpanded] = useState(false);
@@ -95,9 +95,19 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       const newState = { ...prev };
       newState[col] = true;
 
+      // RULE: Opening 'left' (Sources) also opens 'middle' (Research)
+      // UNLESS 'right' (Paper View) is already open
+      if (col === 'left' && !prev.right) {
+        newState.middle = true;
+      }
+
       // Logic: Close any other column that is NOT locked
       (Object.keys(newState) as ColumnKey[]).forEach(key => {
         if (key !== col && !columnLocks[key]) {
+          // Don't close 'middle' if 'left' is being opened or is already open (and right is not open)
+          if (key === 'middle' && (col === 'left' || newState.left) && !newState.right) {
+            return; // Skip closing middle
+          }
           newState[key] = false;
         }
       });

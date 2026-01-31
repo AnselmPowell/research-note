@@ -90,7 +90,7 @@ export const DeepResearchFAB: React.FC<DeepResearchFABProps> = ({ onStartResearc
               {questions.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-4 max-h-40 overflow-y-auto custom-scrollbar">
                   {questions.map((q, idx) => (
-                    <div key={idx} className="flex items-center gap-1.5 bg-scholar-50 dark:bg-scholar-900/30 text-scholar-800 dark:text-scholar-200 px-3 py-1.5 rounded-lg text-sm border border-scholar-100 dark:border-scholar-800 animate-fade-in">
+                    <div key={idx} className="flex items-center gap-1.5 bg-scholar-50 dark:bg-scholar-900/30 text-scholar-800 dark:text-white px-3 py-1.5 rounded-lg text-sm border border-scholar-100 dark:border-scholar-800 animate-fade-in">
                       <span className="truncate max-w-[280px]">{q}</span>
                       <button 
                         onClick={() => handleRemoveQuestion(idx)}
