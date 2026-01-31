@@ -142,7 +142,10 @@ const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[]
                 currentParagraph = { items: [...currentLine.items] };
                 paragraphs.push(currentParagraph);
             } else {
-                currentParagraph.items.push(...currentLine.items);
+                // Mark first item of new line to need space prepended
+                const firstItemOfLine = { ...currentLine.items[0], needsSpacePrefix: true };
+                const restOfLineItems = currentLine.items.slice(1);
+                currentParagraph.items.push(firstItemOfLine, ...restOfLineItems);
             }
         }
     }
@@ -161,9 +164,13 @@ const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[]
             return a.textItem.transform[4] - b.textItem.transform[4];
         });
 
-        paragraph.items.forEach(({ index }) => {
+        paragraph.items.forEach(({ index, needsSpacePrefix }) => {
             const span = spans[index];
             if (span && !processedSpans.has(span)) {
+                // Add space prefix to span content if needed
+                if (needsSpacePrefix && span.textContent) {
+                    span.textContent = ' ' + span.textContent;
+                }
                 groupWrapper.appendChild(span);
                 processedSpans.add(span);
             }
