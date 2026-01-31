@@ -33,7 +33,10 @@ import {
   ChevronsUp,
   X,
   AlertTriangle,
-  Filter
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  Minus
 } from 'lucide-react';
 
 interface DeepResearchViewProps {
@@ -50,6 +53,8 @@ interface DeepResearchViewProps {
 
 type SortOption = 'most-relevant-notes' | 'relevant-papers' | 'newest-papers';
 type TabType = 'web' | 'deep';
+
+const ITEMS_PER_PAGE = 15;
 
 const getNoteId = (paperId: string, page: number, index: number) => `${paperId}-p${page}-i${index}`;
 
@@ -121,6 +126,10 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     query: 'all',
     hasNotes: false
   });
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isSelectMenuOpen, setIsSelectMenuOpen] = useState(false);
 
   // Sync: Switch tab based on active search mode (keeps SearchBar and View in sync)
   useEffect(() => {
@@ -247,6 +256,19 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     }
   }, [filteredPapers, sortBy, selectedArxivIds]);
 
+  // Pagination: Reset to page 1 when filters or sorting change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, localFilters, sortBy]);
+
+  // Pagination: Slice content for current page
+  const paginatedContent = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return content.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [content, currentPage]);
+
+  const totalPages = Math.ceil(content.length / ITEMS_PER_PAGE);
+
   // Generate paper dropdown options based on current filter context
   // Excludes the paper filter itself to show what papers are available given other active filters
   const uniquePapers = useMemo(() => {
@@ -364,6 +386,45 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     }
   }, [selectedArxivIds.size, candidates, clearArxivSelection, selectAllArxivPapers]);
 
+  // Select all papers on current page
+  const handleSelectPage = useCallback(() => {
+    const pagePaperIds = sortBy === 'most-relevant-notes'
+      ? Array.from(new Set(paginatedContent.map(n => (n as any).sourcePaper.id)))
+      : (paginatedContent as ArxivPaper[]).map(p => p.id);
+
+    // Check if everything on page is already selected
+    const allPageSelected = pagePaperIds.every(id => selectedArxivIds.has(id));
+
+    if (allPageSelected) {
+      // Deselect only these papers
+      pagePaperIds.forEach(id => {
+        if (selectedArxivIds.has(id)) {
+          clearArxivSelection();
+          // Re-add all except page items
+          const remainingIds = Array.from(selectedArxivIds).filter(sid => !pagePaperIds.includes(sid));
+          if (remainingIds.length > 0) {
+            selectAllArxivPapers(remainingIds);
+          }
+        }
+      });
+    } else {
+      // Add all page items to selection
+      const currentSelection = Array.from(selectedArxivIds);
+      const newSelection = Array.from(new Set([...currentSelection, ...pagePaperIds]));
+      selectAllArxivPapers(newSelection);
+    }
+    setIsSelectMenuOpen(false);
+  }, [paginatedContent, selectedArxivIds, sortBy, selectAllArxivPapers, clearArxivSelection]);
+
+  // Select all papers in current filtered/sorted results
+  const handleSelectAllTotal = useCallback(() => {
+    const allIds = sortBy === 'most-relevant-notes'
+      ? Array.from(new Set(content.map(n => (n as any).sourcePaper.id)))
+      : (content as ArxivPaper[]).map(p => p.id);
+    selectAllArxivPapers(allIds);
+    setIsSelectMenuOpen(false);
+  }, [content, sortBy, selectAllArxivPapers]);
+
   return (
     <div className="p-3 sm:p-6 font-sans max-w-4xl mx-auto min-h-[500px] relative" style={{ containerType: 'inline-size' }}>
       <style>{`
@@ -400,18 +461,53 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
             {/* LEFT SIDE - TABS */}
             <div className="flex items-center -mb-px">
-              {/* Select All Papers - Icon Only */}
+              {/* Select All Papers - Dropdown Menu */}
               {sortBy !== 'most-relevant-notes' && currentTabCandidates.length > 0 && (
-                <button
-                  onClick={handleSelectAllPapers}
-                  className="p-2.5 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
-                  title={`Select all papers (${selectedArxivIds.size > 0 ? `${selectedArxivIds.size}/` : ''}${candidates.length})`}
-                >
-                  <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${selectedArxivIds.size === candidates.length ? 'bg-scholar-600 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
-                    }`}>
-                    {selectedArxivIds.size === candidates.length && <Check size={16} className="text-white" />}
-                  </div>
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setIsSelectMenuOpen(!isSelectMenuOpen)}
+                    className="flex items-center gap-1 p-2 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                    title="Selection options"
+                  >
+                    <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${selectedArxivIds.size === content.length ? 'bg-scholar-600 border-scholar-600' :
+                        selectedArxivIds.size > 0 ? 'bg-scholar-100 dark:bg-scholar-900/30 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
+                      }`}>
+                      {selectedArxivIds.size === content.length ? <Check size={16} color="white" strokeWidth={3} /> :
+                        selectedArxivIds.size > 0 ? <Minus size={16} className="text-scholar-600 dark:text-scholar-400" strokeWidth={3} /> : null}
+                    </div>
+                    <ChevronDown size={14} className="opacity-60" />
+                  </button>
+
+                  {isSelectMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsSelectMenuOpen(false)} />
+                      <div className="absolute left-0 top-full mt-2 w-64 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 py-1.5 animate-fade-in">
+                        <button
+                          onClick={handleSelectPage}
+                          className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <LayoutList size={16} className="text-gray-400" />
+                          <span className="text-sm font-medium text-gray-700 dark:text-white">Select Current Page ({paginatedContent.length})</span>
+                        </button>
+                        <button
+                          onClick={handleSelectAllTotal}
+                          className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <Layers size={16} className="text-gray-400" />
+                          <span className="text-sm font-medium text-gray-700 dark:text-white">Select All Total ({content.length})</span>
+                        </button>
+                        <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1" />
+                        <button
+                          onClick={() => { clearArxivSelection(); setIsSelectMenuOpen(false); }}
+                          className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                        >
+                          <X size={16} className="text-red-500" />
+                          <span className="text-sm font-medium text-red-600 dark:text-red-400">Clear Selection</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
 
               <button
@@ -721,7 +817,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
         )}
 
         {activeTab === 'deep' && (sortBy === 'most-relevant-notes' ? (
-          (content as any[]).map((note) => (
+          (paginatedContent as any[]).map((note) => (
             <ResearchCardNote
               key={note.uniqueId}
               id={note.uniqueId}
@@ -734,7 +830,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
             />
           ))
         ) : (
-          (content as ArxivPaper[]).map((paper) => (
+          (paginatedContent as ArxivPaper[]).map((paper) => (
             <PaperCard
               key={paper.id}
               paper={paper}
@@ -769,6 +865,62 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
             <BookOpenText size={64} className="mb-6 text-gray-300 dark:text-gray-600" />
             <h3 className="text-xl font-bold text-gray-800 dark:text-white">No deep research results</h3>
             <p className="text-xs max-w-xs leading-relaxed text-gray-500 dark:text-gray-400">Enter topics in the search bar to find academic papers.</p>
+          </div>
+        )}
+
+        {/* Pagination Bar */}
+        {activeTab === 'deep' && !isBlurred && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 py-8 mt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in">
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(prev => prev - 1)}
+              className="p-2 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-600 dark:text-gray-300"
+              title="Previous page"
+            >
+              <ChevronLeft size={20} />
+            </button>
+
+            {Array.from({ length: totalPages }).map((_, i) => {
+              const pageNum = i + 1;
+              // Show first, last, current, and pages around current
+              const showPage = pageNum === 1 || pageNum === totalPages ||
+                Math.abs(pageNum - currentPage) <= 1;
+              const showEllipsis = (pageNum === 2 && currentPage > 3) ||
+                (pageNum === totalPages - 1 && currentPage < totalPages - 2);
+
+              if (!showPage && !showEllipsis) return null;
+
+              if (showEllipsis) {
+                return (
+                  <span key={`ellipsis-${pageNum}`} className="px-2 text-gray-400">...</span>
+                );
+              }
+
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => {
+                    setCurrentPage(pageNum);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`min-w-[36px] h-9 px-3 text-sm font-bold rounded-lg transition-all ${currentPage === pageNum
+                      ? 'bg-scholar-600 text-white shadow-md'
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400'
+                    }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+
+            <button
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(prev => prev + 1)}
+              className="p-2 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-600 dark:text-gray-300"
+              title="Next page"
+            >
+              <ChevronRight size={20} />
+            </button>
           </div>
         )}
       </div>
