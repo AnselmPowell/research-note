@@ -32,7 +32,8 @@ import {
   ChevronsDown,
   ChevronsUp,
   X,
-  AlertTriangle
+  AlertTriangle,
+  Filter
 } from 'lucide-react';
 
 interface DeepResearchViewProps {
@@ -112,6 +113,15 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [allNotesExpanded, setAllNotesExpanded] = useState(true);
 
+  // Filter State
+  const [showFilters, setShowFilters] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [localFilters, setLocalFilters] = useState({
+    paper: 'all',
+    query: 'all',
+    hasNotes: false
+  });
+
   // Sync: Switch tab based on active search mode (keeps SearchBar and View in sync)
   useEffect(() => {
     if (activeSearchMode === 'web' || activeSearchMode === 'deep') {
@@ -157,9 +167,48 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
   const totalNotes = useMemo(() => currentTabCandidates.reduce((acc, paper) => acc + (paper.notes?.length || 0), 0), [currentTabCandidates]);
 
+  // STEP 1: Filter papers based on criteria
+  const filteredPapers = useMemo(() => {
+    let base = [...currentTabCandidates];
+
+    // Filter 1: Text search across titles, abstracts, and notes
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      base = base.filter(paper => {
+        const titleMatch = paper.title.toLowerCase().includes(q);
+        const abstractMatch = paper.summary?.toLowerCase().includes(q);
+        const notesMatch = paper.notes?.some(note =>
+          note.quote.toLowerCase().includes(q) ||
+          note.justification?.toLowerCase().includes(q)
+        );
+        return titleMatch || abstractMatch || notesMatch;
+      });
+    }
+
+    // Filter 2: Specific paper
+    if (localFilters.paper !== 'all') {
+      base = base.filter(p => p.id === localFilters.paper);
+    }
+
+    // Filter 3: Specific research query
+    if (localFilters.query !== 'all') {
+      base = base.filter(p =>
+        p.notes?.some(note => note.relatedQuestion === localFilters.query)
+      );
+    }
+
+    // Filter 4: Only papers with notes
+    if (localFilters.hasNotes) {
+      base = base.filter(p => p.notes && p.notes.length > 0);
+    }
+
+    return base;
+  }, [currentTabCandidates, searchQuery, localFilters]);
+
+  // STEP 2: Sort the filtered results
   const content = useMemo(() => {
     if (sortBy === 'most-relevant-notes') {
-      const allNotes = currentTabCandidates.flatMap(paper =>
+      const allNotes = filteredPapers.flatMap(paper =>
         (paper.notes || []).map((note, idx) => ({
           ...note,
           sourcePaper: paper,
@@ -168,9 +217,9 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
       );
       return allNotes.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
     } else if (sortBy === 'newest-papers') {
-      return [...currentTabCandidates].sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
+      return [...filteredPapers].sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
     } else {
-      return [...currentTabCandidates].sort((a, b) => {
+      return [...filteredPapers].sort((a, b) => {
         // First priority: Papers currently being processed move to top
         const aIsProcessing = ['downloading', 'processing', 'extracting'].includes(a.analysisStatus || '');
         const bIsProcessing = ['downloading', 'processing', 'extracting'].includes(b.analysisStatus || '');
@@ -196,7 +245,31 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
         return (b.relevanceScore || 0) - (a.relevanceScore || 0);
       });
     }
-  }, [currentTabCandidates, sortBy, selectedArxivIds]);
+  }, [filteredPapers, sortBy, selectedArxivIds]);
+
+  // Generate dropdown options dynamically from data
+  const uniquePapers = useMemo(() => {
+    return currentTabCandidates.map(p => ({ id: p.id, title: p.title }));
+  }, [currentTabCandidates]);
+
+  const uniqueQueries = useMemo(() => {
+    const queries = new Set<string>();
+    currentTabCandidates.forEach(paper => {
+      paper.notes?.forEach(note => {
+        if (note.relatedQuestion) queries.add(note.relatedQuestion);
+      });
+    });
+    return Array.from(queries);
+  }, [currentTabCandidates]);
+
+  const handleResetFilters = useCallback(() => {
+    setSearchQuery('');
+    setLocalFilters({
+      paper: 'all',
+      query: 'all',
+      hasNotes: false
+    });
+  }, []);
 
   const handleSelectAllPapers = useCallback(() => {
     // Only handle ArXiv candidates selection
@@ -235,10 +308,10 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
       )}
 
       {!isBlurred && (
-      <div className="sticky top-0 z-30 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-0 mb-3 -pt-3 -mt-3 -mx-3 sm:-mx-6 px-3 sm:px-6 shadow-sm">
+        <div className="sticky top-0 z-30 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-0 mb-3 -pt-3 -mt-3 -mx-3 sm:-mx-6 px-3 sm:px-6 shadow-sm">
 
-        {/* SINGLE ROW - TABS LEFT, ACTIONS RIGHT */}
-        <div className="flex items-center justify-between py-3 gap-4 deep-header-row">
+          {/* SINGLE ROW - TABS LEFT, ACTIONS RIGHT */}
+          <div className="flex items-center justify-between py-3 gap-4 deep-header-row">
 
 
             {/* LEFT SIDE - TABS */}
@@ -281,13 +354,13 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
             <div className="flex items-center gap-2 deep-actions-right">
 
               {/* Sort Dropdown */}
+              {activeTab === 'deep' && !isBlurred && (currentTabCandidates.length > 0 || totalNotes > 0) && (
               <div className="relative">
                 <button
                   onClick={() => setIsSortOpen(!isSortOpen)}
                   className="flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
                   title="Sort options"
                 >
-                  <ArrowUpDown size={20} className="text-gray-400" />
                   <span className="deep-sort-text truncate">
                     {sortBy === 'most-relevant-notes' && 'Most Relevant Notes'}
                     {sortBy === 'relevant-papers' && 'Most Relevant Papers'}
@@ -316,40 +389,156 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                     </div>
                   </>
                 )}
+              </div> )}
+
+            </div>
+          </div>
+
+          {/* Secondary Action Bar - Below Header */}
+          {activeTab === 'deep' && !isBlurred && (currentTabCandidates.length > 0 || totalNotes > 0) && (
+            <div className="flex items-center justify-between mb-4 px-1 animate-fade-in">
+              {/* LEFT SIDE - Clear All */}
+              <div>
+                {researchPhase !== 'searching' && (
+                  <button
+                    onClick={() => {
+                      if (confirm(`Clear all ${activeTab === 'web' ? 'web search' : 'deep research'} results?`)) {
+                        clearDeepResearchResults();
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    title="Clear all results"
+                  >
+                    <X size={20} />
+                    <span className="hidden sm:inline">Clear All Results</span>
+                  </button>
+                )}
               </div>
 
-              {/* Clear All Button - Only show when there are results */}
-              {(currentTabCandidates.length > 0 || totalNotes > 0) && researchPhase !== 'searching' && (
+              {/* RIGHT SIDE - Expand/Collapse and Filter */}
+              <div className="flex items-center gap-2">
+                
+
+                {/* Filter Button */}
                 <button
-                  onClick={() => {
-                    if (confirm(`Clear all ${activeTab === 'web' ? 'web search' : 'deep research'} results?`)) {
-                      clearDeepResearchResults();
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                  title="Clear all results"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`flex items-center gap-2 px-3 py-2.5 text-xs font-bold rounded-lg transition-all ${showFilters || searchQuery || localFilters.paper !== 'all' || localFilters.query !== 'all' || localFilters.hasNotes
+                      ? 'text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30'
+                      : 'text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  title="Filter options"
                 >
-                  <X size={20} />
-                  <span className="hidden sm:inline">Clear All Results</span>
+                  <Filter size={20} />
+                  <span className="deep-sort-text">Filters</span>
                 </button>
-              )}
 
-              {/* Collapse/Expand All Notes - Icon Only */}
-              {sortBy !== 'most-relevant-notes' && currentTabCandidates.some(p => p.notes && p.notes.length > 0) && (
-                <button
-                  onClick={() => setAllNotesExpanded(!allNotesExpanded)}
-                  className="p-2.5 -pl-3 text-gray-500 dark:text-gray-400 font-bold hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
-                  title={allNotesExpanded ? 'Collapse all notes' : 'Expand all notes'}
-                >
-                  {allNotesExpanded ? <ChevronsUp size={24} /> : <ChevronsDown size={24} />}
-                </button>
-              )}
+                {/* Collapse/Expand All Notes */}
+                {sortBy !== 'most-relevant-notes' && currentTabCandidates.some(p => p.notes && p.notes.length > 0) && (
+                  <button
+                    onClick={() => setAllNotesExpanded(!allNotesExpanded)}
+                    className="p-2.5 text-gray-500 dark:text-gray-400 font-bold hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                    title={allNotesExpanded ? 'Collapse all notes' : 'Expand all notes'}
+                  >
+                    {allNotesExpanded ? <ChevronsUp size={24} /> : <ChevronsDown size={24} />}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
+          {/* Filter Panel */}
+          {showFilters && activeTab === 'deep' && !isBlurred && (
+            <div className="bg-white/60 dark:bg-dark-card/60 backdrop-blur-md border border-white dark:border-gray-700 rounded-2xl p-4 sm:p-6 mb-6 shadow-scholar animate-fade-in">
+              <div className="flex flex-col gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-5 sm:gap-6">
 
+                {/* Search Input */}
+                <div className="sm:col-span-2 space-y-1.5">
+                  <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">
+                    Keywords
+                  </label>
+                  <div className="relative group">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-scholar-600 dark:group-focus-within:text-scholar-400 transition-colors" />
+                    <input
+                      className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl pl-11 pr-10 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-scholar-400 outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search papers, notes, insights..."
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-          </div>
+                {/* Paper Filter */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">
+                    Source Paper
+                  </label>
+                  <select
+                    value={localFilters.paper}
+                    onChange={(e) => setLocalFilters(prev => ({ ...prev, paper: e.target.value }))}
+                    className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="all">All Papers ({currentTabCandidates.length})</option>
+                    {uniquePapers.map(p => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Query Filter */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">
+                    Research Query
+                  </label>
+                  <select
+                    value={localFilters.query}
+                    onChange={(e) => setLocalFilters(prev => ({ ...prev, query: e.target.value }))}
+                    className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="all">All Queries</option>
+                    {uniqueQueries.map(q => (
+                      <option key={q} value={q}>{q}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Has Notes Toggle + Reset */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">
+                    Actions
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setLocalFilters(prev => ({ ...prev, hasNotes: !prev.hasNotes }))}
+                      className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${localFilters.hasNotes
+                        ? 'bg-scholar-600 text-white shadow-md'
+                        : 'bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800'
+                        }`}
+                    >
+                      <FileText size={14} />
+                      With Notes
+                    </button>
+                    <button
+                      onClick={handleResetFilters}
+                      className="px-4 py-2.5 bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800 rounded-xl text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+                      title="Reset all filters"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
         </div>
-      </div>
       )}
 
       <div className={`space-y-6 transition-all duration-500 ${isBlurred ? 'blur-sm opacity-50 pointer-events-none select-none overflow-hidden h-screen' : 'blur-0 opacity-100'}`}>
@@ -428,6 +617,23 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
           <div className="text-sm text-gray-500 dark:text-gray-400 font-medium px-1 flex items-center gap-2 mb-2 animate-fade-in">
             <BookOpenText size={14} className="opacity-60" />
             About {currentTabCandidates.length} paper{currentTabCandidates.length !== 1 ? 's' : ''} with {totalNotes} note{totalNotes !== 1 ? 's' : ''} found
+          </div>
+        )}
+
+        {/* Empty state when filters return no results */}
+        {activeTab === 'deep' && !isBlurred && currentTabCandidates.length > 0 && filteredPapers.length === 0 && (
+          <div className="py-16 flex flex-col items-center justify-center text-center opacity-60 animate-fade-in">
+            <TextSearch size={48} className="mb-4 text-gray-300 dark:text-gray-600" />
+            <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2">No papers match your filters</h3>
+            <p className="text-xs max-w-xs leading-relaxed text-gray-500 dark:text-gray-400 mb-4">
+              Try adjusting your search or filter criteria
+            </p>
+            <button
+              onClick={handleResetFilters}
+              className="text-xs font-medium text-scholar-600 dark:text-scholar-400 hover:underline"
+            >
+              Reset all filters
+            </button>
           </div>
         )}
 
@@ -599,12 +805,12 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     // Load if needed
     const loaded = loadedPdfs.find(p => p.uri === paper.pdfUri);
     let loadedPdf = loaded;
-    
+
     if (!loaded) {
       const result = await loadPdfFromUrl(paper.pdfUri, paper.title);
       // @ts-ignore
       if (result && !result.success) return;
-      
+
       // Use the PDF from the result to avoid stale closure issue
       loadedPdf = result.pdf;
     }
@@ -617,10 +823,10 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
       numPages: loadedPdf ? loadedPdf.numPages : undefined
     };
     savePaper(paperData);
-    
+
     // FIXED: Also add to AgentResearcher context like other workflows do
     togglePdfContext(paper.pdfUri, paper.title);
-    
+
     openColumn('left');
   };
 
@@ -752,8 +958,8 @@ const ResearchCardNote: React.FC<{
 
   // Helper function for smart paper metadata extraction with multiple fallbacks
   const createPaperMetadata = useCallback((
-    note: DeepResearchNote, 
-    sourcePaper?: ArxivPaper, 
+    note: DeepResearchNote,
+    sourcePaper?: ArxivPaper,
     sourceTitle?: string
   ) => {
     // Priority 1: Use sourcePaper prop if available (most complete data)
@@ -767,7 +973,7 @@ const ResearchCardNote: React.FC<{
         publishedDate: sourcePaper.publishedDate,
       };
     }
-    
+
     // Priority 2: Check if note has sourcePaper attached (from "Most Relevant Notes" view)
     if ('sourcePaper' in note && (note as any).sourcePaper) {
       const paper = (note as any).sourcePaper as ArxivPaper;
@@ -780,7 +986,7 @@ const ResearchCardNote: React.FC<{
         publishedDate: paper.publishedDate,
       };
     }
-    
+
     // Priority 3: Fallback to minimal data (maintains backward compatibility)
     return {
       uri: note.pdfUri,
