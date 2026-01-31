@@ -184,6 +184,20 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     }
   };
 
+ 
+  const paperByUri = useMemo(() => 
+    new Map(savedPapers.map(paper => [paper.uri, paper])), 
+    [savedPapers]
+  );
+
+  const notesCountByPaperUri = useMemo(() => {
+    const map = new Map<string, number>();
+    savedNotes.forEach(note => {
+      map.set(note.paper_uri, (map.get(note.paper_uri) || 0) + 1);
+    });
+    return map;
+  }, [savedNotes]);
+
   const filteredNotes = useMemo(() => {
     let base = [...savedNotes];
     if (activeView === 'starred') base = base.filter(n => n.is_starred);
@@ -205,9 +219,9 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
         valA = new Date(a.created_at || 0).getTime();
         valB = new Date(b.created_at || 0).getTime();
       } else if (sortColumn === 'publishedYear') {
-        // Sort notes by the publication year of their source paper
-        const paperA = savedPapers.find(p => p.uri === a.paper_uri);
-        const paperB = savedPapers.find(p => p.uri === b.paper_uri);
+  
+        const paperA = paperByUri.get(a.paper_uri);
+        const paperB = paperByUri.get(b.paper_uri);
         const yearA = paperA?.created_at || paperA?.published || paperA?.publishedDate ? new Date(paperA.created_at || paperA.published || paperA.publishedDate).getFullYear() : 0;
         const yearB = paperB?.created_at || paperB?.published || paperB?.publishedDate ? new Date(paperB.created_at || paperB.published || paperB.publishedDate).getFullYear() : 0;
         valA = yearA;
@@ -218,13 +232,15 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
       return sortDirection === 'asc' ? (valA < valB ? -1 : 1) : (valA > valB ? -1 : 1);
     });
     return base;
-  }, [savedNotes, activeView, searchQuery, localFilters, sortColumn, sortDirection]);
+  }, [savedNotes, savedPapers, activeView, searchQuery, localFilters, sortColumn, sortDirection, paperByUri]); // FIXED: Added missing dependencies
 
   const filteredPapers = useMemo(() => {
     let base = [...savedPapers];
     
     if (paperSubFilter === 'noted') {
-        base = base.filter(p => savedNotes.some(n => n.paper_uri === p.uri));
+
+      const papersWithNotes = new Set(savedNotes.map(n => n.paper_uri));
+      base = base.filter(p => papersWithNotes.has(p.uri));
     }
 
     if (searchQuery) {
@@ -233,9 +249,9 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     }
     
     base.sort((a, b) => {
-      // Always prioritize papers with notes first, then apply selected sorting
-      const notesA = savedNotes.filter(n => n.paper_uri === a.uri).length;
-      const notesB = savedNotes.filter(n => n.paper_uri === b.uri).length;
+
+      const notesA = notesCountByPaperUri.get(a.uri) || 0;
+      const notesB = notesCountByPaperUri.get(b.uri) || 0;
       if (notesA > 0 && notesB === 0) return -1;
       if (notesB > 0 && notesA === 0) return 1;
       
@@ -254,36 +270,36 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
       return sortDirection === 'asc' ? valA - valB : valB - valA;
     });
     return base;
-  }, [savedPapers, savedNotes, searchQuery, sortDirection, sortColumn, paperSubFilter]);
+  }, [savedPapers, savedNotes, searchQuery, sortDirection, sortColumn, paperSubFilter, notesCountByPaperUri]);
 
   const paginatedNotes = filteredNotes.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const paginatedPapers = filteredPapers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const handleToggleExpand = (id: number) => {
+  const handleToggleExpand = useCallback((id: number) => {
     setExpandedNotes(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  };
+  }, []);
 
-  const handleLocateNote = (note: any) => {
-      const paper = savedPapers.find(p => p.uri === note.paper_uri);
+  const handleLocateNote = useCallback((note: any) => {
+      const paper = paperByUri.get(note.paper_uri);
       const cleanedQuote = note.content.replace(/^[\W\d]+|[\W\d]+$/g, '').trim();
       
       loadPdfFromUrl(note.paper_uri, paper?.title);
       setActivePdf(note.paper_uri);
       setSearchHighlight(cleanedQuote);
       setColumnVisibility(prev => ({ ...prev, right: true }));
-  };
+  }, [paperByUri, loadPdfFromUrl, setActivePdf, setSearchHighlight, setColumnVisibility]);
 
-  const handleTogglePaperExpand = (uri: string) => {
+  const handleTogglePaperExpand = useCallback((uri: string) => {
     setExpandedPapers(prev => {
       const next = new Set(prev);
       if (next.has(uri)) next.delete(uri); else next.add(uri);
       return next;
     });
-  };
+  }, []);
 
   const handleSelectAllNotes = useCallback(() => {
     if (selectedNoteIds.length === paginatedNotes.length && selectedNoteIds.length > 0) {
@@ -309,8 +325,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
         : [...prev, paperUri]
     );
     
-    // ALSO add/remove from PDF context for researcher (issue #3 fix)
-    const paper = savedPapers.find(p => p.uri === paperUri);
+   
+    const paper = paperByUri.get(paperUri); 
     if (paper) {
       const wasInContext = isPdfInContext(paperUri);
       togglePdfContext(paperUri, paper.title);
@@ -318,11 +334,11 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
         await loadPdfFromUrl(paperUri, paper.title);
       }
     }
-  }, [savedPapers, isPdfInContext, togglePdfContext, loadPdfFromUrl]);
+  }, [paperByUri, isPdfInContext, togglePdfContext, loadPdfFromUrl]);
 
-  const handleNoteSelect = (id: number) => {
+  const handleNoteSelect = useCallback((id: number) => {
     setSelectedNoteIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
+  }, []);
 
   const handlePaperSelect = async (paper: any) => {
     const wasInContext = isPdfInContext(paper.uri);
@@ -333,34 +349,36 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     }
   };
 
-  const handleBulkCopy = (mode: 'raw' | 'full') => {
+  const handleBulkCopy = useCallback((mode: 'raw' | 'full') => {
     const selected = savedNotes.filter(n => selectedNoteIds.includes(n.id));
     let text = '';
     if (mode === 'raw') {
       text = selected.map(n => `"${n.content}"`).join('\n\n');
     } else {
       text = selected.map(n => {
-        const paper = savedPapers.find(p => p.uri === n.paper_uri);
+        const paper = paperByUri.get(n.paper_uri);
         return formatFullNote(n, paper);
       }).join('\n\n========================\n\n');
     }
     navigator.clipboard.writeText(text);
     setSelectedNoteIds([]);
     setShowBulkCopyMenu(false);
-  };
+  }, [savedNotes, selectedNoteIds, paperByUri]);
 
   const paperCounts = useMemo(() => ({
       all: savedPapers.length,
-      noted: savedPapers.filter(p => savedNotes.some(n => n.paper_uri === p.uri)).length
+      noted: Array.from(new Set(savedNotes.map(n => n.paper_uri))).length 
   }), [savedPapers, savedNotes]);
 
   const uniqueQueries = useMemo(() => {
-    const queries = savedNotes
-      .map(note => note.related_question)
-      .filter(query => query && query.trim().length > 0)
-      .filter((query, index, array) => array.indexOf(query) === index) // Remove duplicates
-      .sort();
-    return queries;
+
+    const uniqueSet = new Set<string>();
+    savedNotes.forEach(note => {
+      if (note.related_question && note.related_question.trim().length > 0) {
+        uniqueSet.add(note.related_question);
+      }
+    });
+    return Array.from(uniqueSet).sort();
   }, [savedNotes]);
 
   return (
@@ -703,7 +721,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                       onSaveEdit={async (id, content) => { await updateNote(id, content); setEditingNoteId(null); }}
                       onCancelEdit={() => setEditingNoteId(null)}
                       onDelete={() => openDeleteNoteModal([note.id])}
-                      paper={savedPapers.find(p => p.uri === note.paper_uri)}
+                      paper={paperByUri.get(note.paper_uri)}
                     />
                   )) : (
                     <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
