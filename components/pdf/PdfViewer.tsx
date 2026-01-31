@@ -1,32 +1,32 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Copy, 
-  Search, 
-  ZoomIn, 
-  ZoomOut,
-  File,
-  Menu
+import {
+    ChevronLeft,
+    ChevronRight,
+    Copy,
+    Search,
+    ZoomIn,
+    ZoomOut,
+    File,
+    Menu
 } from 'lucide-react';
 
 import { LeftArrowIcon, RightArrowIcon, NewFileIcon, CopyIcon, SearchIcon, ZoomInIcon, ZoomOutIcon } from '../ui/icons';
 
 // Define a placeholder type for PDFDocumentProxy to avoid TypeScript errors
 type PDFDocumentProxy = any;
-type PDFRenderTask = any; 
+type PDFRenderTask = any;
 
 type MapEntry = { itemIndex: number; charInItemIndex: number };
 interface PageTextIndex {
-  combinedText: string;
-  charToItemMap: (MapEntry | null)[];
+    combinedText: string;
+    charToItemMap: (MapEntry | null)[];
 }
 interface SearchResult {
-  startPageIndex: number;
-  startCharIndex: number;
-  endPageIndex: number;
-  endCharIndex: number;
+    startPageIndex: number;
+    startCharIndex: number;
+    endPageIndex: number;
+    endCharIndex: number;
 }
 
 interface PdfViewerProps {
@@ -53,10 +53,10 @@ const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[]
         container.innerHTML = '';
         return;
     };
-    
+
     const itemsWithIndices = textItems.map((item, index) => ({ item, index }));
     const xList = itemsWithIndices.map(i => i.item.transform[4]);
-    
+
     let sortedItemsWithIndices = itemsWithIndices;
 
     if (xList.length > 0) {
@@ -84,12 +84,12 @@ const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[]
 
         const ySorter = (a: any, b: any) => {
             const y1 = a.item.transform[5]; const y2 = b.item.transform[5];
-            if (Math.abs(y1 - y2) > 4) return y2 - y1; 
+            if (Math.abs(y1 - y2) > 4) return y2 - y1;
             return a.item.transform[4] - b.item.transform[4];
         };
 
         if (isTwoColumn) {
-             sortedItemsWithIndices = [
+            sortedItemsWithIndices = [
                 ...crossers.sort(ySorter),
                 ...left.sort(ySorter),
                 ...right.sort(ySorter)
@@ -104,34 +104,34 @@ const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[]
         let currentLine = {
             y: sortedItemsWithIndices[0].item.transform[5],
             height: sortedItemsWithIndices[0].item.height,
-            items: [{textItem: sortedItemsWithIndices[0].item, index: sortedItemsWithIndices[0].index}]
+            items: [{ textItem: sortedItemsWithIndices[0].item, index: sortedItemsWithIndices[0].index }]
         };
         lines.push(currentLine);
 
         for (let i = 1; i < sortedItemsWithIndices.length; i++) {
             const currentItem = sortedItemsWithIndices[i];
             const lastLine = lines[lines.length - 1];
-            const verticalDiff = lastLine.y - currentItem.item.transform[5]; 
-            
+            const verticalDiff = lastLine.y - currentItem.item.transform[5];
+
             if (Math.abs(verticalDiff) < lastLine.height * 0.5) {
-                lastLine.items.push({textItem: currentItem.item, index: currentItem.index});
+                lastLine.items.push({ textItem: currentItem.item, index: currentItem.index });
                 lastLine.height = Math.max(lastLine.height, currentItem.item.height);
             } else {
                 currentLine = {
                     y: currentItem.item.transform[5],
                     height: currentItem.item.height,
-                    items: [{textItem: currentItem.item, index: currentItem.index}]
+                    items: [{ textItem: currentItem.item, index: currentItem.index }]
                 };
                 lines.push(currentLine);
             }
         }
     }
-    
+
     const paragraphs: { items: { textItem: any, index: number }[] }[] = [];
     if (lines.length > 0) {
         let currentParagraph = { items: [...lines[0].items] };
         paragraphs.push(currentParagraph);
-        
+
         for (let i = 1; i < lines.length; i++) {
             const prevLine = lines[i - 1];
             const currentLine = lines[i];
@@ -146,14 +146,14 @@ const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[]
             }
         }
     }
-    
+
     const fragment = document.createDocumentFragment();
     const processedSpans = new Set<HTMLElement>();
 
     paragraphs.forEach(paragraph => {
         const groupWrapper = document.createElement('div');
         groupWrapper.className = 'structural-item';
-        
+
         paragraph.items.sort((a, b) => {
             const y1 = a.textItem.transform[5];
             const y2 = b.textItem.transform[5];
@@ -179,75 +179,75 @@ const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[]
             fragment.appendChild(span);
         }
     });
-    
+
     container.innerHTML = '';
     container.appendChild(fragment);
 };
 
-const SearchControls: React.FC<Pick<PdfViewerProps, 'searchQuery' | 'setSearchQuery' | 'performSearch' | 'searchResults' | 'activeResultIndex' | 'navigateToResult'>> = 
-  ({ searchQuery, setSearchQuery, performSearch, searchResults, activeResultIndex, navigateToResult }) => {
-    
-    const [showSearch, setShowSearch] = useState(false);
+const SearchControls: React.FC<Pick<PdfViewerProps, 'searchQuery' | 'setSearchQuery' | 'performSearch' | 'searchResults' | 'activeResultIndex' | 'navigateToResult'>> =
+    ({ searchQuery, setSearchQuery, performSearch, searchResults, activeResultIndex, navigateToResult }) => {
 
-    const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter') {
-            performSearch(searchQuery);
-        }
+        const [showSearch, setShowSearch] = useState(false);
+
+        const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === 'Enter') {
+                performSearch(searchQuery);
+            }
+        };
+
+        useEffect(() => {
+            if (searchQuery === '') {
+                performSearch('');
+            }
+        }, [searchQuery, performSearch]);
+
+        return (
+            <>
+                <button
+                    onClick={() => setShowSearch(!showSearch)}
+                    className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                    title="Search Document"
+                >
+                    <SearchIcon className="w-5 h-5" />
+                </button>
+                {showSearch && (
+                    <div className="flex items-center space-x-2 border-l border-gray-300 dark:border-gray-600 ml-2 pl-2">
+                        <input
+                            type="text"
+                            placeholder="Search..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={handleSearchKeyDown}
+                            className="w-32 sm:w-40 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        {searchResults.length > 0 && activeResultIndex !== null ? (
+                            <>
+                                <span className="text-gray-600 dark:text-gray-400 text-sm font-medium">
+                                    {activeResultIndex + 1} / {searchResults.length}
+                                </span>
+                                <button
+                                    onClick={() => navigateToResult('prev')}
+                                    className="p-1 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                                    title="Previous Result"
+                                >
+                                    <LeftArrowIcon className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={() => navigateToResult('next')}
+                                    className="p-1 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                                    title="Next Result"
+                                >
+                                    <RightArrowIcon className="w-4 h-4" />
+                                </button>
+                            </>
+                        ) : searchQuery && (
+                            <span className="text-gray-500 dark:text-gray-400 text-sm">No results</span>
+                        )}
+                    </div>
+                )}
+            </>
+        );
     };
-    
-    useEffect(() => {
-        if (searchQuery === '') {
-            performSearch('');
-        }
-    }, [searchQuery, performSearch]);
-
-    return (
-        <>
-            <button
-                onClick={() => setShowSearch(!showSearch)}
-                className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                title="Search Document"
-            >
-                <SearchIcon className="w-5 h-5" />
-            </button>
-            {showSearch && (
-                <div className="flex items-center space-x-2 border-l border-gray-300 dark:border-gray-600 ml-2 pl-2">
-                    <input
-                        type="text"
-                        placeholder="Search..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onKeyDown={handleSearchKeyDown}
-                        className="w-32 sm:w-40 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    {searchResults.length > 0 && activeResultIndex !== null ? (
-                        <>
-                            <span className="text-gray-600 dark:text-gray-400 text-sm font-medium">
-                                {activeResultIndex + 1} / {searchResults.length}
-                            </span>
-                             <button
-                                onClick={() => navigateToResult('prev')}
-                                className="p-1 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                                title="Previous Result"
-                            >
-                                <LeftArrowIcon className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => navigateToResult('next')}
-                                className="p-1 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                                title="Next Result"
-                            >
-                                <RightArrowIcon className="w-4 h-4" />
-                            </button>
-                        </>
-                    ) : searchQuery && (
-                        <span className="text-gray-500 dark:text-gray-400 text-sm">No results</span>
-                    )}
-                </div>
-            )}
-        </>
-    );
-};
 
 export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
     const { pdfDoc, pdfjsLib, currentPage, numPages, onPageChange, onNewFile, zoomLevel, onZoom, searchResults, activeResultIndex, documentTextIndex, onScrollActivity } = props;
@@ -260,6 +260,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
     const textDivsRef = useRef<HTMLElement[]>([]);
     const [isUiVisible, setIsUiVisible] = useState(true);
     const [pageInput, setPageInput] = useState(currentPage.toString());
+    const isInteractingWithUi = useRef(false);
 
     const [selectionDetails, setSelectionDetails] = useState<{
         visible: boolean;
@@ -268,7 +269,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
         text: string;
     }>({ visible: false, x: 0, y: 0, text: '' });
 
-     useEffect(() => {
+    useEffect(() => {
         if (toastMessage) {
             if (toastTimer.current) clearTimeout(toastTimer.current);
             toastTimer.current = window.setTimeout(() => {
@@ -276,7 +277,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
             }, 2000);
         }
         return () => {
-            if(toastTimer.current) clearTimeout(toastTimer.current);
+            if (toastTimer.current) clearTimeout(toastTimer.current);
         }
     }, [toastMessage]);
 
@@ -288,7 +289,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
         const handleMouseUp = () => {
             const selection = window.getSelection();
             const selectedText = selection ? selection.toString().trim() : '';
-            
+
             if (selectedText && selection && !selection.isCollapsed) {
                 const range = selection.getRangeAt(0);
                 const rect = range.getBoundingClientRect();
@@ -300,14 +301,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 });
             }
         };
-        
+
         const handleMouseDown = (event: MouseEvent) => {
             if (selectionDetails.visible) {
-                 const copyButton = document.getElementById('selection-copy-button');
-                 if (!copyButton || !copyButton.contains(event.target as Node)) {
+                const copyButton = document.getElementById('selection-copy-button');
+                if (!copyButton || !copyButton.contains(event.target as Node)) {
                     window.getSelection()?.removeAllRanges();
                     setSelectionDetails({ visible: false, x: 0, y: 0, text: '' });
-                 }
+                }
             }
         };
 
@@ -320,13 +321,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
             document.removeEventListener('mousedown', handleMouseDown);
         };
     }, [selectionDetails.visible]);
-    
+
     useEffect(() => {
         const scrollEl = scrollContainerRef.current;
         if (!scrollEl) return;
 
         const handleScroll = () => {
-            if (isUiVisible) {
+            if (isUiVisible && !isInteractingWithUi.current) {
                 setIsUiVisible(false);
                 if (onScrollActivity) onScrollActivity();
             }
@@ -355,22 +356,22 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
 
                 const start = (currentPageIndex === result.startPageIndex) ? result.startCharIndex : 0;
                 const end = (currentPageIndex === result.endPageIndex) ? result.endCharIndex : pageTextIndex.combinedText.length;
-                
+
                 const itemIndicesToHighlight = new Set<number>();
                 for (let i = start; i < end; i++) {
                     const mapEntry = pageTextIndex.charToItemMap[i];
-                    if(mapEntry) {
+                    if (mapEntry) {
                         itemIndicesToHighlight.add(mapEntry.itemIndex);
                     }
                 }
-                
+
                 itemIndicesToHighlight.forEach(itemIndex => {
                     const span = textDivsRef.current[itemIndex];
                     if (span) {
                         (span as HTMLElement).classList.add(highlightClass);
                     }
                 });
-                
+
                 if (isActive) {
                     const firstMapEntry = pageTextIndex.charToItemMap[start];
                     if (firstMapEntry) {
@@ -402,7 +403,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                     // Ignore expected RenderingCancelledException
                 }
             }
-            
+
             window.getSelection()?.removeAllRanges();
             setSelectionDetails({ visible: false, x: 0, y: 0, text: '' });
 
@@ -433,19 +434,19 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
 
             const task = page.render(renderContext);
             renderTaskRef.current = task;
-            
+
             try {
                 await task.promise;
 
-                textLayer.innerHTML = ''; 
+                textLayer.innerHTML = '';
                 textLayer.style.width = `${cssViewport.width}px`;
                 textLayer.style.height = `${cssViewport.height}px`;
                 (textLayer as HTMLElement).style.setProperty('--scale-factor', cssViewport.scale.toString());
-                
+
                 const textContent = await page.getTextContent();
                 const textDivs: HTMLElement[] = [];
-                textDivsRef.current = textDivs; 
-                
+                textDivsRef.current = textDivs;
+
                 const textLayerRenderTask = pdfjsLib.renderTextLayer({
                     textContentSource: textContent,
                     container: textLayer,
@@ -455,14 +456,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 if (textLayerRenderTask && textLayerRenderTask.promise) {
                     await textLayerRenderTask.promise;
                 }
-                
+
                 if (textContent.items.length > 0) {
                     (textLayer as HTMLElement).classList.add('structurally-tagged');
                     regroupSpansByVisualLayout(textLayer as HTMLElement, textDivs, textContent.items);
                 } else {
                     (textLayer as HTMLElement).classList.remove('structurally-tagged');
                 }
-                
+
                 applyHighlights();
 
             } catch (error: any) {
@@ -480,7 +481,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
         const handleResize = () => renderPage();
         window.addEventListener('resize', handleResize);
         return () => {
-             if (renderTaskRef.current) {
+            if (renderTaskRef.current) {
                 renderTaskRef.current.cancel();
             }
             window.removeEventListener('resize', handleResize);
@@ -556,14 +557,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 </button>
             )}
 
-            <div 
+            <div
                 ref={scrollContainerRef}
                 className="flex-grow w-full max-w-5xl p-0 sm:p-4 mb-16 flex justify-center overflow-auto custom-scrollbar"
             >
                 <div className="flex-shrink-0">
                     <div className="relative shadow-lg rounded-md my-8">
                         <canvas ref={canvasRef} className="block" />
-                        <div 
+                        <div
                             ref={textLayerRef}
                             className="textLayer"
                         />
@@ -577,15 +578,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 </div>
             )}
 
-            <div 
+            <div
                 className={`absolute bottom-0 left-0 right-0 h-24 z-[40] transition-opacity ${isUiVisible ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'}`}
                 onMouseEnter={() => setIsUiVisible(true)}
             />
 
             {!isUiVisible && (
-                <button 
-                  onClick={() => setIsUiVisible(true)}
-                  className="sm:hidden fixed bottom-10 right-6 p-3 bg-scholar-600 text-white rounded-full shadow-lg z-[70] animate-fade-in"
+                <button
+                    onClick={() => setIsUiVisible(true)}
+                    className="sm:hidden fixed bottom-10 right-6 p-3 bg-scholar-600 text-white rounded-full shadow-lg z-[70] animate-fade-in"
                 >
                     <Menu size={24} />
                 </button>
@@ -598,7 +599,13 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 </div>
             )}
 
-            <div className={`fixed bottom-4 w-auto bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-full shadow-xl px-4 py-2 flex items-center justify-center space-x-2 sm:space-x-4 z-[60] transition-all duration-300 transform ${isUiVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'}`}>
+            <div
+                className={`fixed bottom-4 w-auto bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-full shadow-xl px-4 py-2 flex items-center justify-center space-x-2 sm:space-x-4 z-[60] transition-all duration-300 transform ${isUiVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'}`}
+                onMouseEnter={() => { isInteractingWithUi.current = true; }}
+                onMouseLeave={() => { isInteractingWithUi.current = false; }}
+                onFocus={() => { isInteractingWithUi.current = true; }}
+                onBlur={() => { isInteractingWithUi.current = false; }}
+            >
                 <button
                     onClick={onNewFile}
                     className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
@@ -615,7 +622,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                     >
                         <LeftArrowIcon className="w-5 h-5" />
                     </button>
-                    
+
                     <div className="flex items-center text-gray-800 dark:text-gray-200 font-medium text-sm tabular-nums min-w-[120px] justify-center">
                         <span className="mr-1">Page</span>
                         <input
@@ -639,7 +646,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                     </button>
                 </div>
                 <div className="flex items-center space-x-2">
-                     <button
+                    <button
                         onClick={() => onZoom('out')}
                         disabled={zoomLevel <= 0.25}
                         className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -647,7 +654,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                     >
                         <ZoomOutIcon className="w-5 h-5" />
                     </button>
-                     <span className="text-gray-800 dark:text-gray-200 font-medium text-sm tabular-nums w-12 text-center">
+                    <span className="text-gray-800 dark:text-gray-200 font-medium text-sm tabular-nums w-12 text-center">
                         {Math.round(zoomLevel * 100)}%
                     </span>
                     <button
