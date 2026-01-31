@@ -247,20 +247,82 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     }
   }, [filteredPapers, sortBy, selectedArxivIds]);
 
-  // Generate dropdown options dynamically from data
+  // Generate paper dropdown options based on current filter context
+  // Excludes the paper filter itself to show what papers are available given other active filters
   const uniquePapers = useMemo(() => {
-    return currentTabCandidates.map(p => ({ id: p.id, title: p.title }));
-  }, [currentTabCandidates]);
+    let base = [...currentTabCandidates];
 
+    // Apply text search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      base = base.filter(paper => {
+        const titleMatch = paper.title.toLowerCase().includes(q);
+        const abstractMatch = paper.summary?.toLowerCase().includes(q);
+        const notesMatch = paper.notes?.some(note =>
+          note.quote.toLowerCase().includes(q) ||
+          note.justification?.toLowerCase().includes(q)
+        );
+        return titleMatch || abstractMatch || notesMatch;
+      });
+    }
+
+    // Apply "has notes" filter
+    if (localFilters.hasNotes) {
+      base = base.filter(p => p.notes && p.notes.length > 0);
+    }
+
+    // Apply query filter (but NOT paper filter - that's what we're generating options for)
+    if (localFilters.query !== 'all') {
+      base = base.filter(p =>
+        p.notes?.some(note => note.relatedQuestion === localFilters.query)
+      );
+    }
+
+    // Extract and sort unique papers
+    return base
+      .map(p => ({ id: p.id, title: p.title }))
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [currentTabCandidates, searchQuery, localFilters.hasNotes, localFilters.query]);
+
+  // Generate query dropdown options based on current filter context
+  // Excludes the query filter itself to show what queries are available given other active filters
   const uniqueQueries = useMemo(() => {
+    let base = [...currentTabCandidates];
+
+    // Apply text search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      base = base.filter(paper => {
+        const titleMatch = paper.title.toLowerCase().includes(q);
+        const abstractMatch = paper.summary?.toLowerCase().includes(q);
+        const notesMatch = paper.notes?.some(note =>
+          note.quote.toLowerCase().includes(q) ||
+          note.justification?.toLowerCase().includes(q)
+        );
+        return titleMatch || abstractMatch || notesMatch;
+      });
+    }
+
+    // Apply "has notes" filter
+    if (localFilters.hasNotes) {
+      base = base.filter(p => p.notes && p.notes.length > 0);
+    }
+
+    // Apply paper filter (but NOT query filter - that's what we're generating options for)
+    if (localFilters.paper !== 'all') {
+      base = base.filter(p => p.id === localFilters.paper);
+    }
+
+    // Extract unique queries and sort
     const queries = new Set<string>();
-    currentTabCandidates.forEach(paper => {
+    base.forEach(paper => {
       paper.notes?.forEach(note => {
         if (note.relatedQuestion) queries.add(note.relatedQuestion);
       });
     });
-    return Array.from(queries);
-  }, [currentTabCandidates]);
+
+    return Array.from(queries).sort();
+  }, [currentTabCandidates, searchQuery, localFilters.hasNotes, localFilters.paper]);
 
   const handleResetFilters = useCallback(() => {
     setSearchQuery('');
@@ -270,6 +332,28 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
       hasNotes: false
     });
   }, []);
+
+  // Auto-reset invalid filter selections when dropdown options change
+  // This prevents showing a selected paper/query that's been filtered out
+  useEffect(() => {
+    // If selected paper is no longer in the available options, reset it
+    if (localFilters.paper !== 'all') {
+      const paperExists = uniquePapers.some(p => p.id === localFilters.paper);
+      if (!paperExists) {
+        setLocalFilters(prev => ({ ...prev, paper: 'all' }));
+      }
+    }
+  }, [uniquePapers, localFilters.paper]);
+
+  useEffect(() => {
+    // If selected query is no longer in the available options, reset it
+    if (localFilters.query !== 'all') {
+      const queryExists = uniqueQueries.includes(localFilters.query);
+      if (!queryExists) {
+        setLocalFilters(prev => ({ ...prev, query: 'all' }));
+      }
+    }
+  }, [uniqueQueries, localFilters.query]);
 
   const handleSelectAllPapers = useCallback(() => {
     // Only handle ArXiv candidates selection
@@ -355,41 +439,41 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
               {/* Sort Dropdown */}
               {activeTab === 'deep' && !isBlurred && (currentTabCandidates.length > 0 || totalNotes > 0) && (
-              <div className="relative">
-                <button
-                  onClick={() => setIsSortOpen(!isSortOpen)}
-                  className="flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
-                  title="Sort options"
-                >
-                  <span className="deep-sort-text truncate">
-                    {sortBy === 'most-relevant-notes' && 'Most Relevant Notes'}
-                    {sortBy === 'relevant-papers' && 'Most Relevant Papers'}
-                    {sortBy === 'newest-papers' && 'Newest Papers'}
-                  </span>
-                  <ChevronDown size={20} className={`text-gray-400 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setIsSortOpen(!isSortOpen)}
+                    className="flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                    title="Sort options"
+                  >
+                    <span className="deep-sort-text truncate">
+                      {sortBy === 'most-relevant-notes' && 'Most Relevant Notes'}
+                      {sortBy === 'relevant-papers' && 'Most Relevant Papers'}
+                      {sortBy === 'newest-papers' && 'Newest Papers'}
+                    </span>
+                    <ChevronDown size={20} className={`text-gray-400 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+                  </button>
 
-                {isSortOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
-                    <div className="absolute right-0 top-[110%] w-full sm:w-56 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 overflow-hidden z-50 animate-fade-in flex flex-col">
-                      <button onClick={() => { setSortBy('most-relevant-notes'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                        <Star size={16} className={sortBy === 'most-relevant-notes' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
-                        <span className="text-sm font-medium text-gray-700 dark:text-white">Most Relevant Notes</span>
-                      </button>
-                      <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1"></div>
-                      <button onClick={() => { setSortBy('relevant-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                        <Layers size={16} className={sortBy === 'relevant-papers' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
-                        <span className="text-sm font-medium text-gray-700 dark:text-white">Relevant Papers</span>
-                      </button>
-                      <button onClick={() => { setSortBy('newest-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                        <Calendar size={16} className={sortBy === 'newest-papers' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
-                        <span className="text-sm font-medium text-gray-700 dark:text-white">Newest Papers</span>
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div> )}
+                  {isSortOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
+                      <div className="absolute right-0 top-[110%] w-full sm:w-56 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 overflow-hidden z-50 animate-fade-in flex flex-col">
+                        <button onClick={() => { setSortBy('most-relevant-notes'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                          <Star size={16} className={sortBy === 'most-relevant-notes' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+                          <span className="text-sm font-medium text-gray-700 dark:text-white">Most Relevant Notes</span>
+                        </button>
+                        <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1"></div>
+                        <button onClick={() => { setSortBy('relevant-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                          <Layers size={16} className={sortBy === 'relevant-papers' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+                          <span className="text-sm font-medium text-gray-700 dark:text-white">Relevant Papers</span>
+                        </button>
+                        <button onClick={() => { setSortBy('newest-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                          <Calendar size={16} className={sortBy === 'newest-papers' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+                          <span className="text-sm font-medium text-gray-700 dark:text-white">Newest Papers</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>)}
 
             </div>
           </div>
@@ -417,14 +501,14 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
               {/* RIGHT SIDE - Expand/Collapse and Filter */}
               <div className="flex items-center gap-2">
-                
+
 
                 {/* Filter Button */}
                 <button
                   onClick={() => setShowFilters(!showFilters)}
                   className={`flex items-center gap-2 px-3 py-2.5 text-xs font-bold rounded-lg transition-all ${showFilters || searchQuery || localFilters.paper !== 'all' || localFilters.query !== 'all' || localFilters.hasNotes
-                      ? 'text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30'
-                      : 'text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    ? 'text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700'
                     }`}
                   title="Filter options"
                 >
@@ -485,7 +569,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                     onChange={(e) => setLocalFilters(prev => ({ ...prev, paper: e.target.value }))}
                     className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all appearance-none cursor-pointer"
                   >
-                    <option value="all">All Papers ({currentTabCandidates.length})</option>
+                    <option value="all">All Papers ({uniquePapers.length})</option>
                     {uniquePapers.map(p => (
                       <option key={p.id} value={p.id}>{p.title}</option>
                     ))}
@@ -502,7 +586,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                     onChange={(e) => setLocalFilters(prev => ({ ...prev, query: e.target.value }))}
                     className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all appearance-none cursor-pointer"
                   >
-                    <option value="all">All Queries</option>
+                    <option value="all">All Queries ({uniqueQueries.length})</option>
                     {uniqueQueries.map(q => (
                       <option key={q} value={q}>{q}</option>
                     ))}
@@ -512,22 +596,21 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                 {/* Has Notes Toggle + Reset */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">
-                    Actions
+
                   </label>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setLocalFilters(prev => ({ ...prev, hasNotes: !prev.hasNotes }))}
-                      className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${localFilters.hasNotes
+                      className={`flex-1 px-2 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${localFilters.hasNotes
                         ? 'bg-scholar-600 text-white shadow-md'
                         : 'bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800'
                         }`}
                     >
-                      <FileText size={14} />
                       With Notes
                     </button>
                     <button
                       onClick={handleResetFilters}
-                      className="px-4 py-2.5 bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800 rounded-xl text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+                      className="px-2 py-2.5 bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800 rounded-xl text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
                       title="Reset all filters"
                     >
                       <X size={16} />
