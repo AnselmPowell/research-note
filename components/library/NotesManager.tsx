@@ -86,6 +86,19 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     }
   }, [activeView]);
 
+  // FIXED: Sync UI selection with AgentResearcher context on mount and context changes
+  // This ensures the checkbox state reflects the actual AgentResearcher context
+  useEffect(() => {
+    if (activeTab === 'papers') {
+      // Find papers that are in AgentResearcher context but not in UI selection
+      const papersInContext = savedPapers.filter(paper => isPdfInContext(paper.uri));
+      const papersInContextUris = papersInContext.map(p => p.uri);
+      
+      // Update UI selection to match AgentResearcher context
+      setUiSelectedPaperUris(papersInContextUris);
+    }
+  }, [activeTab, savedPapers, isPdfInContext]);
+
   const [paperSubFilter, setPaperSubFilter] = useState<'all' | 'noted'>('all');
   const [viewMode, setViewMode] = useState<'list' | 'table'>('table');
   const [searchQuery, setSearchQuery] = useState('');
@@ -167,10 +180,19 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
           // FIXED: Use uiSelectedPaperUris instead of selectedPaperUris for bulk delete
           for (const uri of uiSelectedPaperUris) {
               await deletePaper(uri);
+              // FIXED: Also remove from AgentResearcher context when deleting
+              if (isPdfInContext(uri)) {
+                const paper = paperByUri.get(uri);
+                togglePdfContext(uri, paper?.title);
+              }
           }
           setUiSelectedPaperUris([]); // Clear UI selection after delete
       } else if (deleteModal.paperUri) {
         await deletePaper(deleteModal.paperUri);
+        // FIXED: Also remove from AgentResearcher context when deleting single paper
+        if (isPdfInContext(deleteModal.paperUri)) {
+          togglePdfContext(deleteModal.paperUri, deleteModal.paperTitle);
+        }
       } else {
         for (const id of deleteModal.ids) {
           await deleteNote(id);
@@ -197,6 +219,12 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     });
     return map;
   }, [savedNotes]);
+
+  // PERFORMANCE OPTIMIZATION: Memoized Set for papers with notes (O(1) lookup instead of O(n) Set creation)
+  const papersWithNotesSet = useMemo(() => 
+    new Set(savedNotes.map(n => n.paper_uri)), 
+    [savedNotes]
+  );
 
   const filteredNotes = useMemo(() => {
     let base = [...savedNotes];
@@ -238,9 +266,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     let base = [...savedPapers];
     
     if (paperSubFilter === 'noted') {
-
-      const papersWithNotes = new Set(savedNotes.map(n => n.paper_uri));
-      base = base.filter(p => papersWithNotes.has(p.uri));
+      // PERFORMANCE OPTIMIZATION: Use memoized Set instead of creating new Set on each render
+      base = base.filter(p => papersWithNotesSet.has(p.uri));
     }
 
     if (searchQuery) {
@@ -270,7 +297,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
       return sortDirection === 'asc' ? valA - valB : valB - valA;
     });
     return base;
-  }, [savedPapers, savedNotes, searchQuery, sortDirection, sortColumn, paperSubFilter, notesCountByPaperUri]);
+  }, [savedPapers, savedNotes, searchQuery, sortDirection, sortColumn, paperSubFilter, notesCountByPaperUri, papersWithNotesSet]);
 
   const paginatedNotes = filteredNotes.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const paginatedPapers = filteredPapers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -309,32 +336,67 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     }
   }, [selectedNoteIds, paginatedNotes]); // FIXED: Include full selectedNoteIds array, not just length
 
-  const handleSelectAllPapers = useCallback(() => {
-    if (uiSelectedPaperUris.length === paginatedPapers.length && uiSelectedPaperUris.length > 0) {
-      setUiSelectedPaperUris([]);
+  const handleSelectAllPapers = useCallback(async () => {
+    const isCurrentlyAllSelected = uiSelectedPaperUris.length === paginatedPapers.length && uiSelectedPaperUris.length > 0;
+    const willSelectAll = !isCurrentlyAllSelected;
+    
+    if (willSelectAll) {
+      // Selecting all papers
+      const paperUrisToSelect = paginatedPapers.map(paper => paper.uri);
+      setUiSelectedPaperUris(paperUrisToSelect);
+      
+      // FIXED: Add all papers to AgentResearcher context
+      for (const paper of paginatedPapers) {
+        const isInContext = isPdfInContext(paper.uri);
+        if (!isInContext) {
+          togglePdfContext(paper.uri, paper.title);
+          // Load PDF for context (but don't await all - do in background)
+          loadPdfFromUrl(paper.uri, paper.title);
+        }
+      }
     } else {
-      setUiSelectedPaperUris(paginatedPapers.map(paper => paper.uri));
+      // Deselecting all papers
+      const currentlySelected = [...uiSelectedPaperUris];
+      setUiSelectedPaperUris([]);
+      
+      // FIXED: Remove all currently selected papers from AgentResearcher context
+      for (const paperUri of currentlySelected) {
+        const isInContext = isPdfInContext(paperUri);
+        if (isInContext) {
+          const paper = paperByUri.get(paperUri);
+          togglePdfContext(paperUri, paper?.title);
+        }
+      }
     }
-  }, [uiSelectedPaperUris, paginatedPapers]); // FIXED: Include full uiSelectedPaperUris array, not just length
+  }, [uiSelectedPaperUris, paginatedPapers, isPdfInContext, togglePdfContext, loadPdfFromUrl, paperByUri]); // FIXED: Include full uiSelectedPaperUris array, not just length
 
   const handleUiPaperSelect = useCallback(async (paperUri: string) => {
+    // Determine new UI selection state
+    const isCurrentlySelected = uiSelectedPaperUris.includes(paperUri);
+    const willBeSelected = !isCurrentlySelected;
+    
     // Update UI selection state
     setUiSelectedPaperUris(prev => 
-      prev.includes(paperUri) 
+      isCurrentlySelected 
         ? prev.filter(uri => uri !== paperUri)
         : [...prev, paperUri]
     );
     
-   
-    const paper = paperByUri.get(paperUri); 
+    // FIXED: Make AgentResearcher context follow UI selection state
+    const paper = paperByUri.get(paperUri);
     if (paper) {
-      const wasInContext = isPdfInContext(paperUri);
-      togglePdfContext(paperUri, paper.title);
-      if (!wasInContext) {
+      const isInContext = isPdfInContext(paperUri);
+      
+      if (willBeSelected && !isInContext) {
+        // Selecting: Add to context if not already there
+        togglePdfContext(paperUri, paper.title);
         await loadPdfFromUrl(paperUri, paper.title);
+      } else if (!willBeSelected && isInContext) {
+        // Deselecting: Remove from context if currently there
+        togglePdfContext(paperUri, paper.title);
       }
     }
-  }, [paperByUri, isPdfInContext, togglePdfContext, loadPdfFromUrl]);
+  }, [uiSelectedPaperUris, paperByUri, isPdfInContext, togglePdfContext, loadPdfFromUrl]);
 
   const handleNoteSelect = useCallback((id: number) => {
     setSelectedNoteIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -417,30 +479,24 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
             {/* LEFT: TABS WITH SELECT ALL */}
             <div className="flex items-center -mb-px gap-2">
               
-              {/* SELECT ALL BUTTON */}
-              {(activeTab === 'notes' ? paginatedNotes.length > 0 : paginatedPapers.length > 0) && (
-                <button
-                  onClick={activeTab === 'notes' ? handleSelectAllNotes : handleSelectAllPapers}
-                  className="p-2.5 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
-                  title={`Select all ${activeTab} on page`}
-                >
-                  <div className={`w-5 h-5 rounded border-2 transition-colors flex items-center justify-center ${
-                    (activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length && selectedNoteIds.length > 0) ||
-                    (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length && uiSelectedPaperUris.length > 0)
-                      ? 'bg-scholar-600 border-scholar-600' 
-                      : 'border-gray-400 dark:border-gray-500'
-                  }`}>
-                    {((activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length && selectedNoteIds.length > 0) ||
-                      (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length && uiSelectedPaperUris.length > 0)) && (
-                      <Check size={14} className="text-white" />
-                    )}
-                  </div>
-                </button>
-              )}
+        
 
               {/* EXISTING TAB BUTTONS */}
               <button 
-                onClick={() => { setActiveTab('notes'); setCurrentPage(1); setUiSelectedPaperUris([]); }}
+                onClick={() => { 
+                  setActiveTab('notes'); 
+                  setCurrentPage(1); 
+                  // FIXED: Clear AgentResearcher context when switching away from papers tab
+                  const currentlySelected = [...uiSelectedPaperUris];
+                  setUiSelectedPaperUris([]); 
+                  // Remove papers from AgentResearcher context
+                  for (const paperUri of currentlySelected) {
+                    if (isPdfInContext(paperUri)) {
+                      const paper = paperByUri.get(paperUri);
+                      togglePdfContext(paperUri, paper?.title);
+                    }
+                  }
+                }}
                 className={`tab-button px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'notes' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
               >
                 <LayoutList size={18} className="flex-shrink-0" />
@@ -757,7 +813,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                       setActivePdf(p.uri);
                       setColumnVisibility(prev => ({ ...prev, right: true }));
                    }}
-                   getNotesCount={(uri) => savedNotes.filter(n => n.paper_uri === uri).length}
+                   getNotesCount={(uri) => notesCountByPaperUri.get(uri) || 0}
                    isDownloading={(uri) => downloadingUris.has(uri)}
                    isFailed={(uri) => failedUris.has(uri)}
                 />
