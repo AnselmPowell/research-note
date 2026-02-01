@@ -49,146 +49,590 @@ interface PdfViewerProps {
 }
 
 const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[], textItems: any[]) => {
-    if (!textItems || textItems.length === 0 || !spans || spans.length === 0) {
+    if (!textItems?.length || !spans?.length) {
         container.innerHTML = '';
         return;
+    }
+
+    // Type definitions for the COLUMN-FIRST approach
+    type ItemWithIndex = {
+        item: any;
+        originalIndex: number;
     };
 
-    const itemsWithIndices = textItems.map((item, index) => ({ item, index }));
-    const xList = itemsWithIndices.map(i => i.item.transform[4]);
+    type ColumnBounds = {
+        leftEnd: number;      // Right edge of left column
+        rightStart: number;   // Left edge of right column  
+        gapStart: number;     // Start of column gap
+        gapEnd: number;       // End of column gap
+        isTwoColumn: boolean;
+    };
 
-    let sortedItemsWithIndices = itemsWithIndices;
+    type ColumnLine = {
+        y: number;
+        tolerance: number;
+        items: ItemWithIndex[];
+        columnType: 'header' | 'left' | 'right' | 'single';
+        leftMost: number;
+        rightMost: number;
+    };
 
-    if (xList.length > 0) {
-        const minX = Math.min(...xList);
-        const maxX = Math.max(...itemsWithIndices.map(i => i.item.transform[4] + i.item.width));
-        const midX = (minX + maxX) / 2;
+    // PHASE 1: ULTRA-PRECISE COLUMN BOUNDARY DETECTION
+    const detectPreciseColumnBoundary = (textItems: any[]): ColumnBounds => {
+        // Get page boundaries
+        const allXStarts = textItems.map(item => item.transform[4]);
+        const allXEnds = textItems.map(item => item.transform[4] + (item.width || 0));
+        const pageLeft = Math.min(...allXStarts);
+        const pageRight = Math.max(...allXEnds);
+        const pageWidth = pageRight - pageLeft;
 
-        const crossers: typeof itemsWithIndices = [];
-        const left: typeof itemsWithIndices = [];
-        const right: typeof itemsWithIndices = [];
+        console.log('🔍 PAGE ANALYSIS:', {
+            pageLeft: pageLeft.toFixed(1),
+            pageRight: pageRight.toFixed(1),
+            pageWidth: pageWidth.toFixed(1),
+            totalTextItems: textItems.length
+        });
 
-        itemsWithIndices.forEach(obj => {
-            const x = obj.item.transform[4];
-            const w = obj.item.width;
-            if (x < midX && x + w > midX) {
-                crossers.push(obj);
-            } else if (x + w <= midX) {
-                left.push(obj);
-            } else {
-                right.push(obj);
+        // Ultra-high-resolution density analysis (pixel-perfect)
+        const buckets = 1000;
+        const bucketWidth = pageWidth / buckets;
+        const density = new Array(buckets).fill(0);
+
+        // Fill density histogram - mark ALL pixels occupied by text
+        textItems.forEach(item => {
+            const itemStart = item.transform[4];
+            const itemEnd = itemStart + (item.width || 0);
+
+            const startBucket = Math.floor((itemStart - pageLeft) / bucketWidth);
+            const endBucket = Math.floor((itemEnd - pageLeft) / bucketWidth);
+
+            for (let b = Math.max(0, startBucket); b <= Math.min(buckets - 1, endBucket); b++) {
+                density[b]++;
             }
         });
 
-        const isTwoColumn = itemsWithIndices.length > 0 && (crossers.length / itemsWithIndices.length) < 0.2;
+        // Find largest continuous gap in center region (20-80% of page)
+        const searchStart = Math.floor(buckets * 0.2);
+        const searchEnd = Math.floor(buckets * 0.8);
 
-        const ySorter = (a: any, b: any) => {
-            const y1 = a.item.transform[5]; const y2 = b.item.transform[5];
-            if (Math.abs(y1 - y2) > 4) return y2 - y1;
-            return a.item.transform[4] - b.item.transform[4];
-        };
+        let bestGapStart = -1;
+        let bestGapWidth = 0;
+        let currentGapStart = -1;
 
-        if (isTwoColumn) {
-            sortedItemsWithIndices = [
-                ...crossers.sort(ySorter),
-                ...left.sort(ySorter),
-                ...right.sort(ySorter)
-            ];
-        } else {
-            sortedItemsWithIndices = itemsWithIndices.sort(ySorter);
-        }
-    }
-
-    const lines: { y: number; height: number; items: { textItem: any, index: number }[] }[] = [];
-    if (sortedItemsWithIndices.length > 0) {
-        let currentLine = {
-            y: sortedItemsWithIndices[0].item.transform[5],
-            height: sortedItemsWithIndices[0].item.height,
-            items: [{ textItem: sortedItemsWithIndices[0].item, index: sortedItemsWithIndices[0].index }]
-        };
-        lines.push(currentLine);
-
-        for (let i = 1; i < sortedItemsWithIndices.length; i++) {
-            const currentItem = sortedItemsWithIndices[i];
-            const lastLine = lines[lines.length - 1];
-            const verticalDiff = lastLine.y - currentItem.item.transform[5];
-
-            if (Math.abs(verticalDiff) < lastLine.height * 0.5) {
-                lastLine.items.push({ textItem: currentItem.item, index: currentItem.index });
-                lastLine.height = Math.max(lastLine.height, currentItem.item.height);
-            } else {
-                currentLine = {
-                    y: currentItem.item.transform[5],
-                    height: currentItem.item.height,
-                    items: [{ textItem: currentItem.item, index: currentItem.index }]
-                };
-                lines.push(currentLine);
-            }
-        }
-    }
-
-    const paragraphs: { items: { textItem: any, index: number }[] }[] = [];
-    if (lines.length > 0) {
-        let currentParagraph = { items: [...lines[0].items] };
-        paragraphs.push(currentParagraph);
-
-        for (let i = 1; i < lines.length; i++) {
-            const prevLine = lines[i - 1];
-            const currentLine = lines[i];
-            const verticalGap = prevLine.y - currentLine.y;
-            const isParagraphBreak = verticalGap > prevLine.height * 1.5 || verticalGap < -10;
-
-            if (isParagraphBreak) {
-                currentParagraph = { items: [...currentLine.items] };
-                paragraphs.push(currentParagraph);
-            } else {
-                // Mark first item of new line to need space prepended
-                const firstItemOfLine = { ...currentLine.items[0], needsSpacePrefix: true };
-                const restOfLineItems = currentLine.items.slice(1);
-                currentParagraph.items.push(firstItemOfLine, ...restOfLineItems);
-            }
-        }
-    }
-
-    const fragment = document.createDocumentFragment();
-    const processedSpans = new Set<HTMLElement>();
-
-    paragraphs.forEach(paragraph => {
-        const groupWrapper = document.createElement('div');
-        groupWrapper.className = 'structural-item';
-
-        paragraph.items.sort((a, b) => {
-            const y1 = a.textItem.transform[5];
-            const y2 = b.textItem.transform[5];
-            if (Math.abs(y1 - y2) > 2) return y2 - y1;
-            return a.textItem.transform[4] - b.textItem.transform[4];
-        });
-
-        paragraph.items.forEach(({ index, needsSpacePrefix }) => {
-            const span = spans[index];
-            if (span && !processedSpans.has(span)) {
-                // Add space prefix to span content if needed
-                if (needsSpacePrefix && span.textContent) {
-                    span.textContent = ' ' + span.textContent;
+        for (let i = searchStart; i < searchEnd; i++) {
+            if (density[i] === 0) {
+                // Empty bucket - continue or start gap
+                if (currentGapStart === -1) {
+                    currentGapStart = i;
                 }
-                groupWrapper.appendChild(span);
-                processedSpans.add(span);
+            } else {
+                // Non-empty bucket - end current gap if exists
+                if (currentGapStart !== -1) {
+                    const gapWidth = i - currentGapStart;
+                    if (gapWidth > bestGapWidth) {
+                        bestGapWidth = gapWidth;
+                        bestGapStart = currentGapStart;
+                    }
+                    currentGapStart = -1;
+                }
+            }
+        }
+
+        // Handle gap extending to search boundary
+        if (currentGapStart !== -1) {
+            const gapWidth = searchEnd - currentGapStart;
+            if (gapWidth > bestGapWidth) {
+                bestGapWidth = gapWidth;
+                bestGapStart = currentGapStart;
+            }
+        }
+
+        // Convert bucket coordinates back to PDF coordinates
+        const gapStartX = bestGapStart >= 0 ? pageLeft + (bestGapStart * bucketWidth) : pageLeft + pageWidth * 0.5;
+        const gapEndX = bestGapStart >= 0 ? pageLeft + ((bestGapStart + bestGapWidth) * bucketWidth) : pageLeft + pageWidth * 0.5;
+
+        // Define column boundaries
+        const leftEnd = gapStartX;
+        const rightStart = gapEndX;
+
+        // Validate if this is actually a two-column layout
+        const isTwoColumn = validateTwoColumnLayout(leftEnd, rightStart, textItems);
+
+        const result = {
+            leftEnd,
+            rightStart,
+            gapStart: gapStartX,
+            gapEnd: gapEndX,
+            isTwoColumn
+        };
+
+        console.log('📊 COLUMN DETECTION RESULT:', {
+            layout: isTwoColumn ? '📖 TWO COLUMN' : '📄 SINGLE COLUMN',
+            leftColumnEnd: leftEnd.toFixed(1),
+            gapStart: gapStartX.toFixed(1),
+            gapEnd: gapEndX.toFixed(1),
+            rightColumnStart: rightStart.toFixed(1),
+            gapWidth: (gapEndX - gapStartX).toFixed(1),
+            bucketAnalysis: {
+                bestGapStart,
+                bestGapWidth,
+                bucketWidth: bucketWidth.toFixed(3)
             }
         });
 
-        if (groupWrapper.hasChildNodes()) {
-            fragment.appendChild(groupWrapper);
-        }
-    });
+        return result;
+    };
 
-    spans.forEach(span => {
-        if (!processedSpans.has(span)) {
-            fragment.appendChild(span);
-        }
-    });
+    // PHASE 1.1: Validate Two-Column Hypothesis  
+    const validateTwoColumnLayout = (leftBoundary: number, rightBoundary: number, textItems: any[]): boolean => {
+        let leftCount = 0, rightCount = 0, spanningCount = 0;
 
-    container.innerHTML = '';
-    container.appendChild(fragment);
+        // Classify items by position relative to boundaries
+        textItems.forEach(item => {
+            const start = item.transform[4];
+            const end = start + (item.width || 0);
+
+            if (end <= leftBoundary + 5) { // Small tolerance
+                leftCount++;
+            } else if (start >= rightBoundary - 5) {
+                rightCount++;
+            } else {
+                spanningCount++;
+            }
+        });
+
+        const totalItems = textItems.length;
+        const leftPercent = leftCount / totalItems;
+        const rightPercent = rightCount / totalItems;
+        const spanPercent = spanningCount / totalItems;
+
+        // Valid two-column if:
+        // 1. Both columns have substantial content (>15% each)
+        // 2. Spanning items are minimal (<20% - headers/titles only)
+        // 3. Gap is significant (at least 30 units)
+        const hasSubstantialColumns = leftPercent > 0.15 && rightPercent > 0.15;
+        const hasMinimalSpanning = spanPercent < 0.2;
+        const hasSignificantGap = (rightBoundary - leftBoundary) > 30;
+
+        return hasSubstantialColumns && hasMinimalSpanning && hasSignificantGap;
+    };
+
+    // PHASE 2: COLUMN-AWARE ITEM CLASSIFICATION
+    const classifyItemsByColumn = (textItems: any[], columnBounds: ColumnBounds): {
+        headers: ItemWithIndex[],
+        leftItems: ItemWithIndex[],
+        rightItems: ItemWithIndex[]
+    } => {
+        const headers: ItemWithIndex[] = [];
+        const leftItems: ItemWithIndex[] = [];
+        const rightItems: ItemWithIndex[] = [];
+
+        // Calculate median height for header detection
+        const heights = textItems.map(item => item.height || 10);
+        const sortedHeights = heights.slice().sort((a, b) => a - b);
+        const medianHeight = sortedHeights[Math.floor(sortedHeights.length / 2)];
+
+        const TOLERANCE = 8; // Boundary tolerance
+
+        console.log('🔍 CLASSIFICATION BOUNDARIES:', {
+            leftColumnEnd: columnBounds.leftEnd.toFixed(1),
+            rightColumnStart: columnBounds.rightStart.toFixed(1),
+            tolerance: TOLERANCE,
+            medianHeight: medianHeight.toFixed(1)
+        });
+
+        textItems.forEach((item, index) => {
+            const start = item.transform[4];
+            const end = start + (item.width || 0);
+            const height = item.height || 10;
+
+            // HEADER DETECTION: Multiple criteria
+            const spansColumns = start < columnBounds.leftEnd - 10 && end > columnBounds.rightStart + 10;
+            const isLargeFont = height > medianHeight * 1.4;
+            const isBold = item.fontName?.toLowerCase().includes('bold');
+            const isTitle = item.fontName?.toLowerCase().includes('title') ||
+                item.fontName?.toLowerCase().includes('header');
+            const isInGap = start >= columnBounds.gapStart - 10 && end <= columnBounds.gapEnd + 10;
+
+            if (spansColumns || isLargeFont || isBold || isTitle || (!columnBounds.isTwoColumn && isInGap)) {
+                headers.push({ item, originalIndex: index });
+            }
+            // LEFT COLUMN: Completely within left boundary - STRICT END DETECTION
+            else if (end <= columnBounds.leftEnd + TOLERANCE) {
+                leftItems.push({ item, originalIndex: index });
+            }
+            // RIGHT COLUMN: Starts after right boundary  
+            else if (start >= columnBounds.rightStart - TOLERANCE) {
+                rightItems.push({ item, originalIndex: index });
+            }
+            // EDGE CASE: Assign to nearest boundary
+            else {
+                const distToLeft = Math.abs(end - columnBounds.leftEnd);
+                const distToRight = Math.abs(start - columnBounds.rightStart);
+                if (distToLeft < distToRight) {
+                    leftItems.push({ item, originalIndex: index });
+                } else {
+                    rightItems.push({ item, originalIndex: index });
+                }
+            }
+        });
+
+        // DETAILED LOGGING: Column classification results
+        console.log('📋 COLUMN CLASSIFICATION RESULTS:', {
+            headers: headers.length,
+            leftColumn: leftItems.length,
+            rightColumn: rightItems.length,
+            total: textItems.length
+        });
+
+        // Helper function to log item details
+        const logItemDetails = (item: any, label: string, column: string) => {
+            const start = item.transform[4];
+            const end = start + (item.width || 0);
+            return {
+                text: `"${item.str}"`,
+                column,
+                position: label,
+                x_start: start.toFixed(1),
+                x_end: end.toFixed(1),
+                width: (item.width || 0).toFixed(1),
+                y: item.transform[5].toFixed(1)
+            };
+        };
+
+        // LOG FIRST AND LAST ITEMS OF EACH COLUMN
+        if (headers.length > 0) {
+            const sortedHeaders = headers.slice().sort((a, b) => b.item.transform[5] - a.item.transform[5]);
+            console.log('📄 HEADERS:', {
+                first: logItemDetails(sortedHeaders[0].item, 'FIRST', 'HEADER'),
+                last: logItemDetails(sortedHeaders[sortedHeaders.length - 1].item, 'LAST', 'HEADER')
+            });
+        }
+
+        if (leftItems.length > 0) {
+            // Sort left items by Y-coordinate (top to bottom)
+            const sortedLeft = leftItems.slice().sort((a, b) => b.item.transform[5] - a.item.transform[5]);
+
+            console.log('👈 LEFT COLUMN ITEMS:', {
+                count: leftItems.length,
+                first: logItemDetails(sortedLeft[0].item, 'FIRST', 'LEFT'),
+                last: logItemDetails(sortedLeft[sortedLeft.length - 1].item, 'LAST', 'LEFT')
+            });
+
+            // Show first few left items for debugging
+            console.log('👈 FIRST 5 LEFT ITEMS:',
+                sortedLeft.slice(0, 5).map((item, i) =>
+                    logItemDetails(item.item, `#${i + 1}`, 'LEFT')
+                )
+            );
+        }
+
+        if (rightItems.length > 0) {
+            // Sort right items by Y-coordinate (top to bottom)  
+            const sortedRight = rightItems.slice().sort((a, b) => b.item.transform[5] - a.item.transform[5]);
+
+            console.log('👉 RIGHT COLUMN ITEMS:', {
+                count: rightItems.length,
+                first: logItemDetails(sortedRight[0].item, 'FIRST', 'RIGHT'),
+                last: logItemDetails(sortedRight[sortedRight.length - 1].item, 'LAST', 'RIGHT')
+            });
+
+            // Show first few right items for debugging
+            console.log('👉 FIRST 5 RIGHT ITEMS:',
+                sortedRight.slice(0, 5).map((item, i) =>
+                    logItemDetails(item.item, `#${i + 1}`, 'RIGHT')
+                )
+            );
+        }
+
+        return { headers, leftItems, rightItems };
+    };
+
+    // PHASE 3: COLUMN-SPECIFIC LINE BUILDING
+    const buildLinesWithinColumn = (items: ItemWithIndex[], columnType: 'header' | 'left' | 'right' | 'single'): ColumnLine[] => {
+        if (items.length === 0) return [];
+
+        console.log(`🔨 BUILDING LINES FOR ${columnType.toUpperCase()} COLUMN:`, {
+            inputItems: items.length,
+            firstItem: items[0] ? {
+                text: `"${items[0].item.str}"`,
+                y: items[0].item.transform[5].toFixed(1),
+                x: items[0].item.transform[4].toFixed(1)
+            } : 'none'
+        });
+
+        // Sort by Y-coordinate first (top to bottom)
+        const sortedByY = items.sort((a, b) => b.item.transform[5] - a.item.transform[5]);
+
+        const lines: ColumnLine[] = [];
+
+        sortedByY.forEach(({ item, originalIndex }) => {
+            const y = item.transform[5];
+            const height = item.height || 10;
+
+            // Find existing line with compatible Y-coordinate
+            let targetLine = null;
+            let bestDistance = Infinity;
+
+            for (const line of lines) {
+                const distance = Math.abs(line.y - y);
+                const tolerance = Math.max(height * 0.6, line.tolerance, 4);
+
+                if (distance <= tolerance && distance < bestDistance) {
+                    targetLine = line;
+                    bestDistance = distance;
+                }
+            }
+
+            if (targetLine) {
+                // Add to existing line
+                targetLine.items.push({ item, originalIndex });
+                targetLine.tolerance = Math.max(targetLine.tolerance, height * 0.6);
+
+                // Update line boundaries for this column
+                const itemStart = item.transform[4];
+                const itemEnd = itemStart + (item.width || 0);
+                targetLine.leftMost = Math.min(targetLine.leftMost, itemStart);
+                targetLine.rightMost = Math.max(targetLine.rightMost, itemEnd);
+
+                console.log(`📎 ADDED TO EXISTING ${columnType.toUpperCase()} LINE:`, {
+                    text: `"${item.str}"`,
+                    y: y.toFixed(1),
+                    lineY: targetLine.y.toFixed(1),
+                    distance: distance.toFixed(1),
+                    tolerance: targetLine.tolerance.toFixed(1),
+                    totalItemsInLine: targetLine.items.length
+                });
+            } else {
+                // Create new line
+                const itemStart = item.transform[4];
+                const itemEnd = itemStart + (item.width || 0);
+
+                const newLine = {
+                    y: y,
+                    tolerance: Math.max(height * 0.6, 4),
+                    items: [{ item, originalIndex }],
+                    columnType: columnType,
+                    leftMost: itemStart,
+                    rightMost: itemEnd
+                };
+
+                lines.push(newLine);
+
+                console.log(`🆕 CREATED NEW ${columnType.toUpperCase()} LINE:`, {
+                    text: `"${item.str}"`,
+                    y: y.toFixed(1),
+                    tolerance: newLine.tolerance.toFixed(1),
+                    lineIndex: lines.length - 1
+                });
+            }
+        });
+
+        // Sort items within each line left-to-right
+        lines.forEach((line, lineIndex) => {
+            line.items.sort((a, b) => a.item.transform[4] - b.item.transform[4]);
+
+            console.log(`📋 ${columnType.toUpperCase()} LINE #${lineIndex}:`, {
+                y: line.y.toFixed(1),
+                itemCount: line.items.length,
+                items: line.items.map(({ item }) => `"${item.str}"`).join(' + '),
+                xRange: `${line.leftMost.toFixed(1)} → ${line.rightMost.toFixed(1)}`
+            });
+        });
+
+        console.log(`✅ ${columnType.toUpperCase()} LINE BUILDING COMPLETE:`, {
+            totalLines: lines.length,
+            totalItems: items.length
+        });
+
+        return lines;
+    };
+
+    // PHASE 4: READING ORDER ASSEMBLY
+    const assembleReadingOrder = (headerLines: ColumnLine[], leftLines: ColumnLine[], rightLines: ColumnLine[]): ColumnLine[] => {
+        // Sort all sections by Y-coordinate (top to bottom)
+        const allHeaders = headerLines.sort((a, b) => b.y - a.y);
+        const allLefts = leftLines.sort((a, b) => b.y - a.y);
+        const allRights = rightLines.sort((a, b) => b.y - a.y);
+
+        // For single column or simple layouts, interleave by Y position
+        if (allHeaders.length === 0 && (allLefts.length === 0 || allRights.length === 0)) {
+            // Single column layout
+            return [...allHeaders, ...allLefts, ...allRights];
+        }
+
+        // Two-column layout: Headers first, then left column, then right column
+        // This ensures proper column separation for hover effects
+        const orderedSections: ColumnLine[] = [];
+
+        // Simple approach: Add all headers first, then left, then right
+        // This ensures proper column separation for hover effects
+        orderedSections.push(...allHeaders);
+        orderedSections.push(...allLefts);
+        orderedSections.push(...allRights);
+
+        return orderedSections;
+    };
+
+    // PHASE 5: PRECISE DOM CONSTRUCTION
+    const generatePreciseDOM = (orderedLines: ColumnLine[], spans: HTMLElement[]): DocumentFragment => {
+        const fragment = document.createDocumentFragment();
+        const processedSpans = new Set<HTMLElement>();
+
+        console.log('🏗️ GENERATING DOM STRUCTURE:', {
+            totalLines: orderedLines.length,
+            lineTypes: orderedLines.map(line => `${line.columnType}(${line.items.length})`).join(', ')
+        });
+
+        orderedLines.forEach((line, index) => {
+            const groupWrapper = document.createElement('div');
+            groupWrapper.className = 'structural-item';
+
+            // Add column-specific classes for debugging/styling
+            if (line.columnType === 'header') {
+                groupWrapper.classList.add('header-line');
+            } else if (line.columnType === 'left') {
+                groupWrapper.classList.add('left-column-line');
+            } else if (line.columnType === 'right') {
+                groupWrapper.classList.add('right-column-line');
+            } else if (line.columnType === 'single') {
+                groupWrapper.classList.add('single-column-line');
+            }
+
+            console.log(`🔧 DOM GROUP #${index} (${line.columnType.toUpperCase()}):`, {
+                y: line.y.toFixed(1),
+                itemCount: line.items.length,
+                texts: line.items.map(({ item }) => `"${item.str}"`),
+                xRange: `${line.leftMost.toFixed(1)} → ${line.rightMost.toFixed(1)}`,
+                className: groupWrapper.className
+            });
+
+            // Items are already sorted left-to-right within line
+            // BUT we need to add spaces between different Y-coordinates (visual lines)
+            let previousY = null;
+            line.items.forEach(({ originalIndex, item }) => {
+                const span = spans[originalIndex];
+                if (span && !processedSpans.has(span)) {
+                    const currentY = item.transform[5];
+
+                    // Add a space if this span is on a different Y-coordinate (different visual line)
+                    if (previousY !== null && Math.abs(currentY - previousY) > 2) {
+                        const spaceNode = document.createTextNode(' ');
+                        groupWrapper.appendChild(spaceNode);
+                        console.log(`📝 Added space between lines: Y ${previousY.toFixed(1)} → ${currentY.toFixed(1)}`);
+                    }
+
+                    span.style.position = span.style.position || 'absolute';
+                    groupWrapper.appendChild(span);
+                    processedSpans.add(span);
+                    previousY = currentY;
+                } else if (!span) {
+                    console.warn(`⚠️ Missing span for originalIndex ${originalIndex}`);
+                } else {
+                    console.warn(`⚠️ Span already processed for originalIndex ${originalIndex}`);
+                }
+            });
+
+            if (groupWrapper.hasChildNodes()) {
+                fragment.appendChild(groupWrapper);
+                console.log(`✅ Added DOM group #${index} with ${groupWrapper.children.length} spans`);
+            } else {
+                console.warn(`⚠️ Empty DOM group #${index} - no children added`);
+            }
+        });
+
+        // Handle any unprocessed spans
+        spans.forEach((span, index) => {
+            if (!processedSpans.has(span)) {
+                console.warn(`⚠️ Unprocessed span #${index}: "${span.textContent}"`);
+                fragment.appendChild(span);
+            }
+        });
+
+        console.log('✅ DOM GENERATION COMPLETE:', {
+            totalGroups: fragment.children.length,
+            processedSpans: processedSpans.size,
+            totalSpans: spans.length
+        });
+
+        return fragment;
+    };
+
+    // MAIN EXECUTION: COLUMN-FIRST PIPELINE
+    try {
+        console.log('🚀 STARTING COLUMN-FIRST PDF TEXT ANALYSIS...');
+
+        // Phase 1: Detect precise column boundaries FIRST
+        const columnBounds = detectPreciseColumnBoundary(textItems);
+
+        // Phase 2: Classify items into columns using hard boundaries
+        const { headers, leftItems, rightItems } = classifyItemsByColumn(textItems, columnBounds);
+
+        // Phase 3: Build lines within each column separately  
+        const headerLines = buildLinesWithinColumn(headers, 'header');
+        const leftLines = buildLinesWithinColumn(leftItems, 'left');
+        const rightLines = buildLinesWithinColumn(rightItems, 'right');
+
+        console.log('📊 LINE BUILDING RESULTS:', {
+            headerLines: headerLines.length,
+            leftLines: leftLines.length,
+            rightLines: rightLines.length,
+            totalStructuralItems: headerLines.length + leftLines.length + rightLines.length
+        });
+
+        // Handle single column case
+        if (!columnBounds.isTwoColumn) {
+            const allItems = [...headers, ...leftItems, ...rightItems];
+            const singleLines = buildLinesWithinColumn(allItems, 'single');
+            const fragment = generatePreciseDOM(singleLines, spans);
+
+            console.log('✅ SINGLE COLUMN LAYOUT APPLIED:', {
+                totalLines: singleLines.length,
+                totalItems: allItems.length
+            });
+
+            container.innerHTML = '';
+            container.appendChild(fragment);
+            container.classList.add('structurally-tagged', 'single-column-layout');
+            return;
+        }
+
+        // Phase 4: Assemble proper reading order
+        const orderedLines = assembleReadingOrder(headerLines, leftLines, rightLines);
+
+        // Phase 5: Generate precise DOM with column separation
+        const fragment = generatePreciseDOM(orderedLines, spans);
+
+        // Apply to container
+        container.innerHTML = '';
+        container.appendChild(fragment);
+
+        // CSS classes for styling and debugging
+        container.classList.add('structurally-tagged', 'two-column-layout');
+
+        console.log('✅ TWO COLUMN LAYOUT APPLIED:', {
+            readingOrder: 'Headers → Left Column → Right Column',
+            totalStructuralItems: orderedLines.length,
+            finalDomStructure: {
+                headerGroups: headerLines.length,
+                leftGroups: leftLines.length,
+                rightGroups: rightLines.length
+            }
+        });
+
+        console.log('🎯 PDF TEXT ANALYSIS COMPLETE!');
+
+
+    } catch (error) {
+        console.error('Error in COLUMN-FIRST regroupSpansByVisualLayout:', error);
+        // Fallback: just append spans as-is
+        container.innerHTML = '';
+        spans.forEach(span => {
+            span.style.position = span.style.position || 'absolute';
+            container.appendChild(span);
+        });
+        container.classList.add('structurally-tagged', 'fallback-layout');
+    }
 };
 
 const SearchControls: React.FC<Pick<PdfViewerProps, 'searchQuery' | 'setSearchQuery' | 'performSearch' | 'searchResults' | 'activeResultIndex' | 'navigateToResult'>> =
