@@ -151,13 +151,6 @@ const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[]
     try {
         const columnBounds = detectColumnLayout(textItems);
 
-        console.log('📊 PDF LAYOUT DETECTION:', {
-            layout: columnBounds.isTwoColumn ? '📖 TWO COLUMN' : '📄 SINGLE COLUMN',
-            leftColumnEnd: columnBounds.leftEnd.toFixed(1),
-            rightColumnStart: columnBounds.rightStart.toFixed(1),
-            gapWidth: columnBounds.gapWidth.toFixed(1)
-        });
-
         // CRITICAL: Preserve the original PDF.js span order!
         // PDF.js already provides text in the correct reading order for selection
         container.innerHTML = '';
@@ -205,12 +198,6 @@ const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[]
         container.classList.add('structurally-tagged',
             columnBounds.isTwoColumn ? 'two-column-layout' : 'single-column-layout'
         );
-
-        console.log('✅ TEXT LAYER COMPLETE:', {
-            approach: 'PRESERVED ORIGINAL PDF.js ORDER',
-            totalSpans: spans.length,
-            reason: 'PDF.js already provides correct reading order for text selection'
-        });
 
     } catch (error) {
         console.error('Error in regroupSpansByVisualLayout:', error);
@@ -398,6 +385,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 const start = (currentPageIndex === result.startPageIndex) ? result.startCharIndex : 0;
                 const end = (currentPageIndex === result.endPageIndex) ? result.endCharIndex : pageTextIndex.combinedText.length;
 
+                // Debug: Show what text is being matched
+                const matchedText = pageTextIndex.combinedText.substring(start, end);
+                console.log('🔍 SEARCH HIGHLIGHT:', {
+                    matchedText: `"${matchedText}"`,
+                    charRange: `${start} → ${end}`,
+                    isActive
+                });
+
                 const itemIndicesToHighlight = new Set<number>();
                 for (let i = start; i < end; i++) {
                     const mapEntry = pageTextIndex.charToItemMap[i];
@@ -406,10 +401,21 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                     }
                 }
 
+                console.log('🎯 SPANS TO HIGHLIGHT:', {
+                    itemIndices: Array.from(itemIndicesToHighlight),
+                    textDivsLength: textDivsRef.current.length,
+                    spanTexts: Array.from(itemIndicesToHighlight).map(idx => {
+                        const span = textDivsRef.current[idx];
+                        return span ? `"${span.textContent}"` : `NOT FOUND (idx ${idx} > length ${textDivsRef.current.length})`;
+                    })
+                });
+
                 itemIndicesToHighlight.forEach(itemIndex => {
                     const span = textDivsRef.current[itemIndex];
                     if (span) {
                         (span as HTMLElement).classList.add(highlightClass);
+                    } else {
+                        console.warn(`⚠️ Span not found for itemIndex ${itemIndex} (textDivs length: ${textDivsRef.current.length})`);
                     }
                 });
 
