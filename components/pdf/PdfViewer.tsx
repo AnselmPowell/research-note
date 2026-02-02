@@ -162,8 +162,28 @@ const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[]
         // PDF.js already provides text in the correct reading order for selection
         container.innerHTML = '';
 
+        // Track Y-coordinate to detect line changes and add spacing
+        let previousY: number | null = null;
+        let previousSpan: HTMLElement | null = null;
+        const LINE_CHANGE_THRESHOLD = 3; // Y difference that indicates a new line
+
         spans.forEach((span, index) => {
             span.style.position = span.style.position || 'absolute';
+
+            // Get current Y-coordinate from textItems
+            const currentY = textItems[index]?.transform[5];
+
+            // If Y-coordinate changed significantly, append a space to the PREVIOUS span
+            // This prevents words from being concatenated when selecting multiple lines
+            if (previousY !== null && currentY !== undefined && previousSpan) {
+                const yDiff = Math.abs(currentY - previousY);
+                if (yDiff > LINE_CHANGE_THRESHOLD) {
+                    // New line detected - append space to previous span's text
+                    previousSpan.textContent = previousSpan.textContent + ' ';
+                }
+            }
+            previousY = currentY;
+            previousSpan = span;
 
             // Add column marker class for debugging/styling (optional)
             if (columnBounds.isTwoColumn && textItems[index]) {
