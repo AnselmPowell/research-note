@@ -57,7 +57,7 @@ export const PdfWorkspace: React.FC = () => {
 
     // Add Menu state
     const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
-    const [addMenuPos, setAddMenuPos] = useState<'top' | 'bottom'>('top');
+    const [addMenuCoords, setAddMenuCoords] = useState<{ left: number; top: number } | null>(null);
     const [showUrlInput, setShowUrlInput] = useState(false);
     const [urlInputValue, setUrlInputValue] = useState('');
     const addMenuRef = useRef<HTMLDivElement>(null);
@@ -164,9 +164,17 @@ export const PdfWorkspace: React.FC = () => {
         }
     }, [isUiVisible]);
 
-    const openAddMenu = (pos: 'top' | 'bottom') => {
-        setAddMenuPos(pos);
-        setIsAddMenuOpen(!isAddMenuOpen);
+    const openAddMenuAt = (e: React.MouseEvent) => {
+        const target = e.currentTarget as HTMLElement | null;
+        if (target) {
+            const rect = target.getBoundingClientRect();
+            // Position menu centered under the button, slightly below
+            setAddMenuCoords({ left: rect.left + rect.width / 2, top: rect.bottom + 8 });
+        } else {
+            setAddMenuCoords(null);
+        }
+        setShowUrlInput(false);
+        setIsAddMenuOpen(prev => !prev);
     };
 
     useEffect(() => {
@@ -371,7 +379,7 @@ export const PdfWorkspace: React.FC = () => {
                         activePdfUri={activePdfUri}
                         onTabChange={handleTabChange}
                         onClosePdf={handleClosePdf}
-                        onAddClick={() => openAddMenu('top')}
+                        onAddClick={(e) => openAddMenuAt(e)}
                         isVisible={isUiVisible}
                     />
 
@@ -379,8 +387,8 @@ export const PdfWorkspace: React.FC = () => {
                     {isAddMenuOpen && (
                         <div
                             ref={addMenuRef}
-                            className={`fixed z-[100] w-64 bg-white dark:bg-dark-card rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-2 animate-fade-in transition-all
-                    ${addMenuPos === 'top' ? 'top-16 left-1/2 -translate-x-1/2' : 'bottom-20 left-1/2 -translate-x-1/2'}`}
+                            className={`fixed z-[100] w-64 bg-white dark:bg-dark-card rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-2 animate-fade-in transition-all`}
+                            style={addMenuCoords ? { left: addMenuCoords.left, top: addMenuCoords.top, transform: 'translateX(-50%)' } as React.CSSProperties : { left: '50%', top: '6rem', transform: 'translateX(-50%)' }}
                         >
                             {showUrlInput ? (
                                 <div className="p-2 space-y-2">
@@ -443,7 +451,7 @@ export const PdfWorkspace: React.FC = () => {
                                 currentPage={activePdf.currentPage}
                                 numPages={activePdf.numPages}
                                 onPageChange={handlePageChange}
-                                onNewFile={() => openAddMenu('bottom')}
+                                onNewFile={() => openAddMenuAt('bottom')}
                                 zoomLevel={activePdf.zoomLevel}
                                 onZoom={handleZoom}
                                 searchQuery={searchQuery}

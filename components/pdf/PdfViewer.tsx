@@ -212,70 +212,73 @@ const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[]
 };
 
 
-const SearchControls: React.FC<Pick<PdfViewerProps, 'searchQuery' | 'setSearchQuery' | 'performSearch' | 'searchResults' | 'activeResultIndex' | 'navigateToResult'>> =
-    ({ searchQuery, setSearchQuery, performSearch, searchResults, activeResultIndex, navigateToResult }) => {
+type SearchControlsProps = Pick<PdfViewerProps, 'searchQuery' | 'setSearchQuery' | 'performSearch' | 'searchResults' | 'activeResultIndex' | 'navigateToResult'> & {
+    isSearchOpen: boolean;
+    setIsSearchOpen: (open: boolean) => void;
+};
 
-        const [showSearch, setShowSearch] = useState(false);
+const SearchControls: React.FC<SearchControlsProps> = ({ searchQuery, setSearchQuery, performSearch, searchResults, activeResultIndex, navigateToResult, isSearchOpen, setIsSearchOpen }) => {
 
-        const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === 'Enter') {
-                performSearch(searchQuery);
-            }
-        };
-
-        useEffect(() => {
-            if (searchQuery === '') {
-                performSearch('');
-            }
-        }, [searchQuery, performSearch]);
-
-        return (
-            <>
-                <button
-                    onClick={() => setShowSearch(!showSearch)}
-                    className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                    title="Search Document"
-                >
-                    <SearchIcon className="w-5 h-5" />
-                </button>
-                {showSearch && (
-                    <div className="flex items-center space-x-2 border-l border-gray-300 dark:border-gray-600 ml-2 pl-2">
-                        <input
-                            type="text"
-                            placeholder="Search..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onKeyDown={handleSearchKeyDown}
-                            className="w-32 sm:w-40 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        {searchResults.length > 0 && activeResultIndex !== null ? (
-                            <>
-                                <span className="text-gray-600 dark:text-gray-400 text-sm font-medium">
-                                    {activeResultIndex + 1} / {searchResults.length}
-                                </span>
-                                <button
-                                    onClick={() => navigateToResult('prev')}
-                                    className="p-1 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                                    title="Previous Result"
-                                >
-                                    <LeftArrowIcon className="w-4 h-4" />
-                                </button>
-                                <button
-                                    onClick={() => navigateToResult('next')}
-                                    className="p-1 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                                    title="Next Result"
-                                >
-                                    <RightArrowIcon className="w-4 h-4" />
-                                </button>
-                            </>
-                        ) : searchQuery && (
-                            <span className="text-gray-500 dark:text-gray-400 text-sm">No results</span>
-                        )}
-                    </div>
-                )}
-            </>
-        );
+    const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            performSearch(searchQuery);
+        }
     };
+
+    useEffect(() => {
+        if (searchQuery === '') {
+            performSearch('');
+        }
+    }, [searchQuery, performSearch]);
+
+    return (
+        <>
+            <button
+                onClick={() => setIsSearchOpen(!isSearchOpen)}
+                className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                title="Search Document"
+            >
+                <SearchIcon className="w-5 h-5" />
+            </button>
+            {isSearchOpen && (
+                <div className="flex items-center space-x-2 border-l border-gray-300 dark:border-gray-600 ml-2 pl-2">
+                    <input
+                        type="text"
+                        placeholder="Search..."
+                        value={searchQuery}
+                        onChange={(e) => { setSearchQuery(e.target.value); setIsSearchOpen(true); }}
+                        onFocus={() => setIsSearchOpen(true)}
+                        onKeyDown={handleSearchKeyDown}
+                        className="w-32 sm:w-40 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    {searchResults.length > 0 && activeResultIndex !== null ? (
+                        <>
+                            <span className="text-gray-600 dark:text-gray-400 text-sm font-medium">
+                                {activeResultIndex + 1} / {searchResults.length}
+                            </span>
+                            <button
+                                onClick={() => navigateToResult('prev')}
+                                className="p-1 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                                title="Previous Result"
+                            >
+                                <LeftArrowIcon className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => navigateToResult('next')}
+                                className="p-1 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                                title="Next Result"
+                            >
+                                <RightArrowIcon className="w-4 h-4" />
+                            </button>
+                        </>
+                    ) : searchQuery && (
+                        <span className="text-gray-500 dark:text-gray-400 text-sm">No results</span>
+                    )}
+                </div>
+            )}
+        </>
+    );
+};
 
 export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
     const { pdfDoc, pdfjsLib, currentPage, numPages, onPageChange, onNewFile, zoomLevel, onZoom, searchResults, activeResultIndex, documentTextIndex, onScrollActivity } = props;
@@ -287,8 +290,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
     const toastTimer = useRef<number | null>(null);
     const textDivsRef = useRef<HTMLElement[]>([]);
     const [isUiVisible, setIsUiVisible] = useState(true);
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [pageInput, setPageInput] = useState(currentPage.toString());
     const isInteractingWithUi = useRef(false);
+    const controlBarRef = useRef<HTMLDivElement>(null);
+    const [controlBarStyle, setControlBarStyle] = useState<React.CSSProperties | null>(null);
 
     const [selectionDetails, setSelectionDetails] = useState<{
         visible: boolean;
@@ -355,7 +361,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
         if (!scrollEl) return;
 
         const handleScroll = () => {
-            if (isUiVisible && !isInteractingWithUi.current) {
+            // Keep UI visible when user is interacting with controls OR when search is open
+            if (isUiVisible && !isInteractingWithUi.current && !isSearchOpen) {
                 setIsUiVisible(false);
                 if (onScrollActivity) onScrollActivity();
             }
@@ -363,7 +370,34 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
 
         scrollEl.addEventListener('scroll', handleScroll, { passive: true });
         return () => scrollEl.removeEventListener('scroll', handleScroll);
-    }, [isUiVisible, onScrollActivity]);
+    }, [isUiVisible, onScrollActivity, isSearchOpen]);
+
+    // Keep the control bar positioned and sized to the viewer container (responsive)
+    useEffect(() => {
+        const updateControlBar = () => {
+            const container = scrollContainerRef.current;
+            if (!container) {
+                setControlBarStyle(null);
+                return;
+            }
+            const rect = container.getBoundingClientRect();
+            const maxWidth = Math.max(240, rect.width - 24); // ensure some min width
+            const left = rect.left + rect.width / 2 + window.scrollX;
+            const bottom = 16; // keep small gap from bottom
+            setControlBarStyle({ left, width: Math.min(maxWidth, 1200), bottom, transform: 'translateX(-50%)' });
+        };
+
+        updateControlBar();
+        window.addEventListener('resize', updateControlBar);
+        window.addEventListener('orientationchange', updateControlBar);
+        const ro = new ResizeObserver(updateControlBar);
+        if (scrollContainerRef.current) ro.observe(scrollContainerRef.current);
+        return () => {
+            window.removeEventListener('resize', updateControlBar);
+            window.removeEventListener('orientationchange', updateControlBar);
+            try { ro.disconnect(); } catch (e) { }
+        };
+    }, []);
 
     const applyHighlights = useCallback(() => {
         if (!textLayerRef.current || !documentTextIndex) return;
@@ -797,7 +831,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
             )}
 
             <div
-                className={`fixed bottom-4 w-auto bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-full shadow-xl px-4 py-2 flex items-center justify-center space-x-2 sm:space-x-4 z-[60] transition-all duration-300 transform ${isUiVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'}`}
+                ref={controlBarRef}
+                style={controlBarStyle || undefined}
+                className={`fixed bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-full shadow-xl px-3 py-2 flex items-center justify-center gap-2 sm:gap-4 z-[60] transition-all duration-300 transform ${isUiVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'} flex-wrap sm:flex-nowrap overflow-hidden`}
                 onMouseEnter={() => { isInteractingWithUi.current = true; }}
                 onMouseLeave={() => { isInteractingWithUi.current = false; }}
                 onFocus={() => { isInteractingWithUi.current = true; }}
@@ -805,12 +841,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
             >
                 <button
                     onClick={onNewFile}
-                    className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                    className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
                     title="Upload New File"
                 >
                     <NewFileIcon className="w-5 h-5" />
                 </button>
-                <div className="flex items-center space-x-2 border-l border-r border-gray-300 dark:border-gray-600 px-2 sm:px-4">
+                <div className="flex items-center space-x-2 border-l border-r border-gray-300 dark:border-gray-600 px-2 sm:px-4 flex-shrink-0">
                     <button
                         onClick={() => onPageChange(currentPage - 1)}
                         disabled={currentPage <= 1}
@@ -842,7 +878,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                         <RightArrowIcon className="w-5 h-5" />
                     </button>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 flex-shrink-0">
                     <button
                         onClick={() => onZoom('out')}
                         disabled={zoomLevel <= 0.25}
@@ -863,7 +899,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                         <ZoomInIcon className="w-5 h-5" />
                     </button>
                 </div>
-                <SearchControls {...props} />
+                <SearchControls {...props} isSearchOpen={isSearchOpen} setIsSearchOpen={setIsSearchOpen} />
             </div>
         </div>
     );
