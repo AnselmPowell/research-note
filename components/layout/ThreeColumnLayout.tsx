@@ -27,7 +27,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
 
   const [leftWidth, setLeftWidth] = useState(20);
   const [middleWidth, setMiddleWidth] = useState(30);
-  const [libraryWidth, setLibraryWidth] = useState(30);
+  const [libraryWidth, setLibraryWidth] = useState(45);
   const [rightWidth, setRightWidth] = useState(45); // Will be calculated dynamically
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -78,9 +78,11 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
       return `${clampedWidth}%`;
     }
 
-    // Library column
+    // Library column - enforce minimum 45%
     if (column === 'library') {
-      return showLibrary ? `${libraryWidth}%` : '0%';
+      if (!showLibrary) return '0%';
+      const clamped = Math.min(80, Math.max(45, libraryWidth));
+      return `${clamped}%`;
     }
 
     // Calculate available space for Middle and Right
@@ -156,7 +158,8 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
       } else if (isResizing.current === 'library') {
         const leftOffset = showLeft ? leftWidth : 0;
         const middleOffset = showMiddle ? middleWidth : 0;
-        setLibraryWidth(Math.min(Math.max(mousePercent - leftOffset - middleOffset, 10), 80));
+        // Library must not be smaller than 45% and not larger than 80%
+        setLibraryWidth(Math.min(Math.max(mousePercent - leftOffset - middleOffset, 45), 80));
       } else if (isResizing.current === 'right' && showRight) {
         const leftOffset = showLeft ? leftWidth : 0;
         const middleOffset = showMiddle ? middleWidth : 0;
@@ -292,8 +295,8 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         {/* Library / Notes Manager */}
         {showLibrary && (
           <div
-            style={{ width: getColumnWidth('library') }}
-            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-75 ease-out shadow-sm min-w-[320px]`}
+            style={{ width: getColumnWidth('library'), minWidth: '45%' }}
+            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-75 ease-out shadow-sm`}
           >
             <RenderHeader title="Research Library" icon={Library} colKey="library" onClose={() => toggleColumn('library')} isLocked={columnLocks.library} />
             <div className="flex-1 overflow-hidden relative">{libraryContent}</div>

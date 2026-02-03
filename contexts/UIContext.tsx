@@ -93,12 +93,29 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const openColumn = (col: ColumnKey) => {
     setColumnVisibility(prev => {
       const newState = { ...prev };
+
+      // If opening the library, enforce exclusivity: close sources and research
+      // but do NOT automatically open the paper view (right). The paper view
+      // should be controlled separately by the user.
+      if (col === 'library') {
+        newState.library = true;
+        newState.left = false;
+        newState.middle = false;
+        return newState;
+      }
+
+      // Default behavior for other columns
       newState[col] = true;
 
       // RULE: Opening 'left' (Sources) also opens 'middle' (Research)
       // UNLESS 'right' (Paper View) is already open
       if (col === 'left' && !prev.right) {
         newState.middle = true;
+      }
+
+      // If library is currently open, close it when opening left/middle/right
+      if (prev.library && (col === 'left' || col === 'middle' || col === 'right')) {
+        newState.library = false;
       }
 
       // Logic: Close any other column that is NOT locked
@@ -127,6 +144,12 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   };
 
   const toggleColumn = (col: ColumnKey) => {
+    // If toggling to open sources or research while library is open, close library first
+    if (!columnVisibility[col] && columnVisibility.library && (col === 'left' || col === 'middle')) {
+      // Close library to allow opening left/middle
+      setColumnVisibility(prev => ({ ...prev, library: false }));
+    }
+
     if (columnVisibility[col]) {
       setColumnVisibility(prev => ({ ...prev, [col]: false }));
     } else {
@@ -134,7 +157,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   };
 
-  const toggleLibrary = () => setIsLibraryOpen(prev => !prev);
+  const toggleLibrary = () => setLibraryOpen(!isLibraryOpen);
 
   const openAssignmentModal = (note: DeepResearchNote, sourceMetadata: any) => {
     setAssignmentModal({ isOpen: true, note, sourceMetadata });
@@ -159,6 +182,14 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     closeAssignmentModal();
   };
 
+  // Controlled setter for the library drawer state. This toggles the sidebar
+  // drawer only; it does NOT automatically open the library column. The
+  // library column should be opened explicitly via `openColumn('library')`
+  // (e.g. when the user selects an item inside the sidebar).
+  const setLibraryOpen = (open: boolean) => {
+    setIsLibraryOpen(open);
+  };
+
   return (
     <UIContext.Provider value={{
       darkMode,
@@ -174,7 +205,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       isLibraryOpen,
       isLibraryExpanded,
       toggleLibrary,
-      setLibraryOpen: setIsLibraryOpen,
+      setLibraryOpen,
       setLibraryExpanded: setIsLibraryExpanded,
       libraryActiveView,
       setLibraryActiveView,
