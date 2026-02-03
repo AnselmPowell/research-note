@@ -28,7 +28,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
   const [leftWidth, setLeftWidth] = useState(20);
   const [middleWidth, setMiddleWidth] = useState(30);
   const [libraryWidth, setLibraryWidth] = useState(30);
-  const [rightWidth, setRightWidth] = useState(40); // Will be calculated dynamically
+  const [rightWidth, setRightWidth] = useState(45); // Will be calculated dynamically
 
   const containerRef = useRef<HTMLDivElement>(null);
   const isResizing = useRef<ColumnKey | null>(null);
@@ -46,10 +46,10 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
       setLeftWidth(20);
     }
 
-    // Scenario B: Research + PDF (Middle + Right) -> Middle 60, Right 40
+    // Scenario B: Research + PDF (Middle + Right) -> Middle 60, Right 45
     if (showMiddle && showRight && !showLeft && !showLibrary) {
       setMiddleWidth(60);
-      setRightWidth(40);
+      setRightWidth(45);
     }
 
     // Scenario C: Sources + Research + PDF -> Left 20, Middle 50, Right 30
@@ -94,7 +94,13 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
 
       if (showRight) {
         // If Right is open, Middle uses its stored width
-        return `${middleWidth}%`;
+        // Ensure Middle never claims space that would reduce Right below 40%
+        const leftSpace = showLeft ? Math.min(30, Math.max(15, leftWidth)) : 0;
+        const librarySpace = showLibrary ? libraryWidth : 0;
+        const remainingSpace = 100 - leftSpace - librarySpace;
+        const maxMiddle = Math.max(10, remainingSpace - 45);
+        const clampedMiddle = Math.min(middleWidth, maxMiddle);
+        return `${clampedMiddle}%`;
       }
 
       // If Right is NOT open, Middle takes all remaining space
@@ -108,11 +114,16 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
       if (showMiddle) {
         // If Middle is open, Right takes whatever is left after Middle
         const middleSpace = middleWidth;
-        return `${remainingSpace - middleSpace}%`;
+        const desired = remainingSpace - middleSpace;
+        // Enforce minimum 45% for Right, and cap at 80%
+        const clamped = Math.min(80, Math.max(45, desired));
+        return `${clamped}%`;
       }
 
       // If Middle is NOT open (e.g. Sources + PDF), Right takes all remaining space
-      return `${remainingSpace}%`;
+      // Ensure Right has at least 45% when it's the only content with left/library
+      const clampedFull = Math.max(45, remainingSpace);
+      return `${clampedFull}%`;
     }
 
     return 'auto';
@@ -132,7 +143,16 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         setLeftWidth(Math.min(Math.max(mousePercent, 15), 30));
       } else if (isResizing.current === 'middle') {
         const leftOffset = showLeft ? leftWidth : 0;
-        setMiddleWidth(Math.min(Math.max(mousePercent - leftOffset, 10), 80));
+          // If Right is visible, ensure Middle doesn't grow so large that Right falls below 40%
+          if (showRight) {
+            const leftOffsetLocal = showLeft ? leftWidth : 0;
+            const libraryOffset = showLibrary ? libraryWidth : 0;
+            const remainingSpaceLocal = 100 - leftOffsetLocal - libraryOffset;
+            const maxMiddleLocal = Math.max(10, remainingSpaceLocal - 45);
+            setMiddleWidth(Math.min(Math.max(mousePercent - leftOffset, 10), maxMiddleLocal));
+          } else {
+            setMiddleWidth(Math.min(Math.max(mousePercent - leftOffset, 10), 80));
+          }
       } else if (isResizing.current === 'library') {
         const leftOffset = showLeft ? leftWidth : 0;
         const middleOffset = showMiddle ? middleWidth : 0;
@@ -141,7 +161,8 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         const leftOffset = showLeft ? leftWidth : 0;
         const middleOffset = showMiddle ? middleWidth : 0;
         const libraryOffset = showLibrary ? libraryWidth : 0;
-        setRightWidth(Math.min(Math.max(mousePercent - leftOffset - middleOffset - libraryOffset, 10), 80));
+            // Right must not be smaller than 45% and not larger than 80%
+            setRightWidth(Math.min(Math.max(mousePercent - leftOffset - middleOffset - libraryOffset, 45), 80));
       }
     };
 
@@ -283,10 +304,10 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
 
         {/* Paper View */}
         {showRight && (
-          <div
-            style={{ width: getColumnWidth('right') }}
-            className={`flex flex-col h-full bg-cream dark:bg-dark-card border rounded-xl dark:border-gray-700 overflow-hidden shadow-sm min-w-[320px] transition-[width] duration-75 ease-out`}
-          >
+            <div
+              style={{ width: getColumnWidth('right'), minWidth: '45%' }}
+              className={`flex flex-col h-full bg-cream dark:bg-dark-card border rounded-xl dark:border-gray-700 overflow-hidden shadow-sm transition-[width] duration-75 ease-out`}
+            >
             <RenderHeader title="Paper View" icon={FileText} colKey="right" onClose={() => toggleColumn('right')} isLocked={columnLocks.right} />
             <div className="flex-1 overflow-y-auto custom-scrollbar relative">{rightContent}</div>
           </div>

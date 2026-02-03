@@ -114,6 +114,16 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
       return newState;
     });
+
+    // Ensure the middle column is locked when it becomes visible.
+    // This covers both: direct opening of middle, and opening left which auto-opens middle.
+    setColumnLocks(prev => {
+      const next = { ...prev };
+      if (col === 'middle' || (col === 'left' && !columnVisibility.right)) {
+        next.middle = true;
+      }
+      return next;
+    });
   };
 
   const toggleColumn = (col: ColumnKey) => {
