@@ -6,6 +6,7 @@ import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
 import { useDatabase } from '../../database/DatabaseContext';
 import { ChevronDown, BookOpen, Check, Loader2, Sparkles, BookText, FileText, ChevronUp, Lightbulb, Copy, Plus, BookmarkPlus, Bookmark, Square, AlertCircle, Search, Library } from 'lucide-react';
+import { ExternalLinkIcon } from '../ui/icons';
 
 interface WebSearchdProps {
   source: SearchSource;
@@ -33,8 +34,9 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const hasAutoExpanded = useRef(false);
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
-  const { loadedPdfs, loadPdfFromUrl, togglePdfContext } = useLibrary();
+  const { loadedPdfs, loadPdfFromUrl, togglePdfContext, setActivePdf } = useLibrary();
   const { openColumn } = useUI();
+  const [viewFailed, setViewFailed] = useState(false);
 
   const isSaved = isPaperSaved(source.uri);
 
@@ -105,7 +107,7 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
   };
 
   const domain = getDomain(source.uri);
-  const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+  const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=48`;
   const displayUrl = source.uri.replace('https://', '').replace('http://', '').split('/').slice(0, 2).join(' › ');
 
   return (
@@ -130,29 +132,64 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
             <img
               src={faviconUrl}
               alt=""
-              className="w-4 h-4 rounded-full opacity-90"
+              className="w-8 h-8 rounded-full opacity-90"
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
             <span className="truncate">{domain}</span>
-            <span className="text-gray-400 mx-0.5">•</span>
-            <span className="truncate opacity-70">{displayUrl}</span>
+            {/* <span className="text-gray-400 mx-0.5">•</span> */}
+            {/* <span className="truncate opacity-70">{displayUrl}</span> */}
           </a>
 
           {isFailed && (
             <span className="flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 animate-fade-in ml-2">
               <AlertCircle size={12} />
               Failed to load
-            </span>
+
+
+              </span>
           )}
+
+          
 
           <div className="flex items-center gap-2 ml-2 opacity-100 sm:opacity-0 sm:group-hover/result:opacity-100 transition-opacity">
             {onView && (
-              <button
-                onClick={(e) => { e.preventDefault(); onView(); }}
-                className="text-xs font-medium text-scholar-700 hover:text-scholar-800 bg-scholar-50 hover:bg-scholar-100 dark:bg-scholar-900/30 dark:text-scholar-300 dark:hover:bg-scholar-900/50 px-2 py-0.5 rounded border border-scholar-200 dark:border-scholar-800 transition-colors flex items-center gap-1"
-              >
-                <FileText size={12} /> View
-              </button>
+              <>
+                {source.uri ? (
+                  <a
+                    href={source.uri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(ev) => ev.stopPropagation()}
+                    className="text-gray-400 hover:text-gray-600 mr-1"
+                    title="Open page externally"
+                  >
+                    <ExternalLinkIcon className="h-4 w-4" />
+                  </a>
+                ) : null}
+
+                <button
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setViewFailed(false);
+                    try {
+                      const result = await loadPdfFromUrl(source.uri, source.title);
+                      // @ts-ignore
+                      if (result && result.success) {
+                        setActivePdf(source.uri);
+                        openColumn('right');
+                      } else {
+                        setViewFailed(true);
+                      }
+                    } catch (err) {
+                      setViewFailed(true);
+                    }
+                  }}
+                  className="text-xs font-medium text-scholar-700 hover:text-scholar-800 bg-scholar-50 hover:bg-scholar-100 dark:bg-scholar-900/30 dark:text-scholar-300 dark:hover:bg-scholar-900/50 px-2 py-0.5 rounded border border-scholar-200 dark:border-scholar-800 transition-colors flex items-center gap-1"
+                >
+                  <FileText size={12} /> View
+                </button>
+              </>
             )}
 
             <button

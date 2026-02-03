@@ -38,6 +38,7 @@ import {
   ChevronRight,
   Minus
 } from 'lucide-react';
+import { ExternalLinkIcon } from '../ui/icons';
 
 interface DeepResearchViewProps {
   researchPhase: ResearchPhase;
@@ -1062,32 +1063,17 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
       deletePaper(paper.pdfUri);
       return;
     }
-
-    // Load if needed
-    const loaded = loadedPdfs.find(p => p.uri === paper.pdfUri);
-    let loadedPdf = loaded;
-
-    if (!loaded) {
-      const result = await loadPdfFromUrl(paper.pdfUri, paper.title);
-      // @ts-ignore
-      if (result && !result.success) return;
-
-      // Use the PDF from the result to avoid stale closure issue
-      loadedPdf = result.pdf;
-    }
-
-    // Save using the correct PDF reference
+    // Save the paper to Sources without loading or activating the PDF.
+    // Loading the PDF (via `loadPdfFromUrl`) sets the active PDF which
+    // can cause the right-hand PDF viewer to open. We avoid that here so
+    // "Add to Sources" only saves the paper.
     const paperData = {
       ...paper,
       uri: paper.pdfUri,
-      pdfUri: paper.pdfUri,
-      numPages: loadedPdf ? loadedPdf.numPages : undefined
+      pdfUri: paper.pdfUri
     };
+
     savePaper(paperData);
-
-    // FIXED: Also add to AgentResearcher context like other workflows do
-    togglePdfContext(paper.pdfUri, paper.title);
-
     openColumn('left');
   };
 
@@ -1109,29 +1095,43 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                 <span>•</span>
                 <span className="truncate max-w-[200px] opacity-70">{paper.authors.slice(0, 2).join(', ')}{paper.authors.length > 2 ? ' et al.' : ''}</span>
 
-                <div className="flex items-center gap-2 ml-4 opacity-100 sm:opacity-0 sm:group-hover/paper:opacity-100 transition-opacity">
-                  <button onClick={handleOpenPdf} className="text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 ">
-                    <BookText size={12} /> View
-                  </button>
+                  <div className="flex items-center gap-2 ml-4 opacity-100 sm:opacity-0 sm:group-hover/paper:opacity-100 transition-opacity">
+                    {paper.pdfUri ? (
+                      <a
+                        href={paper.pdfUri}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(ev) => ev.stopPropagation()}
+                        className="text-gray-400 hover:text-gray-600 mr-1"
+                        title="Open PDF externally"
+                      >
+                        <ExternalLinkIcon className="h-4 w-4" />
+                      </a>
+                    ) : null}
 
-                  <button
-                    onClick={handleAddToSources}
-                    disabled={downloadingUris.has(paper.pdfUri)}
-                    className={`text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm
-                      ${isSaved
-                        ? 'bg-scholar-100 text-scholar-700 border border-scholar-200 hover:bg-scholar-200 dark:bg-scholar-900/40 dark:text-scholar-300 dark:border-scholar-800'
-                        : 'bg-white text-scholar-600 border border-scholar-200 hover:bg-scholar-50 dark:bg-gray-800 dark:text-scholar-400 dark:border-gray-700 dark:hover:bg-gray-700'
-                      }
-                    `}
-                  >
-                    {downloadingUris.has(paper.pdfUri) ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      isSaved ? <Check size={12} /> : <Plus size={12} />
-                    )}
-                    {isSaved ? 'Added' : 'Add to Sources'}
-                  </button>
-                </div>
+                    <button onClick={handleOpenPdf} className="text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 ">
+                      <BookText size={12} /> View
+                    </button>
+
+
+                    <button
+                      onClick={handleAddToSources}
+                      disabled={downloadingUris.has(paper.pdfUri)}
+                      className={`text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm
+                        ${isSaved
+                          ? 'bg-scholar-100 text-scholar-700 border border-scholar-200 hover:bg-scholar-200 dark:bg-scholar-900/40 dark:text-scholar-300 dark:border-scholar-800'
+                          : 'bg-white text-scholar-600 border border-scholar-200 hover:bg-scholar-50 dark:bg-gray-800 dark:text-scholar-400 dark:border-gray-700 dark:hover:bg-gray-700'
+                        }
+                      `}
+                    >
+                      {downloadingUris.has(paper.pdfUri) ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        isSaved ? <Check size={12} /> : <Plus size={12} />
+                      )}
+                      {isSaved ? 'Added' : 'Add to Sources'}
+                    </button>
+                  </div>
               </div>
             </div>
 
