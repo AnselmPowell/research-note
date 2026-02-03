@@ -377,6 +377,67 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
         const pageTextIndex = documentTextIndex[currentPageIndex];
         if (!pageTextIndex) return;
 
+        // Build a span-based column detection for this page (fallback when column classes are absent)
+        const computeColumnBoundsFromSpans = () => {
+            try {
+                const spansForBounds = textDivsRef.current.filter(s => !!s);
+                if (!spansForBounds.length) return null;
+                const rects = spansForBounds.map(s => s.getBoundingClientRect());
+                const allXStarts = rects.map(r => r.left);
+                const allXEnds = rects.map(r => r.right);
+                const pageLeft = Math.min(...allXStarts);
+                const pageRight = Math.max(...allXEnds);
+                const pageWidth = pageRight - pageLeft || (textLayerRef.current ? textLayerRef.current.clientWidth : window.innerWidth);
+
+                const buckets = 100;
+                const bucketWidth = pageWidth / buckets;
+                const density = new Array(buckets).fill(0);
+
+                rects.forEach(r => {
+                    const center = r.left + (r.width || 0) / 2 - pageLeft;
+                    let b = Math.floor(center / bucketWidth);
+                    if (b < 0) b = 0;
+                    if (b >= buckets) b = buckets - 1;
+                    density[b]++;
+                });
+
+                const searchStart = Math.floor(buckets * 0.25);
+                const searchEnd = Math.floor(buckets * 0.75);
+                let bestGapStart = -1;
+                let bestGapWidth = 0;
+                let currentGapStart = -1;
+                for (let i = searchStart; i < searchEnd; i++) {
+                    if (density[i] === 0) {
+                        if (currentGapStart === -1) currentGapStart = i;
+                    } else {
+                        if (currentGapStart !== -1) {
+                            const gapWidth = i - currentGapStart;
+                            if (gapWidth > bestGapWidth) {
+                                bestGapWidth = gapWidth;
+                                bestGapStart = currentGapStart;
+                            }
+                            currentGapStart = -1;
+                        }
+                    }
+                }
+                if (currentGapStart !== -1) {
+                    const gapWidth = searchEnd - currentGapStart;
+                    if (gapWidth > bestGapWidth) {
+                        bestGapWidth = gapWidth;
+                        bestGapStart = currentGapStart;
+                    }
+                }
+
+                const leftEnd = bestGapStart >= 0 ? pageLeft + (bestGapStart * bucketWidth) : pageLeft + pageWidth * 0.5;
+                const rightStart = bestGapStart >= 0 ? pageLeft + ((bestGapStart + bestGapWidth) * bucketWidth) : pageLeft + pageWidth * 0.5;
+                return { leftEnd, rightStart, isTwoColumn: bestGapStart >= 0 && bestGapWidth > 2 };
+            } catch (e) {
+                return null;
+            }
+        };
+
+        const columnBoundsFromSpans = computeColumnBoundsFromSpans();
+
         searchResults.forEach((result, index) => {
             if (currentPageIndex >= result.startPageIndex && currentPageIndex <= result.endPageIndex) {
                 const isActive = activeResultIndex === index;
@@ -410,6 +471,44 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                     })
                 });
 
+                // Determine column information for this match once
+                let startClass: string | null = null;
+                try {
+                    const startMapEntry = pageTextIndex.charToItemMap[start];
+                    if (startMapEntry) {
+                        const startSpan = textDivsRef.current[startMapEntry.itemIndex];
+                        if (startSpan) {
+                            if (startSpan.classList.contains('column-left')) startClass = 'column-left';
+                            else if (startSpan.classList.contains('column-right')) startClass = 'column-right';
+                            else if (startSpan.classList.contains('column-header')) startClass = 'column-header';
+                        }
+                    }
+                } catch (e) {
+                    startClass = null;
+                }
+
+                // Compute which columns/sides the matched spans live in (use span bounds if classes absent)
+                const matchedSides = new Set<string>();
+                itemIndicesToHighlight.forEach(idx => {
+                    const s = textDivsRef.current[idx];
+                    if (!s) return;
+                    const classSide = s.classList.contains('column-left') ? 'left' : s.classList.contains('column-right') ? 'right' : s.classList.contains('column-header') ? 'header' : null;
+                    if (classSide) matchedSides.add(classSide);
+                    else if (columnBoundsFromSpans) {
+                        const r = s.getBoundingClientRect();
+                        if (r.right <= columnBoundsFromSpans.leftEnd + 2) matchedSides.add('left');
+                        else if (r.left >= columnBoundsFromSpans.rightStart - 2) matchedSides.add('right');
+                        else matchedSides.add('header');
+                    } else {
+                        // fallback to center-based side
+                        const r = s.getBoundingClientRect();
+                        const pageMid = (textLayerRef.current ? (textLayerRef.current.getBoundingClientRect().left + (textLayerRef.current.clientWidth || 0) / 2) : (window.innerWidth / 2));
+                        if (r.left + r.width / 2 <= pageMid) matchedSides.add('left');
+                        else matchedSides.add('right');
+                    }
+                });
+
+                // Now highlight each span, using detected sides with X-distance fallback
                 itemIndicesToHighlight.forEach(itemIndex => {
                     const span = textDivsRef.current[itemIndex];
                     if (!span) {
@@ -417,29 +516,52 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                         return;
                     }
 
-                    // Column-aware filtering: Only highlight spans that are in the
-                    // same horizontal region (column) as the match start. This prevents
-                    // matches from highlighting text in the opposite column on
-                    // two-column pages.
                     let shouldHighlight = true;
-                    try {
-                        const startMapEntry = pageTextIndex.charToItemMap[start];
-                        if (startMapEntry) {
-                            const startSpan = textDivsRef.current[startMapEntry.itemIndex];
-                            if (startSpan) {
-                                const startRect = startSpan.getBoundingClientRect();
-                                const spanRect = span.getBoundingClientRect();
-                                const pageWidth = (textLayerRef.current && textLayerRef.current.clientWidth) || window.innerWidth;
-                                // Threshold: allow matches within ~35% of page width from start X
-                                const threshold = Math.max(48, pageWidth * 0.35);
-                                if (Math.abs(spanRect.left - startRect.left) > threshold) {
-                                    shouldHighlight = false;
+
+                    // If the match legitimately spans multiple sides, allow all matched spans
+                    if (matchedSides.size > 1) {
+                        shouldHighlight = true;
+                    } else {
+                        // Determine this span's side
+                        let spanSide: string | null = null;
+                        if (span.classList.contains('column-left')) spanSide = 'left';
+                        else if (span.classList.contains('column-right')) spanSide = 'right';
+                        else if (span.classList.contains('column-header')) spanSide = 'header';
+                        else if (columnBoundsFromSpans) {
+                            const r = span.getBoundingClientRect();
+                            if (r.right <= columnBoundsFromSpans.leftEnd + 2) spanSide = 'left';
+                            else if (r.left >= columnBoundsFromSpans.rightStart - 2) spanSide = 'right';
+                            else spanSide = 'header';
+                        }
+
+                        if (spanSide && startClass) {
+                            // If we detected a startClass earlier, map it to side and require match
+                            const startSide = startClass === 'column-left' ? 'left' : startClass === 'column-right' ? 'right' : 'header';
+                            shouldHighlight = (spanSide === startSide);
+                        } else if (spanSide && !startClass) {
+                            // No startClass but we have a spanSide: only highlight if it matches the single matched side
+                            const onlySide = Array.from(matchedSides)[0];
+                            shouldHighlight = (spanSide === onlySide);
+                        } else {
+                            // Final fallback: X-distance from start span
+                            try {
+                                const startMapEntry = pageTextIndex.charToItemMap[start];
+                                if (startMapEntry) {
+                                    const startSpan = textDivsRef.current[startMapEntry.itemIndex];
+                                    if (startSpan) {
+                                        const startRect = startSpan.getBoundingClientRect();
+                                        const spanRect = span.getBoundingClientRect();
+                                        const pageWidth = (textLayerRef.current && textLayerRef.current.clientWidth) || window.innerWidth;
+                                        const threshold = Math.max(48, pageWidth * 0.35);
+                                        if (Math.abs(spanRect.left - startRect.left) > threshold) {
+                                            shouldHighlight = false;
+                                        }
+                                    }
                                 }
+                            } catch (e) {
+                                shouldHighlight = true;
                             }
                         }
-                    } catch (e) {
-                        // If any bounding rect lookup fails, fall back to highlighting
-                        shouldHighlight = true;
                     }
 
                     if (shouldHighlight) {
