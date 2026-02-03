@@ -412,10 +412,38 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
 
                 itemIndicesToHighlight.forEach(itemIndex => {
                     const span = textDivsRef.current[itemIndex];
-                    if (span) {
-                        (span as HTMLElement).classList.add(highlightClass);
-                    } else {
+                    if (!span) {
                         console.warn(`⚠️ Span not found for itemIndex ${itemIndex} (textDivs length: ${textDivsRef.current.length})`);
+                        return;
+                    }
+
+                    // Column-aware filtering: Only highlight spans that are in the
+                    // same horizontal region (column) as the match start. This prevents
+                    // matches from highlighting text in the opposite column on
+                    // two-column pages.
+                    let shouldHighlight = true;
+                    try {
+                        const startMapEntry = pageTextIndex.charToItemMap[start];
+                        if (startMapEntry) {
+                            const startSpan = textDivsRef.current[startMapEntry.itemIndex];
+                            if (startSpan) {
+                                const startRect = startSpan.getBoundingClientRect();
+                                const spanRect = span.getBoundingClientRect();
+                                const pageWidth = (textLayerRef.current && textLayerRef.current.clientWidth) || window.innerWidth;
+                                // Threshold: allow matches within ~35% of page width from start X
+                                const threshold = Math.max(48, pageWidth * 0.35);
+                                if (Math.abs(spanRect.left - startRect.left) > threshold) {
+                                    shouldHighlight = false;
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // If any bounding rect lookup fails, fall back to highlighting
+                        shouldHighlight = true;
+                    }
+
+                    if (shouldHighlight) {
+                        (span as HTMLElement).classList.add(highlightClass);
                     }
                 });
 

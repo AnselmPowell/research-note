@@ -194,18 +194,16 @@ export const PdfWorkspace: React.FC = () => {
                 const page = await activePdf.doc.getPage(i);
                 const textContent = await page.getTextContent();
 
-                const sortedItems = textContent.items.slice().sort((a: any, b: any) => {
-                    const y1 = a.transform[5]; const y2 = b.transform[5];
-                    const x1 = a.transform[4]; const x2 = b.transform[4];
-                    if (Math.abs(y1 - y2) > 4) return y2 - y1;
-                    return x1 - x2;
-                });
+                // CRITICAL FIX: Do NOT sort by Y-coordinate!
+                // PDF.js provides items in the correct reading order (Column-by-Column).
+                // Sorting by Y merges columns (Row-by-Row), causing search to fail on multi-column text.
+                const itemsToProcess = textContent.items;
 
                 let combinedText = '';
                 const charToItemMap: (MapEntry | null)[] = [];
                 let lastItem: any = null;
 
-                for (const item of sortedItems) {
+                for (const item of itemsToProcess) {
                     const originalItemIndex = textContent.items.indexOf(item);
                     if (lastItem) {
                         const lastY = lastItem.transform[5];
