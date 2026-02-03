@@ -829,7 +829,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
         )}
 
         {activeTab === 'deep' && (sortBy === 'most-relevant-notes' ? (
-          (paginatedContent as any[]).map((note) => (
+          (paginatedContent as any[]).filter((note: any) => (note?.quote || '').trim().length > 0).map((note) => (
             <ResearchCardNote
               key={note.uniqueId}
               id={note.uniqueId}
@@ -1004,6 +1004,7 @@ interface PaperCardProps {
 
 const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true }) => {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [isAbstractExpanded, setIsAbstractExpanded] = useState(false);
   const { toggleArxivSelection, selectedArxivIds } = useResearch();
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
   const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf, failedUrlErrors, downloadingUris } = useLibrary();
@@ -1027,9 +1028,10 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
   };
 
   const notes = paper.notes || [];
+  const visibleNotes = (notes || []).filter(n => (n?.quote || '').toString().trim().length > 0);
 
   useEffect(() => {
-    if (notes.length > 0) {
+    if (visibleNotes.length > 0) {
       setIsExpanded(forceExpanded);
     }
   }, [forceExpanded]);
@@ -1139,7 +1141,19 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
               {paper.title}
             </h3>
 
-            <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-2 mb-3">{paper.summary}</p>
+            <p
+              role="button"
+              aria-expanded={isAbstractExpanded}
+              onClick={(e) => { e.stopPropagation(); setIsAbstractExpanded(prev => !prev); }}
+              className={`text-sm text-gray-600 dark:text-gray-300 leading-relaxed ${isAbstractExpanded ? '' : 'line-clamp-2'} mb-3 cursor-pointer`}
+            >
+              {paper.summary}
+              {isAbstractExpanded && (
+                <span className="inline-flex items-center dark:text-scholar-400 ml-2 pt-3 text-gray-500 hover:text-gray-700" aria-hidden="true">
+                  <ChevronUp size={30} />
+                </span>
+              )}
+            </p>
 
             <div className="flex items-center justify-between mt-2">
               <div className="flex items-center gap-3">
@@ -1148,9 +1162,9 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                     <Loader2 size={12} className="animate-spin" />
                     <span className="animate-pulse">{getStatusText()}</span>
                   </div>
-                ) : notes.length > 0 ? (
+                ) : visibleNotes.length > 0 ? (
                   <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-1.5 text-md font-medium text-bold text-scholar-600 dark:text-scholar-400 hover:text-scholar-800 dark:hover:text-scholar-300 transition-colors">
-                    {notes.length} Note{notes.length !== 1 ? 's' : ''} {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    {visibleNotes.length} Note{visibleNotes.length !== 1 ? 's' : ''} {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                   </button>
                 ) : isCompleted ? (
                   <span className="text-xs text-gray-400 italic">No notes extracted</span>
@@ -1175,9 +1189,9 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
               </div>
             </div>
 
-            {isExpanded && notes.length > 0 && (
+            {isExpanded && visibleNotes.length > 0 && (
               <div className="mt-4 pl-0 sm:pl-4 border-l-0 sm:border-l-2 border-gray-100 dark:border-gray-800 space-y-3">
-                {notes.map((note, idx) => {
+                {visibleNotes.map((note, idx) => {
                   const noteId = getNoteId(paper.id, note.pageNumber, idx);
                   return <ResearchCardNote key={noteId} id={noteId} note={note} isSelected={selectedNoteIds.includes(noteId)} onSelect={() => onSelectNote(noteId)} sourceTitle={paper.title} sourcePaper={paper} />;
                 })}
