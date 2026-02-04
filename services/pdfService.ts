@@ -365,17 +365,17 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSig
     // 6. Enhance metadata with AI if needed
     let finalMetadata = metadata;
     const needsTitle = metadata.title === "Untitled Document";
-    const needsAuthor = metadata.author === "Unknown Author"; 
+    const needsAuthor = metadata.author === "Unknown Author";
     const needsSubject = metadata.subject === "";
 
     if (needsTitle || needsAuthor || needsSubject) {
       try {
         // Check if aborted before processing
         if (signal?.aborted) throw new Error('Aborted');
-        
+
         const firstFourPages = pages.slice(0, 4).join('\n\n');
         if (firstFourPages.length > 100) { // Only if we have substantial text
-          
+
           // Check cache first
           const cached = await getCachedMetadata(firstFourPages);
           if (cached) {
@@ -389,12 +389,12 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSig
             // AI enhancement
             console.log('[PDF Service] Enhancing metadata with AI...');
             finalMetadata = await enhanceMetadataWithAI(firstFourPages, metadata, signal);
-            
+
             // Only cache if AI actually enhanced something
-            const wasEnhanced = finalMetadata.title !== metadata.title || 
-                               finalMetadata.author !== metadata.author || 
-                               finalMetadata.subject !== metadata.subject;
-            
+            const wasEnhanced = finalMetadata.title !== metadata.title ||
+              finalMetadata.author !== metadata.author ||
+              finalMetadata.subject !== metadata.subject;
+
             if (wasEnhanced) {
               await setCachedMetadata(firstFourPages, finalMetadata);
               console.log('[PDF Service] Metadata enhanced and cached');

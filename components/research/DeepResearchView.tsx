@@ -38,6 +38,7 @@ import {
   ChevronRight,
   Minus
 } from 'lucide-react';
+import { ExternalLinkIcon } from '../ui/icons';
 
 interface DeepResearchViewProps {
   researchPhase: ResearchPhase;
@@ -828,7 +829,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
         )}
 
         {activeTab === 'deep' && (sortBy === 'most-relevant-notes' ? (
-          (paginatedContent as any[]).map((note) => (
+          (paginatedContent as any[]).filter((note: any) => (note?.quote || '').trim().length > 0).map((note) => (
             <ResearchCardNote
               key={note.uniqueId}
               id={note.uniqueId}
@@ -1003,10 +1004,11 @@ interface PaperCardProps {
 
 const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true }) => {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [isAbstractExpanded, setIsAbstractExpanded] = useState(false);
   const { toggleArxivSelection, selectedArxivIds } = useResearch();
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
   const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf, failedUrlErrors, downloadingUris } = useLibrary();
-  const { setColumnVisibility, openColumn } = useUI();
+  const { setColumnVisibility, openColumn: openUIColumn } = useUI();
 
   const isSelected = isLocal ? isPdfInContext(paper.id) : selectedArxivIds.has(paper.id);
   const isSaved = isPaperSaved(paper.pdfUri);
@@ -1026,9 +1028,10 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
   };
 
   const notes = paper.notes || [];
+  const visibleNotes = (notes || []).filter(n => (n?.quote || '').toString().trim().length > 0);
 
   useEffect(() => {
-    if (notes.length > 0) {
+    if (visibleNotes.length > 0) {
       setIsExpanded(forceExpanded);
     }
   }, [forceExpanded]);
@@ -1048,7 +1051,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     e.stopPropagation();
     if (isLocal) {
       setActivePdf(paper.id);
-      setColumnVisibility(prev => ({ ...prev, right: true }));
+      openUIColumn('right');
     } else if (onView) {
       onView();
     }
@@ -1062,33 +1065,18 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
       deletePaper(paper.pdfUri);
       return;
     }
-
-    // Load if needed
-    const loaded = loadedPdfs.find(p => p.uri === paper.pdfUri);
-    let loadedPdf = loaded;
-
-    if (!loaded) {
-      const result = await loadPdfFromUrl(paper.pdfUri, paper.title);
-      // @ts-ignore
-      if (result && !result.success) return;
-
-      // Use the PDF from the result to avoid stale closure issue
-      loadedPdf = result.pdf;
-    }
-
-    // Save using the correct PDF reference
+    // Save the paper to Sources without loading or activating the PDF.
+    // Loading the PDF (via `loadPdfFromUrl`) sets the active PDF which
+    // can cause the right-hand PDF viewer to open. We avoid that here so
+    // "Add to Sources" only saves the paper.
     const paperData = {
       ...paper,
       uri: paper.pdfUri,
-      pdfUri: paper.pdfUri,
-      numPages: loadedPdf ? loadedPdf.numPages : undefined
+      pdfUri: paper.pdfUri
     };
+
     savePaper(paperData);
-
-    // FIXED: Also add to AgentResearcher context like other workflows do
-    togglePdfContext(paper.pdfUri, paper.title);
-
-    openColumn('left');
+    openUIColumn('left');
   };
 
   return (
@@ -1110,19 +1098,33 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                 <span className="truncate max-w-[200px] opacity-70">{paper.authors.slice(0, 2).join(', ')}{paper.authors.length > 2 ? ' et al.' : ''}</span>
 
                 <div className="flex items-center gap-2 ml-4 opacity-100 sm:opacity-0 sm:group-hover/paper:opacity-100 transition-opacity">
+                  {paper.pdfUri ? (
+                    <a
+                      href={paper.pdfUri}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(ev) => ev.stopPropagation()}
+                      className="text-gray-400 hover:text-gray-600 mr-1"
+                      title="Open PDF externally"
+                    >
+                      <ExternalLinkIcon className="h-4 w-4" />
+                    </a>
+                  ) : null}
+
                   <button onClick={handleOpenPdf} className="text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 ">
                     <BookText size={12} /> View
                   </button>
+
 
                   <button
                     onClick={handleAddToSources}
                     disabled={downloadingUris.has(paper.pdfUri)}
                     className={`text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm
-                      ${isSaved
+                        ${isSaved
                         ? 'bg-scholar-100 text-scholar-700 border border-scholar-200 hover:bg-scholar-200 dark:bg-scholar-900/40 dark:text-scholar-300 dark:border-scholar-800'
                         : 'bg-white text-scholar-600 border border-scholar-200 hover:bg-scholar-50 dark:bg-gray-800 dark:text-scholar-400 dark:border-gray-700 dark:hover:bg-gray-700'
                       }
-                    `}
+                      `}
                   >
                     {downloadingUris.has(paper.pdfUri) ? (
                       <Loader2 size={12} className="animate-spin" />
@@ -1139,7 +1141,19 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
               {paper.title}
             </h3>
 
-            <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-2 mb-3">{paper.summary}</p>
+            <p
+              role="button"
+              aria-expanded={isAbstractExpanded}
+              onClick={(e) => { e.stopPropagation(); setIsAbstractExpanded(prev => !prev); }}
+              className={`text-sm text-gray-600 dark:text-gray-300 leading-relaxed ${isAbstractExpanded ? '' : 'line-clamp-2'} mb-3 cursor-pointer`}
+            >
+              {paper.summary}
+              {isAbstractExpanded && (
+                <span className="inline-flex items-center dark:text-scholar-400 ml-2 pt-3 text-gray-500 hover:text-gray-700" aria-hidden="true">
+                  <ChevronUp size={30} />
+                </span>
+              )}
+            </p>
 
             <div className="flex items-center justify-between mt-2">
               <div className="flex items-center gap-3">
@@ -1148,9 +1162,9 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                     <Loader2 size={12} className="animate-spin" />
                     <span className="animate-pulse">{getStatusText()}</span>
                   </div>
-                ) : notes.length > 0 ? (
+                ) : visibleNotes.length > 0 ? (
                   <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-1.5 text-md font-medium text-bold text-scholar-600 dark:text-scholar-400 hover:text-scholar-800 dark:hover:text-scholar-300 transition-colors">
-                    {notes.length} Note{notes.length !== 1 ? 's' : ''} {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    {visibleNotes.length} Note{visibleNotes.length !== 1 ? 's' : ''} {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                   </button>
                 ) : isCompleted ? (
                   <span className="text-xs text-gray-400 italic">No notes extracted</span>
@@ -1175,9 +1189,9 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
               </div>
             </div>
 
-            {isExpanded && notes.length > 0 && (
+            {isExpanded && visibleNotes.length > 0 && (
               <div className="mt-4 pl-0 sm:pl-4 border-l-0 sm:border-l-2 border-gray-100 dark:border-gray-800 space-y-3">
-                {notes.map((note, idx) => {
+                {visibleNotes.map((note, idx) => {
                   const noteId = getNoteId(paper.id, note.pageNumber, idx);
                   return <ResearchCardNote key={noteId} id={noteId} note={note} isSelected={selectedNoteIds.includes(noteId)} onSelect={() => onSelectNote(noteId)} sourceTitle={paper.title} sourcePaper={paper} />;
                 })}
@@ -1212,10 +1226,10 @@ const ResearchCardNote: React.FC<{
   const [isExpanded, setIsExpanded] = useState(false);
   const [justCopied, setJustCopied] = useState(false);
 
-  const { toggleContextNote, isNoteInContext } = useResearch();
+  const { toggleContextNote, isNoteInContext, setActiveSearchMode } = useResearch();
   const { isNoteSaved, deleteNote, saveNote, savedNotes } = useDatabase();
   const { setSearchHighlight, loadPdfFromUrl, setActivePdf } = useLibrary();
-  const { setColumnVisibility } = useUI();
+  const { openColumn: openUIColumn } = useUI();
 
   // Helper function for smart paper metadata extraction with multiple fallbacks
   const createPaperMetadata = useCallback((
@@ -1304,7 +1318,7 @@ const ResearchCardNote: React.FC<{
     loadPdfFromUrl(note.pdfUri, sourceTitle);
     setActivePdf(note.pdfUri);
     setSearchHighlight(cleanedQuote);
-    setColumnVisibility(prev => ({ ...prev, right: true }));
+    openUIColumn('right');
   };
 
   return (

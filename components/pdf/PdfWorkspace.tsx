@@ -5,6 +5,7 @@ import { PdfViewer } from './PdfViewer';
 import PdfUploader from './PdfUploader';
 import { X, FileText, Loader2, Plus, ChevronDown, Upload, Link as LinkIcon, ArrowRight } from 'lucide-react';
 import { useLibrary } from '../../contexts/LibraryContext';
+import { useUI } from '../../contexts/UIContext';
 
 // Configure worker
 pdfjsLibWeb.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
@@ -57,7 +58,7 @@ export const PdfWorkspace: React.FC = () => {
 
     // Add Menu state
     const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
-    const [addMenuPos, setAddMenuPos] = useState<'top' | 'bottom'>('top');
+    const [addMenuCoords, setAddMenuCoords] = useState<{ left: number; top: number } | null>(null);
     const [showUrlInput, setShowUrlInput] = useState(false);
     const [urlInputValue, setUrlInputValue] = useState('');
     const addMenuRef = useRef<HTMLDivElement>(null);
@@ -164,9 +165,17 @@ export const PdfWorkspace: React.FC = () => {
         }
     }, [isUiVisible]);
 
-    const openAddMenu = (pos: 'top' | 'bottom') => {
-        setAddMenuPos(pos);
-        setIsAddMenuOpen(!isAddMenuOpen);
+    const openAddMenuAt = (e: React.MouseEvent) => {
+        const target = e.currentTarget as HTMLElement | null;
+        if (target) {
+            const rect = target.getBoundingClientRect();
+            // Position menu centered under the button, slightly below
+            setAddMenuCoords({ left: rect.left + rect.width / 2, top: rect.bottom + 8 });
+        } else {
+            setAddMenuCoords(null);
+        }
+        setShowUrlInput(false);
+        setIsAddMenuOpen(prev => !prev);
     };
 
     useEffect(() => {
@@ -194,18 +203,16 @@ export const PdfWorkspace: React.FC = () => {
                 const page = await activePdf.doc.getPage(i);
                 const textContent = await page.getTextContent();
 
-                const sortedItems = textContent.items.slice().sort((a: any, b: any) => {
-                    const y1 = a.transform[5]; const y2 = b.transform[5];
-                    const x1 = a.transform[4]; const x2 = b.transform[4];
-                    if (Math.abs(y1 - y2) > 4) return y2 - y1;
-                    return x1 - x2;
-                });
+                // CRITICAL FIX: Do NOT sort by Y-coordinate!
+                // PDF.js provides items in the correct reading order (Column-by-Column).
+                // Sorting by Y merges columns (Row-by-Row), causing search to fail on multi-column text.
+                const itemsToProcess = textContent.items;
 
                 let combinedText = '';
                 const charToItemMap: (MapEntry | null)[] = [];
                 let lastItem: any = null;
 
-                for (const item of sortedItems) {
+                for (const item of itemsToProcess) {
                     const originalItemIndex = textContent.items.indexOf(item);
                     if (lastItem) {
                         const lastY = lastItem.transform[5];
@@ -373,7 +380,7 @@ export const PdfWorkspace: React.FC = () => {
                         activePdfUri={activePdfUri}
                         onTabChange={handleTabChange}
                         onClosePdf={handleClosePdf}
-                        onAddClick={() => openAddMenu('top')}
+                        onAddClick={(e) => openAddMenuAt(e)}
                         isVisible={isUiVisible}
                     />
 
@@ -381,8 +388,8 @@ export const PdfWorkspace: React.FC = () => {
                     {isAddMenuOpen && (
                         <div
                             ref={addMenuRef}
-                            className={`fixed z-[100] w-64 bg-white dark:bg-dark-card rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-2 animate-fade-in transition-all
-                    ${addMenuPos === 'top' ? 'top-16 left-1/2 -translate-x-1/2' : 'bottom-20 left-1/2 -translate-x-1/2'}`}
+                            className={`fixed z-[100] w-64 bg-white dark:bg-dark-card rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-2 animate-fade-in transition-all`}
+                            style={addMenuCoords ? { left: addMenuCoords.left, top: addMenuCoords.top, transform: 'translateX(-50%)' } as React.CSSProperties : { left: '50%', top: '6rem', transform: 'translateX(-50%)' }}
                         >
                             {showUrlInput ? (
                                 <div className="p-2 space-y-2">
@@ -445,7 +452,7 @@ export const PdfWorkspace: React.FC = () => {
                                 currentPage={activePdf.currentPage}
                                 numPages={activePdf.numPages}
                                 onPageChange={handlePageChange}
-                                onNewFile={() => openAddMenu('bottom')}
+                                onNewFile={() => openAddMenuAt('bottom')}
                                 zoomLevel={activePdf.zoomLevel}
                                 onZoom={handleZoom}
                                 searchQuery={searchQuery}

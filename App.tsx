@@ -15,7 +15,7 @@ import { useResearch } from './contexts/ResearchContext';
 import { useLibrary } from './contexts/LibraryContext';
 import { useAuth } from './contexts/AuthContext';
 import { AuthModal } from './components/auth/AuthModal';
-import { Globe, Check, Library, ChevronsDown, ChevronsUp, AlertTriangle, User, LogOut, Settings, Sun, Moon, X } from 'lucide-react';
+import { Globe, Check, Library, ChevronsDown, ChevronsUp, AlertTriangle, User, LogOut, Settings, Sun, Moon, X, Search } from 'lucide-react';
 
 // Import configuration to validate on app start
 import { getConfig } from './config/env';
@@ -50,10 +50,10 @@ const App: React.FC = () => {
   useEffect(() => {
     try {
       getConfig(); // This will throw if required config is missing
-      
+
       // Clean up expired metadata cache entries
       cleanupExpiredCache();
-      
+
       setIsConfigLoading(false);
     } catch (error) {
       setConfigError(error instanceof Error ? error.message : 'Configuration error');
@@ -72,7 +72,9 @@ const App: React.FC = () => {
     setLibraryExpanded,
     setLibraryOpen,
     libraryActiveView,
-    resetUI
+    resetUI,
+    isHeaderVisible,
+    setHeaderVisible
   } = useUI();
 
   const {
@@ -167,6 +169,44 @@ const App: React.FC = () => {
     return <PdfWorkspace />;
   }, []);
 
+  const handleSearchTrigger = useCallback((query: any, mode: 'web' | 'deep') => {
+    if (isLibraryOpen) {
+      setLibraryOpen(false);
+    }
+
+    if (!searchState.hasSearched && researchPhase === 'idle' && arxivCandidates.length === 0) {
+      setIsHomeExiting(true);
+    }
+
+    setTimeout(() => {
+      if (mode === 'web' && typeof query === 'string') {
+        performWebSearch(query);
+        openColumn('middle'); // Open Research column for web searches
+      } else if (mode === 'deep') {
+        if (deepResearchResults.length > 0 || arxivCandidates.length > 0) {
+          setPendingDeepResearchQuery(query);
+        } else {
+          performDeepResearch(query);
+        }
+        openColumn('middle');
+      }
+
+      setTimeout(() => {
+        setIsHomeExiting(false);
+      }, 500);
+    }, 50);
+  }, [isLibraryOpen, setLibraryOpen, searchState.hasSearched, researchPhase, arxivCandidates.length, setIsHomeExiting, performWebSearch, openColumn, deepResearchResults.length, setPendingDeepResearchQuery, performDeepResearch]);
+
+  const allColumnsClosed = useMemo(() => !columnVisibility.left && !columnVisibility.middle && !columnVisibility.library && !columnVisibility.right, [columnVisibility]);
+  const showHeaderSearch = useMemo(() => !allColumnsClosed, [allColumnsClosed]);
+
+  const headerContainerClass = useMemo(() =>
+    `flex-none transition-all duration-500 ease-in-out relative z-40 ${(isHeaderVisible || allColumnsClosed)
+      ? 'opacity-100 translate-y-0 max-h-[300px]'
+      : 'opacity-0 -translate-y-full max-h-0 pointer-events-none'
+    }`
+    , [isHeaderVisible, allColumnsClosed]);
+
   // Show loading screen during authentication or config loading
   if (authLoading || isConfigLoading) {
     return (
@@ -199,49 +239,6 @@ const App: React.FC = () => {
 
   // Remove the unauthenticated landing page barrier - let everyone use the app
 
-  const handleSearchTrigger = (query: any, mode: 'web' | 'deep') => {
-    if (isLibraryOpen) {
-      setLibraryOpen(false);
-    }
-
-    if (!searchState.hasSearched && researchPhase === 'idle' && arxivCandidates.length === 0) {
-      setIsHomeExiting(true);
-    }
-
-    setTimeout(() => {
-      if (mode === 'web' && typeof query === 'string') {
-        performWebSearch(query);
-        openColumn('middle'); // Open Research column for web searches
-      } else if (mode === 'deep') {
-        if (deepResearchResults.length > 0 || arxivCandidates.length > 0) {
-          setPendingDeepResearchQuery(query);
-        } else {
-          performDeepResearch(query);
-        }
-        openColumn('middle');
-      }
-
-      setTimeout(() => {
-        setIsHomeExiting(false);
-      }, 500);
-    }, 50);
-  };
-
-  const allColumnsClosed = !columnVisibility.left && !columnVisibility.middle && !columnVisibility.library && !columnVisibility.right;
-  const showHeaderSearch = !allColumnsClosed;
-
-  // Show loading screen while validating config
-  if (isConfigLoading) {
-    return (
-      <div className="h-screen flex flex-col items-center justify-center bg-cream dark:bg-dark-bg font-sans">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-scholar-100 dark:border-scholar-900 border-t-scholar-600 dark:border-t-scholar-500 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Initializing Research Note...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="h-screen flex flex-col bg-cream dark:bg-dark-bg font-sans transition-colors duration-300 overflow-hidden">
 
@@ -251,31 +248,42 @@ const App: React.FC = () => {
       />
       <AgentResearcher />
 
-      <div className="flex-none pt-4 pb-2 px-6 flex items-start justify-center relative z-40">
-        {!isLibraryOpen && !allColumnsClosed && (
-          <div className="absolute left-6 top-6 z-40">
-            <ResearchNoteLogo className="text-2xl" />
-          </div>
-        )}
-        {showHeaderSearch && (
-          <div className="w-full max-w-3xl relative animate-fade-in">
-            <SearchBar centered={true} onSearch={handleSearchTrigger} />
-          </div>
-        )}
-        {!isLibraryOpen && (
-          <div className="absolute right-2 top-4 flex items-center gap-3 pr-5">
-            <LayoutControls />
-          </div>
-        )}
+      {/* Search Tag - Visible only when header is hidden and columns are open */}
+      {!isHeaderVisible && !allColumnsClosed && (
+        <button
+          onClick={() => setHeaderVisible(true)}
+          className="fixed top-0 left-1/2 -translate-x-1/2 z-[100] bg-white dark:bg-gray-800 px-6 py-2.5 rounded-b-2xl shadow-xl border-x border-b border-gray-200 dark:border-gray-700 animate-slide-down hover:pb-4 transition-all group"
+          aria-label="Restore Search Header"
+        >
+          <Search size={20} className="text-scholar-600 dark:text-scholar-400 group-hover:scale-110 transition-transform" />
+        </button>
+      )}
+
+      <div className={headerContainerClass}>
+        <div className={`pt-4 pb-2 px-6 flex items-start justify-center relative ${allColumnsClosed ? 'min-h-[64px]' : ''}`}>
+          {!isLibraryOpen && !allColumnsClosed && (
+            <div className="absolute left-6 top-6 z-40">
+              <ResearchNoteLogo className="text-2xl" />
+            </div>
+          )}
+          {showHeaderSearch && (
+            <div className="w-full max-w-3xl relative animate-fade-in">
+              <SearchBar centered={true} onSearch={handleSearchTrigger} />
+            </div>
+          )}
+          {!isLibraryOpen && (
+            <div className="absolute right-2 top-4 flex items-center gap-3 pr-5">
+              <LayoutControls />
+            </div>
+          )}
+        </div>
       </div>
 
       {allColumnsClosed ? (
-        <main 
-          className={`flex-grow flex flex-col items-center justify-center px-4 -mt-20 transition-all duration-500 ease-in-out ${
-            isHomeExiting ? 'opacity-0 scale-95' : 'animate-slide-up'
-          } ${
-            activeSearchMode === 'deep' && isDeepSearchBarExpanded ? '-mt-72' : ''
-          }`}
+        <main
+          className={`flex-grow flex flex-col items-center justify-center px-4 -mt-20 transition-all duration-500 ease-in-out ${isHomeExiting ? 'opacity-0 scale-95' : 'animate-slide-up'
+            } ${activeSearchMode === 'deep' && isDeepSearchBarExpanded ? '-mt-72' : ''
+            }`}
         >
           <div className="mb-10 text-center select-none">
             <div className="text-6xl sm:text-7xl lg:text-8xl font-semibold tracking-tight mb-4">

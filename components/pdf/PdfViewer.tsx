@@ -1,32 +1,33 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Copy, 
-  Search, 
-  ZoomIn, 
-  ZoomOut,
-  File,
-  Menu
+import {
+    ChevronLeft,
+    ChevronRight,
+    Copy,
+    Search,
+    ZoomIn,
+    ZoomOut,
+    File,
+    Menu
 } from 'lucide-react';
+import { useUI } from '../../contexts/UIContext';
 
 import { LeftArrowIcon, RightArrowIcon, NewFileIcon, CopyIcon, SearchIcon, ZoomInIcon, ZoomOutIcon } from '../ui/icons';
 
 // Define a placeholder type for PDFDocumentProxy to avoid TypeScript errors
 type PDFDocumentProxy = any;
-type PDFRenderTask = any; 
+type PDFRenderTask = any;
 
 type MapEntry = { itemIndex: number; charInItemIndex: number };
 interface PageTextIndex {
-  combinedText: string;
-  charToItemMap: (MapEntry | null)[];
+    combinedText: string;
+    charToItemMap: (MapEntry | null)[];
 }
 interface SearchResult {
-  startPageIndex: number;
-  startCharIndex: number;
-  endPageIndex: number;
-  endCharIndex: number;
+    startPageIndex: number;
+    startCharIndex: number;
+    endPageIndex: number;
+    endCharIndex: number;
 }
 
 interface PdfViewerProps {
@@ -49,152 +50,182 @@ interface PdfViewerProps {
 }
 
 const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[], textItems: any[]) => {
-    if (!textItems || textItems.length === 0 || !spans || spans.length === 0) {
+    // SIMPLIFIED APPROACH: Preserve the original PDF.js span order
+    // 
+    // KEY INSIGHT: PDF.js already extracts text in the correct reading order for 
+    // two-column academic papers. Our previous complex reorganization was BREAKING 
+    // this correct order. When the function errored and fell back to appending spans 
+    // in their original order, text selection worked correctly!
+    //
+    // This simplified function:
+    // 1. Detects column layout (for informational/debugging purposes)
+    // 2. Preserves the original PDF.js order (which is already correct)
+    // 3. Adds column markers to spans for potential styling
+
+    if (!textItems?.length || !spans?.length) {
         container.innerHTML = '';
         return;
+    }
+
+    // Type for column detection result
+    type ColumnBounds = {
+        leftEnd: number;
+        rightStart: number;
+        gapWidth: number;
+        isTwoColumn: boolean;
     };
-    
-    const itemsWithIndices = textItems.map((item, index) => ({ item, index }));
-    const xList = itemsWithIndices.map(i => i.item.transform[4]);
-    
-    let sortedItemsWithIndices = itemsWithIndices;
 
-    if (xList.length > 0) {
-        const minX = Math.min(...xList);
-        const maxX = Math.max(...itemsWithIndices.map(i => i.item.transform[4] + i.item.width));
-        const midX = (minX + maxX) / 2;
+    // Detect column boundaries (for informational purposes)
+    const detectColumnLayout = (textItems: any[]): ColumnBounds => {
+        const allXStarts = textItems.map(item => item.transform[4]);
+        const allXEnds = textItems.map(item => item.transform[4] + (item.width || 0));
+        const pageLeft = Math.min(...allXStarts);
+        const pageRight = Math.max(...allXEnds);
+        const pageWidth = pageRight - pageLeft;
 
-        const crossers: typeof itemsWithIndices = [];
-        const left: typeof itemsWithIndices = [];
-        const right: typeof itemsWithIndices = [];
+        // Density analysis to find column gap
+        const buckets = 100;
+        const bucketWidth = pageWidth / buckets;
+        const density = new Array(buckets).fill(0);
 
-        itemsWithIndices.forEach(obj => {
-            const x = obj.item.transform[4];
-            const w = obj.item.width;
-            if (x < midX && x + w > midX) {
-                crossers.push(obj);
-            } else if (x + w <= midX) {
-                left.push(obj);
-            } else {
-                right.push(obj);
+        textItems.forEach(item => {
+            const itemStart = item.transform[4];
+            const itemEnd = itemStart + (item.width || 0);
+            const startBucket = Math.floor((itemStart - pageLeft) / bucketWidth);
+            const endBucket = Math.floor((itemEnd - pageLeft) / bucketWidth);
+            for (let b = Math.max(0, startBucket); b <= Math.min(buckets - 1, endBucket); b++) {
+                density[b]++;
             }
         });
 
-        const isTwoColumn = itemsWithIndices.length > 0 && (crossers.length / itemsWithIndices.length) < 0.2;
+        // Find largest gap in center region (30-70% of page)
+        const searchStart = Math.floor(buckets * 0.3);
+        const searchEnd = Math.floor(buckets * 0.7);
+        let bestGapStart = -1;
+        let bestGapWidth = 0;
+        let currentGapStart = -1;
 
-        const ySorter = (a: any, b: any) => {
-            const y1 = a.item.transform[5]; const y2 = b.item.transform[5];
-            if (Math.abs(y1 - y2) > 4) return y2 - y1; 
-            return a.item.transform[4] - b.item.transform[4];
-        };
-
-        if (isTwoColumn) {
-             sortedItemsWithIndices = [
-                ...crossers.sort(ySorter),
-                ...left.sort(ySorter),
-                ...right.sort(ySorter)
-            ];
-        } else {
-            sortedItemsWithIndices = itemsWithIndices.sort(ySorter);
-        }
-    }
-
-    const lines: { y: number; height: number; items: { textItem: any, index: number }[] }[] = [];
-    if (sortedItemsWithIndices.length > 0) {
-        let currentLine = {
-            y: sortedItemsWithIndices[0].item.transform[5],
-            height: sortedItemsWithIndices[0].item.height,
-            items: [{textItem: sortedItemsWithIndices[0].item, index: sortedItemsWithIndices[0].index}]
-        };
-        lines.push(currentLine);
-
-        for (let i = 1; i < sortedItemsWithIndices.length; i++) {
-            const currentItem = sortedItemsWithIndices[i];
-            const lastLine = lines[lines.length - 1];
-            const verticalDiff = lastLine.y - currentItem.item.transform[5]; 
-            
-            if (Math.abs(verticalDiff) < lastLine.height * 0.5) {
-                lastLine.items.push({textItem: currentItem.item, index: currentItem.index});
-                lastLine.height = Math.max(lastLine.height, currentItem.item.height);
+        for (let i = searchStart; i < searchEnd; i++) {
+            if (density[i] === 0) {
+                if (currentGapStart === -1) currentGapStart = i;
             } else {
-                currentLine = {
-                    y: currentItem.item.transform[5],
-                    height: currentItem.item.height,
-                    items: [{textItem: currentItem.item, index: currentItem.index}]
-                };
-                lines.push(currentLine);
+                if (currentGapStart !== -1) {
+                    const gapWidth = i - currentGapStart;
+                    if (gapWidth > bestGapWidth) {
+                        bestGapWidth = gapWidth;
+                        bestGapStart = currentGapStart;
+                    }
+                    currentGapStart = -1;
+                }
             }
         }
-    }
-    
-    const paragraphs: { items: { textItem: any, index: number }[] }[] = [];
-    if (lines.length > 0) {
-        let currentParagraph = { items: [...lines[0].items] };
-        paragraphs.push(currentParagraph);
-        
-        for (let i = 1; i < lines.length; i++) {
-            const prevLine = lines[i - 1];
-            const currentLine = lines[i];
-            const verticalGap = prevLine.y - currentLine.y;
-            const isParagraphBreak = verticalGap > prevLine.height * 1.5 || verticalGap < -10;
 
-            if (isParagraphBreak) {
-                currentParagraph = { items: [...currentLine.items] };
-                paragraphs.push(currentParagraph);
-            } else {
-                currentParagraph.items.push(...currentLine.items);
+        if (currentGapStart !== -1) {
+            const gapWidth = searchEnd - currentGapStart;
+            if (gapWidth > bestGapWidth) {
+                bestGapWidth = gapWidth;
+                bestGapStart = currentGapStart;
             }
         }
-    }
-    
-    const fragment = document.createDocumentFragment();
-    const processedSpans = new Set<HTMLElement>();
 
-    paragraphs.forEach(paragraph => {
-        const groupWrapper = document.createElement('div');
-        groupWrapper.className = 'structural-item';
-        
-        paragraph.items.sort((a, b) => {
-            const y1 = a.textItem.transform[5];
-            const y2 = b.textItem.transform[5];
-            if (Math.abs(y1 - y2) > 2) return y2 - y1;
-            return a.textItem.transform[4] - b.textItem.transform[4];
+        const leftEnd = bestGapStart >= 0 ? pageLeft + (bestGapStart * bucketWidth) : pageLeft + pageWidth * 0.5;
+        const rightStart = bestGapStart >= 0 ? pageLeft + ((bestGapStart + bestGapWidth) * bucketWidth) : pageLeft + pageWidth * 0.5;
+        const gapWidthPx = rightStart - leftEnd;
+
+        // Validate two-column layout
+        let leftCount = 0, rightCount = 0;
+        textItems.forEach(item => {
+            const x = item.transform[4];
+            const end = x + (item.width || 0);
+            if (end <= leftEnd + 5) leftCount++;
+            else if (x >= rightStart - 5) rightCount++;
         });
 
-        paragraph.items.forEach(({ index }) => {
-            const span = spans[index];
-            if (span && !processedSpans.has(span)) {
-                groupWrapper.appendChild(span);
-                processedSpans.add(span);
+        const isTwoColumn =
+            leftCount > textItems.length * 0.15 &&
+            rightCount > textItems.length * 0.15 &&
+            gapWidthPx > 20;
+
+        return { leftEnd, rightStart, gapWidth: gapWidthPx, isTwoColumn };
+    };
+
+    try {
+        const columnBounds = detectColumnLayout(textItems);
+
+        // CRITICAL: Preserve the original PDF.js span order!
+        // PDF.js already provides text in the correct reading order for selection
+        container.innerHTML = '';
+
+        // Track Y-coordinate to detect line changes and add spacing
+        let previousY: number | null = null;
+        let previousSpan: HTMLElement | null = null;
+        const LINE_CHANGE_THRESHOLD = 3; // Y difference that indicates a new line
+
+        spans.forEach((span, index) => {
+            span.style.position = span.style.position || 'absolute';
+
+            // Get current Y-coordinate from textItems
+            const currentY = textItems[index]?.transform[5];
+
+            // If Y-coordinate changed significantly, append a space to the PREVIOUS span
+            // This prevents words from being concatenated when selecting multiple lines
+            if (previousY !== null && currentY !== undefined && previousSpan) {
+                const yDiff = Math.abs(currentY - previousY);
+                if (yDiff > LINE_CHANGE_THRESHOLD) {
+                    // New line detected - append space to previous span's text
+                    previousSpan.textContent = previousSpan.textContent + ' ';
+                }
             }
+            previousY = currentY;
+            previousSpan = span;
+
+            // Add column marker class for debugging/styling (optional)
+            if (columnBounds.isTwoColumn && textItems[index]) {
+                const x = textItems[index].transform[4];
+                const end = x + (textItems[index].width || 0);
+
+                if (end <= columnBounds.leftEnd + 8) {
+                    span.classList.add('column-left');
+                } else if (x >= columnBounds.rightStart - 8) {
+                    span.classList.add('column-right');
+                } else {
+                    span.classList.add('column-header');
+                }
+            }
+
+            container.appendChild(span);
         });
 
-        if (groupWrapper.hasChildNodes()) {
-            fragment.appendChild(groupWrapper);
-        }
-    });
+        container.classList.add('structurally-tagged',
+            columnBounds.isTwoColumn ? 'two-column-layout' : 'single-column-layout'
+        );
 
-    spans.forEach(span => {
-        if (!processedSpans.has(span)) {
-            fragment.appendChild(span);
-        }
-    });
-    
-    container.innerHTML = '';
-    container.appendChild(fragment);
+    } catch (error) {
+        console.error('Error in regroupSpansByVisualLayout:', error);
+        // Fallback: just append spans as-is (this is actually what works!)
+        container.innerHTML = '';
+        spans.forEach(span => {
+            span.style.position = span.style.position || 'absolute';
+            container.appendChild(span);
+        });
+        container.classList.add('structurally-tagged', 'fallback-layout');
+    }
 };
 
-const SearchControls: React.FC<Pick<PdfViewerProps, 'searchQuery' | 'setSearchQuery' | 'performSearch' | 'searchResults' | 'activeResultIndex' | 'navigateToResult'>> = 
-  ({ searchQuery, setSearchQuery, performSearch, searchResults, activeResultIndex, navigateToResult }) => {
-    
-    const [showSearch, setShowSearch] = useState(false);
+
+type SearchControlsProps = Pick<PdfViewerProps, 'searchQuery' | 'setSearchQuery' | 'performSearch' | 'searchResults' | 'activeResultIndex' | 'navigateToResult'> & {
+    isSearchOpen: boolean;
+    setIsSearchOpen: (open: boolean) => void;
+};
+
+const SearchControls: React.FC<SearchControlsProps> = ({ searchQuery, setSearchQuery, performSearch, searchResults, activeResultIndex, navigateToResult, isSearchOpen, setIsSearchOpen }) => {
 
     const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
             performSearch(searchQuery);
         }
     };
-    
+
     useEffect(() => {
         if (searchQuery === '') {
             performSearch('');
@@ -204,19 +235,20 @@ const SearchControls: React.FC<Pick<PdfViewerProps, 'searchQuery' | 'setSearchQu
     return (
         <>
             <button
-                onClick={() => setShowSearch(!showSearch)}
+                onClick={() => setIsSearchOpen(!isSearchOpen)}
                 className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                 title="Search Document"
             >
                 <SearchIcon className="w-5 h-5" />
             </button>
-            {showSearch && (
+            {isSearchOpen && (
                 <div className="flex items-center space-x-2 border-l border-gray-300 dark:border-gray-600 ml-2 pl-2">
                     <input
                         type="text"
                         placeholder="Search..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => { setSearchQuery(e.target.value); setIsSearchOpen(true); }}
+                        onFocus={() => setIsSearchOpen(true)}
                         onKeyDown={handleSearchKeyDown}
                         className="w-32 sm:w-40 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -225,7 +257,7 @@ const SearchControls: React.FC<Pick<PdfViewerProps, 'searchQuery' | 'setSearchQu
                             <span className="text-gray-600 dark:text-gray-400 text-sm font-medium">
                                 {activeResultIndex + 1} / {searchResults.length}
                             </span>
-                             <button
+                            <button
                                 onClick={() => navigateToResult('prev')}
                                 className="p-1 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                                 title="Previous Result"
@@ -250,6 +282,7 @@ const SearchControls: React.FC<Pick<PdfViewerProps, 'searchQuery' | 'setSearchQu
 };
 
 export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
+    const { handleScroll: globalHandleScroll } = useUI();
     const { pdfDoc, pdfjsLib, currentPage, numPages, onPageChange, onNewFile, zoomLevel, onZoom, searchResults, activeResultIndex, documentTextIndex, onScrollActivity } = props;
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const textLayerRef = useRef<HTMLDivElement>(null);
@@ -259,7 +292,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
     const toastTimer = useRef<number | null>(null);
     const textDivsRef = useRef<HTMLElement[]>([]);
     const [isUiVisible, setIsUiVisible] = useState(true);
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [pageInput, setPageInput] = useState(currentPage.toString());
+    const isInteractingWithUi = useRef(false);
+    const controlBarRef = useRef<HTMLDivElement>(null);
+    const [controlBarStyle, setControlBarStyle] = useState<React.CSSProperties | null>(null);
 
     const [selectionDetails, setSelectionDetails] = useState<{
         visible: boolean;
@@ -268,7 +305,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
         text: string;
     }>({ visible: false, x: 0, y: 0, text: '' });
 
-     useEffect(() => {
+    useEffect(() => {
         if (toastMessage) {
             if (toastTimer.current) clearTimeout(toastTimer.current);
             toastTimer.current = window.setTimeout(() => {
@@ -276,7 +313,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
             }, 2000);
         }
         return () => {
-            if(toastTimer.current) clearTimeout(toastTimer.current);
+            if (toastTimer.current) clearTimeout(toastTimer.current);
         }
     }, [toastMessage]);
 
@@ -288,7 +325,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
         const handleMouseUp = () => {
             const selection = window.getSelection();
             const selectedText = selection ? selection.toString().trim() : '';
-            
+
             if (selectedText && selection && !selection.isCollapsed) {
                 const range = selection.getRangeAt(0);
                 const rect = range.getBoundingClientRect();
@@ -300,14 +337,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 });
             }
         };
-        
+
         const handleMouseDown = (event: MouseEvent) => {
             if (selectionDetails.visible) {
-                 const copyButton = document.getElementById('selection-copy-button');
-                 if (!copyButton || !copyButton.contains(event.target as Node)) {
+                const copyButton = document.getElementById('selection-copy-button');
+                if (!copyButton || !copyButton.contains(event.target as Node)) {
                     window.getSelection()?.removeAllRanges();
                     setSelectionDetails({ visible: false, x: 0, y: 0, text: '' });
-                 }
+                }
             }
         };
 
@@ -320,13 +357,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
             document.removeEventListener('mousedown', handleMouseDown);
         };
     }, [selectionDetails.visible]);
-    
+
     useEffect(() => {
         const scrollEl = scrollContainerRef.current;
         if (!scrollEl) return;
 
         const handleScroll = () => {
-            if (isUiVisible) {
+            // Keep UI visible when user is interacting with controls OR when search is open
+            if (isUiVisible && !isInteractingWithUi.current && !isSearchOpen) {
                 setIsUiVisible(false);
                 if (onScrollActivity) onScrollActivity();
             }
@@ -334,7 +372,34 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
 
         scrollEl.addEventListener('scroll', handleScroll, { passive: true });
         return () => scrollEl.removeEventListener('scroll', handleScroll);
-    }, [isUiVisible, onScrollActivity]);
+    }, [isUiVisible, onScrollActivity, isSearchOpen]);
+
+    // Keep the control bar positioned and sized to the viewer container (responsive)
+    useEffect(() => {
+        const updateControlBar = () => {
+            const container = scrollContainerRef.current;
+            if (!container) {
+                setControlBarStyle(null);
+                return;
+            }
+            const rect = container.getBoundingClientRect();
+            const maxWidth = Math.max(240, rect.width - 24); // ensure some min width
+            const left = rect.left + rect.width / 2 + window.scrollX;
+            const bottom = 16; // keep small gap from bottom
+            setControlBarStyle({ left, width: Math.min(maxWidth, 1200), bottom, transform: 'translateX(-50%)' });
+        };
+
+        updateControlBar();
+        window.addEventListener('resize', updateControlBar);
+        window.addEventListener('orientationchange', updateControlBar);
+        const ro = new ResizeObserver(updateControlBar);
+        if (scrollContainerRef.current) ro.observe(scrollContainerRef.current);
+        return () => {
+            window.removeEventListener('resize', updateControlBar);
+            window.removeEventListener('orientationchange', updateControlBar);
+            try { ro.disconnect(); } catch (e) { }
+        };
+    }, []);
 
     const applyHighlights = useCallback(() => {
         if (!textLayerRef.current || !documentTextIndex) return;
@@ -348,6 +413,67 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
         const pageTextIndex = documentTextIndex[currentPageIndex];
         if (!pageTextIndex) return;
 
+        // Build a span-based column detection for this page (fallback when column classes are absent)
+        const computeColumnBoundsFromSpans = () => {
+            try {
+                const spansForBounds = textDivsRef.current.filter(s => !!s);
+                if (!spansForBounds.length) return null;
+                const rects = spansForBounds.map(s => s.getBoundingClientRect());
+                const allXStarts = rects.map(r => r.left);
+                const allXEnds = rects.map(r => r.right);
+                const pageLeft = Math.min(...allXStarts);
+                const pageRight = Math.max(...allXEnds);
+                const pageWidth = pageRight - pageLeft || (textLayerRef.current ? textLayerRef.current.clientWidth : window.innerWidth);
+
+                const buckets = 100;
+                const bucketWidth = pageWidth / buckets;
+                const density = new Array(buckets).fill(0);
+
+                rects.forEach(r => {
+                    const center = r.left + (r.width || 0) / 2 - pageLeft;
+                    let b = Math.floor(center / bucketWidth);
+                    if (b < 0) b = 0;
+                    if (b >= buckets) b = buckets - 1;
+                    density[b]++;
+                });
+
+                const searchStart = Math.floor(buckets * 0.25);
+                const searchEnd = Math.floor(buckets * 0.75);
+                let bestGapStart = -1;
+                let bestGapWidth = 0;
+                let currentGapStart = -1;
+                for (let i = searchStart; i < searchEnd; i++) {
+                    if (density[i] === 0) {
+                        if (currentGapStart === -1) currentGapStart = i;
+                    } else {
+                        if (currentGapStart !== -1) {
+                            const gapWidth = i - currentGapStart;
+                            if (gapWidth > bestGapWidth) {
+                                bestGapWidth = gapWidth;
+                                bestGapStart = currentGapStart;
+                            }
+                            currentGapStart = -1;
+                        }
+                    }
+                }
+                if (currentGapStart !== -1) {
+                    const gapWidth = searchEnd - currentGapStart;
+                    if (gapWidth > bestGapWidth) {
+                        bestGapWidth = gapWidth;
+                        bestGapStart = currentGapStart;
+                    }
+                }
+
+                const leftEnd = bestGapStart >= 0 ? pageLeft + (bestGapStart * bucketWidth) : pageLeft + pageWidth * 0.5;
+                const rightStart = bestGapStart >= 0 ? pageLeft + ((bestGapStart + bestGapWidth) * bucketWidth) : pageLeft + pageWidth * 0.5;
+                return { leftEnd, rightStart, isTwoColumn: bestGapStart >= 0 && bestGapWidth > 2 };
+            } catch (e) {
+                return null;
+            }
+        };
+
+        const columnBoundsFromSpans = computeColumnBoundsFromSpans();
+
         searchResults.forEach((result, index) => {
             if (currentPageIndex >= result.startPageIndex && currentPageIndex <= result.endPageIndex) {
                 const isActive = activeResultIndex === index;
@@ -355,22 +481,130 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
 
                 const start = (currentPageIndex === result.startPageIndex) ? result.startCharIndex : 0;
                 const end = (currentPageIndex === result.endPageIndex) ? result.endCharIndex : pageTextIndex.combinedText.length;
-                
+
+                // Debug: Show what text is being matched
+                const matchedText = pageTextIndex.combinedText.substring(start, end);
+                console.log('🔍 SEARCH HIGHLIGHT:', {
+                    matchedText: `"${matchedText}"`,
+                    charRange: `${start} → ${end}`,
+                    isActive
+                });
+
                 const itemIndicesToHighlight = new Set<number>();
                 for (let i = start; i < end; i++) {
                     const mapEntry = pageTextIndex.charToItemMap[i];
-                    if(mapEntry) {
+                    if (mapEntry) {
                         itemIndicesToHighlight.add(mapEntry.itemIndex);
                     }
                 }
-                
+
+                console.log('🎯 SPANS TO HIGHLIGHT:', {
+                    itemIndices: Array.from(itemIndicesToHighlight),
+                    textDivsLength: textDivsRef.current.length,
+                    spanTexts: Array.from(itemIndicesToHighlight).map(idx => {
+                        const span = textDivsRef.current[idx];
+                        return span ? `"${span.textContent}"` : `NOT FOUND (idx ${idx} > length ${textDivsRef.current.length})`;
+                    })
+                });
+
+                // Determine column information for this match once
+                let startClass: string | null = null;
+                try {
+                    const startMapEntry = pageTextIndex.charToItemMap[start];
+                    if (startMapEntry) {
+                        const startSpan = textDivsRef.current[startMapEntry.itemIndex];
+                        if (startSpan) {
+                            if (startSpan.classList.contains('column-left')) startClass = 'column-left';
+                            else if (startSpan.classList.contains('column-right')) startClass = 'column-right';
+                            else if (startSpan.classList.contains('column-header')) startClass = 'column-header';
+                        }
+                    }
+                } catch (e) {
+                    startClass = null;
+                }
+
+                // Compute which columns/sides the matched spans live in (use span bounds if classes absent)
+                const matchedSides = new Set<string>();
+                itemIndicesToHighlight.forEach(idx => {
+                    const s = textDivsRef.current[idx];
+                    if (!s) return;
+                    const classSide = s.classList.contains('column-left') ? 'left' : s.classList.contains('column-right') ? 'right' : s.classList.contains('column-header') ? 'header' : null;
+                    if (classSide) matchedSides.add(classSide);
+                    else if (columnBoundsFromSpans) {
+                        const r = s.getBoundingClientRect();
+                        if (r.right <= columnBoundsFromSpans.leftEnd + 2) matchedSides.add('left');
+                        else if (r.left >= columnBoundsFromSpans.rightStart - 2) matchedSides.add('right');
+                        else matchedSides.add('header');
+                    } else {
+                        // fallback to center-based side
+                        const r = s.getBoundingClientRect();
+                        const pageMid = (textLayerRef.current ? (textLayerRef.current.getBoundingClientRect().left + (textLayerRef.current.clientWidth || 0) / 2) : (window.innerWidth / 2));
+                        if (r.left + r.width / 2 <= pageMid) matchedSides.add('left');
+                        else matchedSides.add('right');
+                    }
+                });
+
+                // Now highlight each span, using detected sides with X-distance fallback
                 itemIndicesToHighlight.forEach(itemIndex => {
                     const span = textDivsRef.current[itemIndex];
-                    if (span) {
+                    if (!span) {
+                        console.warn(`⚠️ Span not found for itemIndex ${itemIndex} (textDivs length: ${textDivsRef.current.length})`);
+                        return;
+                    }
+
+                    let shouldHighlight = true;
+
+                    // If the match legitimately spans multiple sides, allow all matched spans
+                    if (matchedSides.size > 1) {
+                        shouldHighlight = true;
+                    } else {
+                        // Determine this span's side
+                        let spanSide: string | null = null;
+                        if (span.classList.contains('column-left')) spanSide = 'left';
+                        else if (span.classList.contains('column-right')) spanSide = 'right';
+                        else if (span.classList.contains('column-header')) spanSide = 'header';
+                        else if (columnBoundsFromSpans) {
+                            const r = span.getBoundingClientRect();
+                            if (r.right <= columnBoundsFromSpans.leftEnd + 2) spanSide = 'left';
+                            else if (r.left >= columnBoundsFromSpans.rightStart - 2) spanSide = 'right';
+                            else spanSide = 'header';
+                        }
+
+                        if (spanSide && startClass) {
+                            // If we detected a startClass earlier, map it to side and require match
+                            const startSide = startClass === 'column-left' ? 'left' : startClass === 'column-right' ? 'right' : 'header';
+                            shouldHighlight = (spanSide === startSide);
+                        } else if (spanSide && !startClass) {
+                            // No startClass but we have a spanSide: only highlight if it matches the single matched side
+                            const onlySide = Array.from(matchedSides)[0];
+                            shouldHighlight = (spanSide === onlySide);
+                        } else {
+                            // Final fallback: X-distance from start span
+                            try {
+                                const startMapEntry = pageTextIndex.charToItemMap[start];
+                                if (startMapEntry) {
+                                    const startSpan = textDivsRef.current[startMapEntry.itemIndex];
+                                    if (startSpan) {
+                                        const startRect = startSpan.getBoundingClientRect();
+                                        const spanRect = span.getBoundingClientRect();
+                                        const pageWidth = (textLayerRef.current && textLayerRef.current.clientWidth) || window.innerWidth;
+                                        const threshold = Math.max(48, pageWidth * 0.35);
+                                        if (Math.abs(spanRect.left - startRect.left) > threshold) {
+                                            shouldHighlight = false;
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                shouldHighlight = true;
+                            }
+                        }
+                    }
+
+                    if (shouldHighlight) {
                         (span as HTMLElement).classList.add(highlightClass);
                     }
                 });
-                
+
                 if (isActive) {
                     const firstMapEntry = pageTextIndex.charToItemMap[start];
                     if (firstMapEntry) {
@@ -402,7 +636,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                     // Ignore expected RenderingCancelledException
                 }
             }
-            
+
             window.getSelection()?.removeAllRanges();
             setSelectionDetails({ visible: false, x: 0, y: 0, text: '' });
 
@@ -433,19 +667,19 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
 
             const task = page.render(renderContext);
             renderTaskRef.current = task;
-            
+
             try {
                 await task.promise;
 
-                textLayer.innerHTML = ''; 
+                textLayer.innerHTML = '';
                 textLayer.style.width = `${cssViewport.width}px`;
                 textLayer.style.height = `${cssViewport.height}px`;
                 (textLayer as HTMLElement).style.setProperty('--scale-factor', cssViewport.scale.toString());
-                
+
                 const textContent = await page.getTextContent();
                 const textDivs: HTMLElement[] = [];
-                textDivsRef.current = textDivs; 
-                
+                textDivsRef.current = textDivs;
+
                 const textLayerRenderTask = pdfjsLib.renderTextLayer({
                     textContentSource: textContent,
                     container: textLayer,
@@ -455,14 +689,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 if (textLayerRenderTask && textLayerRenderTask.promise) {
                     await textLayerRenderTask.promise;
                 }
-                
+
                 if (textContent.items.length > 0) {
                     (textLayer as HTMLElement).classList.add('structurally-tagged');
                     regroupSpansByVisualLayout(textLayer as HTMLElement, textDivs, textContent.items);
                 } else {
                     (textLayer as HTMLElement).classList.remove('structurally-tagged');
                 }
-                
+
                 applyHighlights();
 
             } catch (error: any) {
@@ -480,7 +714,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
         const handleResize = () => renderPage();
         window.addEventListener('resize', handleResize);
         return () => {
-             if (renderTaskRef.current) {
+            if (renderTaskRef.current) {
                 renderTaskRef.current.cancel();
             }
             window.removeEventListener('resize', handleResize);
@@ -556,14 +790,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 </button>
             )}
 
-            <div 
+            <div
                 ref={scrollContainerRef}
+                onScroll={globalHandleScroll}
                 className="flex-grow w-full max-w-5xl p-0 sm:p-4 mb-16 flex justify-center overflow-auto custom-scrollbar"
             >
                 <div className="flex-shrink-0">
                     <div className="relative shadow-lg rounded-md my-8">
                         <canvas ref={canvasRef} className="block" />
-                        <div 
+                        <div
                             ref={textLayerRef}
                             className="textLayer"
                         />
@@ -577,15 +812,15 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 </div>
             )}
 
-            <div 
+            <div
                 className={`absolute bottom-0 left-0 right-0 h-24 z-[40] transition-opacity ${isUiVisible ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'}`}
                 onMouseEnter={() => setIsUiVisible(true)}
             />
 
             {!isUiVisible && (
-                <button 
-                  onClick={() => setIsUiVisible(true)}
-                  className="sm:hidden fixed bottom-10 right-6 p-3 bg-scholar-600 text-white rounded-full shadow-lg z-[70] animate-fade-in"
+                <button
+                    onClick={() => setIsUiVisible(true)}
+                    className="sm:hidden fixed bottom-10 right-6 p-3 bg-scholar-600 text-white rounded-full shadow-lg z-[70] animate-fade-in"
                 >
                     <Menu size={24} />
                 </button>
@@ -598,15 +833,23 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 </div>
             )}
 
-            <div className={`fixed bottom-4 w-auto bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-full shadow-xl px-4 py-2 flex items-center justify-center space-x-2 sm:space-x-4 z-[60] transition-all duration-300 transform ${isUiVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'}`}>
+            <div
+                ref={controlBarRef}
+                style={controlBarStyle || undefined}
+                className={`fixed bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-full shadow-xl px-3 py-2 flex items-center justify-center gap-2 sm:gap-4 z-[60] transition-all duration-300 transform ${isUiVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'} flex-wrap sm:flex-nowrap overflow-hidden`}
+                onMouseEnter={() => { isInteractingWithUi.current = true; }}
+                onMouseLeave={() => { isInteractingWithUi.current = false; }}
+                onFocus={() => { isInteractingWithUi.current = true; }}
+                onBlur={() => { isInteractingWithUi.current = false; }}
+            >
                 <button
                     onClick={onNewFile}
-                    className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                    className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
                     title="Upload New File"
                 >
                     <NewFileIcon className="w-5 h-5" />
                 </button>
-                <div className="flex items-center space-x-2 border-l border-r border-gray-300 dark:border-gray-600 px-2 sm:px-4">
+                <div className="flex items-center space-x-2 border-l border-r border-gray-300 dark:border-gray-600 px-2 sm:px-4 flex-shrink-0">
                     <button
                         onClick={() => onPageChange(currentPage - 1)}
                         disabled={currentPage <= 1}
@@ -615,7 +858,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                     >
                         <LeftArrowIcon className="w-5 h-5" />
                     </button>
-                    
+
                     <div className="flex items-center text-gray-800 dark:text-gray-200 font-medium text-sm tabular-nums min-w-[120px] justify-center">
                         <span className="mr-1">Page</span>
                         <input
@@ -638,8 +881,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                         <RightArrowIcon className="w-5 h-5" />
                     </button>
                 </div>
-                <div className="flex items-center space-x-2">
-                     <button
+                <div className="flex items-center space-x-2 flex-shrink-0">
+                    <button
                         onClick={() => onZoom('out')}
                         disabled={zoomLevel <= 0.25}
                         className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -647,7 +890,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                     >
                         <ZoomOutIcon className="w-5 h-5" />
                     </button>
-                     <span className="text-gray-800 dark:text-gray-200 font-medium text-sm tabular-nums w-12 text-center">
+                    <span className="text-gray-800 dark:text-gray-200 font-medium text-sm tabular-nums w-12 text-center">
                         {Math.round(zoomLevel * 100)}%
                     </span>
                     <button
@@ -659,7 +902,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                         <ZoomInIcon className="w-5 h-5" />
                     </button>
                 </div>
-                <SearchControls {...props} />
+                <SearchControls {...props} isSearchOpen={isSearchOpen} setIsSearchOpen={setIsSearchOpen} />
             </div>
         </div>
     );

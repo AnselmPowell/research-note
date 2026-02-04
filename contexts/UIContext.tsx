@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { DeepResearchNote } from '../types';
 
 // State for assigning notes to folders
@@ -36,6 +36,11 @@ interface UIContextType {
   closeAssignmentModal: () => void;
   // Reset UI state
   resetUI: () => void;
+  // Header Visibility (Focus Mode)
+  isHeaderVisible: boolean;
+  setHeaderVisible: (visible: boolean) => void;
+  handleAutoHeaderHide: () => void;
+  handleScroll: (e: React.UIEvent<HTMLElement>) => void;
 }
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
@@ -52,7 +57,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
   // NEW: Initialize locks. Right column (Workspace) is locked by default.
   const [columnLocks, setColumnLocks] = useState({
-    left: false,
+    left: true,
     middle: false,
     library: false,
     right: true
@@ -72,6 +77,22 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     sourceMetadata: null
   });
 
+  const [isHeaderVisible, setHeaderVisible] = useState(true);
+  const lastScrollTime = useRef(0);
+
+  const handleAutoHeaderHide = useCallback(() => {
+    if (isHeaderVisible) setHeaderVisible(false);
+  }, [isHeaderVisible]);
+
+  const handleScroll = useCallback((e: React.UIEvent<HTMLElement>) => {
+    const scrollTop = e.currentTarget.scrollTop;
+    // Threshold: Hide header after scrolling down. 
+    // We removed the scroll-up re-show logic to respect Focus Mode.
+    if (scrollTop > 60 && isHeaderVisible) {
+      setHeaderVisible(false);
+    }
+  }, [isHeaderVisible]);
+
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -80,25 +101,53 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   }, [darkMode]);
 
-  const toggleDarkMode = () => setDarkMode(prev => !prev);
+  // Ensure header is visible when all columns are closed (on landing page)
+  useEffect(() => {
+    const allClosed = !columnVisibility.left && !columnVisibility.middle && !columnVisibility.library && !columnVisibility.right;
+    if (allClosed) {
+      setHeaderVisible(true);
+    }
+  }, [columnVisibility]);
 
-  const toggleLock = (col: ColumnKey) => {
+  const toggleDarkMode = useCallback(() => setDarkMode(prev => !prev), []);
+
+  const toggleLock = useCallback((col: ColumnKey) => {
     setColumnLocks(prev => ({ ...prev, [col]: !prev[col] }));
-  };
+  }, []);
+
+
 
   /**
    * UPDATED: Opening a column now checks for locks.
    * Any column that is NOT locked and is NOT the one being opened will be closed.
    */
-  const openColumn = (col: ColumnKey) => {
+  const openColumn = useCallback((col: ColumnKey) => {
+    setHeaderVisible(false);
     setColumnVisibility(prev => {
       const newState = { ...prev };
+
+      // If opening the library, enforce exclusivity: close sources and research
+      // but do NOT automatically open the paper view (right). The paper view
+      // should be controlled separately by the user.
+      if (col === 'library') {
+        newState.library = true;
+        newState.left = false;
+        newState.middle = false;
+        return newState;
+      }
+
+      // Default behavior for other columns
       newState[col] = true;
 
       // RULE: Opening 'left' (Sources) also opens 'middle' (Research)
       // UNLESS 'right' (Paper View) is already open
       if (col === 'left' && !prev.right) {
         newState.middle = true;
+      }
+
+      // If library is currently open, close it when opening left/middle/right
+      if (prev.library && (col === 'left' || col === 'middle' || col === 'right')) {
+        newState.library = false;
       }
 
       // Logic: Close any other column that is NOT locked
@@ -114,28 +163,47 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
       return newState;
     });
-  };
 
-  const toggleColumn = (col: ColumnKey) => {
+    // Ensure the middle column is locked when it becomes visible.
+    // This covers both: direct opening of middle, and opening left which auto-opens middle.
+    setColumnLocks(prev => {
+      const next = { ...prev };
+      if (col === 'left') {
+        next.left = true;
+      }
+      if (col === 'middle' || (col === 'left' && !columnVisibility.right)) {
+        next.middle = true;
+      }
+      return next;
+    });
+  }, [columnLocks, columnVisibility.right]);
+
+  const toggleColumn = useCallback((col: ColumnKey) => {
+    // If toggling to open sources or research while library is open, close library first
+    if (!columnVisibility[col] && columnVisibility.library && (col === 'left' || col === 'middle')) {
+      // Close library to allow opening left/middle
+      setColumnVisibility(prev => ({ ...prev, library: false }));
+    }
+
     if (columnVisibility[col]) {
       setColumnVisibility(prev => ({ ...prev, [col]: false }));
     } else {
       openColumn(col);
     }
-  };
+  }, [columnVisibility, openColumn]);
 
-  const toggleLibrary = () => setIsLibraryOpen(prev => !prev);
+  const toggleLibrary = useCallback(() => setIsLibraryOpen(prev => !prev), []);
 
-  const openAssignmentModal = (note: DeepResearchNote, sourceMetadata: any) => {
+  const openAssignmentModal = useCallback((note: DeepResearchNote, sourceMetadata: any) => {
     setAssignmentModal({ isOpen: true, note, sourceMetadata });
-  };
+  }, []);
 
-  const closeAssignmentModal = () => {
+  const closeAssignmentModal = useCallback(() => {
     setAssignmentModal(prev => ({ ...prev, isOpen: false }));
-  };
+  }, []);
 
   // Reset UI state to initial values (for sign out)
-  const resetUI = () => {
+  const resetUI = useCallback(() => {
     setColumnVisibility({
       left: false,
       middle: false,
@@ -146,33 +214,68 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setIsLibraryOpen(false);
     setIsLibraryExpanded(false);
     setLibraryActiveView('all');
+    setHeaderVisible(true);
     closeAssignmentModal();
-  };
+  }, [closeAssignmentModal]);
+
+  // Controlled setter for the library drawer state. This toggles the sidebar
+  // drawer only; it does NOT automatically open the library column. The
+  // library column should be opened explicitly via `openColumn('library')`
+  // (e.g. when the user selects an item inside the sidebar).
+  const setLibraryOpen = useCallback((open: boolean) => {
+    setIsLibraryOpen(open);
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    darkMode,
+    toggleDarkMode,
+    columnVisibility,
+    columnLocks,
+    setColumnVisibility,
+    toggleColumn,
+    openColumn,
+    toggleLock,
+    isHomeExiting,
+    setIsHomeExiting,
+    isLibraryOpen,
+    isLibraryExpanded,
+    toggleLibrary,
+    setLibraryOpen,
+    setLibraryExpanded: setIsLibraryExpanded,
+    libraryActiveView,
+    setLibraryActiveView,
+    assignmentModal,
+    openAssignmentModal,
+    closeAssignmentModal,
+    resetUI,
+    isHeaderVisible,
+    setHeaderVisible,
+    handleAutoHeaderHide,
+    handleScroll
+  }), [
+    darkMode,
+    toggleDarkMode,
+    columnVisibility,
+    columnLocks,
+    toggleColumn,
+    openColumn,
+    toggleLock,
+    isHomeExiting,
+    isLibraryOpen,
+    isLibraryExpanded,
+    toggleLibrary,
+    setLibraryOpen,
+    libraryActiveView,
+    assignmentModal,
+    openAssignmentModal,
+    closeAssignmentModal,
+    resetUI,
+    isHeaderVisible,
+    handleAutoHeaderHide
+  ]);
 
   return (
-    <UIContext.Provider value={{
-      darkMode,
-      toggleDarkMode,
-      columnVisibility,
-      columnLocks,
-      setColumnVisibility,
-      toggleColumn,
-      openColumn,
-      toggleLock,
-      isHomeExiting,
-      setIsHomeExiting,
-      isLibraryOpen,
-      isLibraryExpanded,
-      toggleLibrary,
-      setLibraryOpen: setIsLibraryOpen,
-      setLibraryExpanded: setIsLibraryExpanded,
-      libraryActiveView,
-      setLibraryActiveView,
-      assignmentModal,
-      openAssignmentModal,
-      closeAssignmentModal,
-      resetUI
-    }}>
+    <UIContext.Provider value={contextValue}>
       {children}
     </UIContext.Provider>
   );

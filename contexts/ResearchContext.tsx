@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { SearchState, SearchMode, DeepResearchQuery, ArxivPaper, DeepResearchNote, LoadedPdf, SearchBarState, ResearchPhase } from '../types';
 import { performSearch, generateArxivSearchTerms, filterRelevantPapers, findRelevantPages, extractNotesFromPages, generateInsightQueries } from '../services/geminiService';
 import { extractPdfData, fetchPdfBuffer } from '../services/pdfService';
@@ -311,7 +311,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     localStorageService.clearDeepResearchResults();
   }, [resetSearch, clearSearchBar, setIsDeepSearchBarExpanded]);
 
-  const performWebSearch = async (query: string) => {
+  const performWebSearch = useCallback(async (query: string) => {
     setActiveSearchMode('web');
     setSearchBarState(prev => ({ ...prev, mainInput: query }));
     addToHistory(query);
@@ -329,7 +329,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (error) {
       setSearchState(prev => ({ ...prev, isLoading: false, error: "Search failed. Please try again." }));
     }
-  };
+  }, [addToHistory]);
 
   const stopDeepResearch = useCallback(() => {
     if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -355,7 +355,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   }, []);
 
-  const analyzeArxivPapers = async (papers: ArxivPaper[], userQuestions: string[], keywords: string[], signal?: AbortSignal) => {
+  const analyzeArxivPapers = useCallback(async (papers: ArxivPaper[], userQuestions: string[], keywords: string[], signal?: AbortSignal) => {
     const PAPER_CONCURRENCY = 3;
     const processPaper = async (paper: ArxivPaper) => {
       if (signal?.aborted) return;
@@ -388,9 +388,91 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     };
     await asyncPool(PAPER_CONCURRENCY, papers, processPaper);
-  };
+  }, []);
 
-  const processUserUrls = async (urls: string[], signal?: AbortSignal): Promise<LoadedPdf[]> => {
+  const analyzeLoadedPdfs = useCallback(async (pdfs: LoadedPdf[], questions: string, signal?: AbortSignal) => {
+    setIsDeepResearching(true);
+    setDeepResearchResults([]);
+
+    // Clear previous statuses and set all selected papers to processing
+    const newStatuses: Record<string, string> = {};
+    pdfs.forEach(pdf => {
+      newStatuses[pdf.uri] = 'processing';
+    });
+    setUploadedPaperStatuses(newStatuses);
+
+    try {
+      const queries = await generateInsightQueries(questions, searchState.query);
+      const onStreamUpdate = (newNotes: DeepResearchNote[]) => setDeepResearchResults(prev => [...prev, ...newNotes]);
+
+      for (const pdf of pdfs) {
+        if (signal?.aborted) break;
+        try {
+          // Update status to analyzing
+          updateUploadedPaperStatus(pdf.uri, 'processing');
+
+          const relevantPages = await findRelevantPages([{ uri: pdf.uri, pages: pdf.pages }], questions, queries);
+
+          if (relevantPages.length > 0) {
+            // Update status to extracting
+            if (!signal?.aborted) {
+              updateUploadedPaperStatus(pdf.uri, 'extracting');
+            }
+
+            await extractNotesFromPages(
+              relevantPages,
+              questions,
+              pdf.metadata.title,
+              pdf.text,
+              pdf.references,
+              onStreamUpdate
+            );
+          }
+
+          // Mark as completed
+          if (!signal?.aborted) {
+            updateUploadedPaperStatus(pdf.uri, 'completed');
+          }
+
+        } catch (e) {
+          console.error(e);
+          if (!signal?.aborted) {
+            updateUploadedPaperStatus(pdf.uri, 'failed');
+          }
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      // Mark all remaining papers as failed
+      pdfs.forEach(pdf => {
+        if (!signal?.aborted) {
+          updateUploadedPaperStatus(pdf.uri, 'failed');
+        }
+      });
+    } finally {
+      setIsDeepResearching(false);
+    }
+  }, [searchState.query, updateUploadedPaperStatus]);
+
+  const performHybridResearch = useCallback(async (pdfs: LoadedPdf[], arxivPapers: ArxivPaper[], questions: string[], keywords: string[]) => {
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+    setGatheringStatus("Analyzing documents...");
+    if (arxivPapers.length > 0) { setResearchPhase('extracting'); setFilteredCandidates(arxivPapers); }
+    const questionsStr = questions.join('\n');
+    const tasks = [];
+    if (pdfs.length > 0) tasks.push(analyzeLoadedPdfs(pdfs, questionsStr, signal));
+    if (arxivPapers.length > 0) tasks.push(analyzeArxivPapers(arxivPapers, questions, keywords, signal));
+    await Promise.all(tasks);
+
+    if (!signal.aborted) {
+      setResearchPhase('completed'); // Always set completed, regardless of arxiv papers
+      setGatheringStatus("Analysis complete.");
+    }
+  }, [analyzeLoadedPdfs, analyzeArxivPapers]);
+
+  const processUserUrls = useCallback(async (urls: string[], signal?: AbortSignal): Promise<LoadedPdf[]> => {
     const userPdfs: LoadedPdf[] = [];
     const CONCURRENCY = 2; // Process 2 URLs at a time to be gentle
 
@@ -420,9 +502,9 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const results = await asyncPool(CONCURRENCY, urls, processUrl);
     return results.filter(pdf => pdf !== null);
-  };
+  }, []);
 
-  const performDeepResearch = async (query: DeepResearchQuery) => {
+  const performDeepResearch = useCallback(async (query: DeepResearchQuery) => {
     setActiveSearchMode('deep');
     if (query.topics.length > 0) addToHistory(query.topics[0]);
 
@@ -527,89 +609,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setResearchPhase('failed');
       }
     }
-  };
-
-  const analyzeLoadedPdfs = async (pdfs: LoadedPdf[], questions: string, signal?: AbortSignal) => {
-    setIsDeepResearching(true);
-    setDeepResearchResults([]);
-
-    // Clear previous statuses and set all selected papers to processing
-    const newStatuses: Record<string, string> = {};
-    pdfs.forEach(pdf => {
-      newStatuses[pdf.uri] = 'processing';
-    });
-    setUploadedPaperStatuses(newStatuses);
-
-    try {
-      const queries = await generateInsightQueries(questions, searchState.query);
-      const onStreamUpdate = (newNotes: DeepResearchNote[]) => setDeepResearchResults(prev => [...prev, ...newNotes]);
-
-      for (const pdf of pdfs) {
-        if (signal?.aborted) break;
-        try {
-          // Update status to analyzing
-          updateUploadedPaperStatus(pdf.uri, 'processing');
-
-          const relevantPages = await findRelevantPages([{ uri: pdf.uri, pages: pdf.pages }], questions, queries);
-
-          if (relevantPages.length > 0) {
-            // Update status to extracting
-            if (!signal?.aborted) {
-              updateUploadedPaperStatus(pdf.uri, 'extracting');
-            }
-
-            await extractNotesFromPages(
-              relevantPages,
-              questions,
-              pdf.metadata.title,
-              pdf.text,
-              pdf.references,
-              onStreamUpdate
-            );
-          }
-
-          // Mark as completed
-          if (!signal?.aborted) {
-            updateUploadedPaperStatus(pdf.uri, 'completed');
-          }
-
-        } catch (e) {
-          console.error(e);
-          if (!signal?.aborted) {
-            updateUploadedPaperStatus(pdf.uri, 'failed');
-          }
-        }
-      }
-    } catch (e) {
-      console.error(e);
-      // Mark all remaining papers as failed
-      pdfs.forEach(pdf => {
-        if (!signal?.aborted) {
-          updateUploadedPaperStatus(pdf.uri, 'failed');
-        }
-      });
-    } finally {
-      setIsDeepResearching(false);
-    }
-  };
-
-  const performHybridResearch = async (pdfs: LoadedPdf[], arxivPapers: ArxivPaper[], questions: string[], keywords: string[]) => {
-    if (abortControllerRef.current) abortControllerRef.current.abort();
-    abortControllerRef.current = new AbortController();
-    const signal = abortControllerRef.current.signal;
-    setGatheringStatus("Analyzing documents...");
-    if (arxivPapers.length > 0) { setResearchPhase('extracting'); setFilteredCandidates(arxivPapers); }
-    const questionsStr = questions.join('\n');
-    const tasks = [];
-    if (pdfs.length > 0) tasks.push(analyzeLoadedPdfs(pdfs, questionsStr, signal));
-    if (arxivPapers.length > 0) tasks.push(analyzeArxivPapers(arxivPapers, questions, keywords, signal));
-    await Promise.all(tasks);
-
-    if (!signal.aborted) {
-      setResearchPhase('completed'); // Always set completed, regardless of arxiv papers
-      setGatheringStatus("Analysis complete.");
-    }
-  };
+  }, [addToHistory, processUserUrls, performHybridResearch]);
 
   const clearWebSearchResults = useCallback(() => {
     localStorageService.clearWebSearchResults();
@@ -634,22 +634,69 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     console.log('[ResearchContext] Deep research results cleared');
   }, []);
 
+  const contextValue = useMemo(() => ({
+    activeSearchMode,
+    setActiveSearchMode,
+    searchState,
+    searchBarState,
+    updateSearchBar,
+    clearSearchBar,
+    searchHistory,
+    addToHistory,
+    removeFromHistory,
+    clearHistory,
+    researchPhase,
+    gatheringStatus,
+    arxivKeywords,
+    arxivCandidates,
+    filteredCandidates,
+    selectedArxivIds,
+    toggleArxivSelection,
+    selectAllArxivPapers,
+    clearArxivSelection,
+    isDeepResearching,
+    deepResearchResults,
+    contextNotes,
+    toggleContextNote,
+    isNoteInContext,
+    performWebSearch,
+    performDeepResearch,
+    performHybridResearch,
+    stopDeepResearch,
+    resetSearch,
+    analyzeLoadedPdfs,
+    analyzeArxivPapers,
+    resetAllResearchData,
+    processedPdfs,
+    showUploadedTab,
+    setShowUploadedTab,
+    shouldOpenPdfViewer,
+    setShouldOpenPdfViewer,
+    uploadedPaperStatuses,
+    updateUploadedPaperStatus,
+    navigationHandled,
+    setNavigationHandled,
+    setProcessedPdfs,
+    clearWebSearchResults,
+    clearDeepResearchResults,
+    pendingDeepResearchQuery,
+    setPendingDeepResearchQuery,
+    isDeepSearchBarExpanded,
+    setIsDeepSearchBarExpanded
+  }), [
+    activeSearchMode, searchState, searchBarState, updateSearchBar, clearSearchBar,
+    searchHistory, addToHistory, removeFromHistory, clearHistory,
+    researchPhase, gatheringStatus, arxivKeywords, arxivCandidates, filteredCandidates,
+    selectedArxivIds, toggleArxivSelection, selectAllArxivPapers, clearArxivSelection,
+    isDeepResearching, deepResearchResults, contextNotes, toggleContextNote, isNoteInContext,
+    performWebSearch, performDeepResearch, performHybridResearch, stopDeepResearch, resetSearch,
+    analyzeLoadedPdfs, analyzeArxivPapers, resetAllResearchData, processedPdfs,
+    showUploadedTab, shouldOpenPdfViewer, uploadedPaperStatuses, updateUploadedPaperStatus,
+    navigationHandled, pendingDeepResearchQuery, isDeepSearchBarExpanded
+  ]);
+
   return (
-    <ResearchContext.Provider value={{
-      activeSearchMode, setActiveSearchMode, searchState, searchBarState, updateSearchBar, clearSearchBar,
-      searchHistory, addToHistory, removeFromHistory, clearHistory,
-      researchPhase, gatheringStatus, arxivKeywords, arxivCandidates, filteredCandidates,
-      selectedArxivIds, toggleArxivSelection, selectAllArxivPapers, clearArxivSelection,
-      isDeepResearching, deepResearchResults, contextNotes, toggleContextNote, isNoteInContext,
-      performWebSearch, performDeepResearch, performHybridResearch, stopDeepResearch, resetSearch,
-      analyzeLoadedPdfs, analyzeArxivPapers, resetAllResearchData, processedPdfs,
-      showUploadedTab, setShowUploadedTab, shouldOpenPdfViewer, setShouldOpenPdfViewer,
-      uploadedPaperStatuses, updateUploadedPaperStatus,
-      navigationHandled, setNavigationHandled, setProcessedPdfs,
-      clearWebSearchResults, clearDeepResearchResults,
-      pendingDeepResearchQuery, setPendingDeepResearchQuery,
-      isDeepSearchBarExpanded, setIsDeepSearchBarExpanded
-    }}>
+    <ResearchContext.Provider value={contextValue}>
       {children}
     </ResearchContext.Provider>
   );
