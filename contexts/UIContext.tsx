@@ -57,7 +57,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
   // NEW: Initialize locks. Right column (Workspace) is locked by default.
   const [columnLocks, setColumnLocks] = useState({
-    left: false,
+    left: true,
     middle: false,
     library: false,
     right: true
@@ -168,6 +168,9 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     // This covers both: direct opening of middle, and opening left which auto-opens middle.
     setColumnLocks(prev => {
       const next = { ...prev };
+      if (col === 'left') {
+        next.left = true;
+      }
       if (col === 'middle' || (col === 'left' && !columnVisibility.right)) {
         next.middle = true;
       }
