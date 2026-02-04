@@ -7,18 +7,33 @@ export default defineConfig(({ mode }) => {
     const isProduction = mode === 'production';
     
     // Debug environment variables during build
-    console.log('🔧 Vite Build Environment:', {
-      mode,
-      // Server-side variables (only injected in development)
-      hasGeminiKey: !!(env.GEMINI_API_KEY || process.env.GEMINI_API_KEY),
-      hasGoogleSearch: !!(env.GOOGLE_SEARCH_KEY || process.env.GOOGLE_SEARCH_KEY),
-      // Client-side variables (always injected)
-      hasNeonAuthUrl: !!(env.VITE_NEON_AUTH_URL || process.env.VITE_NEON_AUTH_URL),
-      hasMicrosoftClientId: !!(env.VITE_MICROSOFT_CLIENT_ID || process.env.VITE_MICROSOFT_CLIENT_ID),
-      nodeEnv: env.NODE_ENV || process.env.NODE_ENV || mode,
-      serverVarsInjected: mode === 'development',
-      note: mode === 'production' ? 'Production: Server-side API keys accessed via Railway process.env at runtime' : 'Development: All variables injected at build time'
-    });
+    console.log('[ENV-TRACE] ========================================');
+    console.log('[ENV-TRACE] VITE BUILD CONFIGURATION');
+    console.log('[ENV-TRACE] ========================================');
+    console.log('[ENV-TRACE] Build mode:', mode);
+    console.log('[ENV-TRACE] Is production:', isProduction);
+    console.log('[ENV-TRACE] ');
+    console.log('[ENV-TRACE] === CHECKING ENVIRONMENT VARIABLES ===');
+    console.log('[ENV-TRACE] ');
+    console.log('[ENV-TRACE] SERVER-SIDE VARIABLES (should NOT be injected in production):');
+    console.log('[ENV-TRACE] - GEMINI_API_KEY:', !!(env.GEMINI_API_KEY || process.env.GEMINI_API_KEY) ? `⚠️  FOUND (length: ${(env.GEMINI_API_KEY || process.env.GEMINI_API_KEY || '').length})` : '✅ NOT FOUND (correct for production)');
+    console.log('[ENV-TRACE] - GOOGLE_SEARCH_KEY:', !!(env.GOOGLE_SEARCH_KEY || process.env.GOOGLE_SEARCH_KEY) ? `⚠️  FOUND (length: ${(env.GOOGLE_SEARCH_KEY || process.env.GOOGLE_SEARCH_KEY || '').length})` : '✅ NOT FOUND (correct for production)');
+    console.log('[ENV-TRACE] - DATABASE_URL:', !!(env.DATABASE_URL || process.env.DATABASE_URL) ? `⚠️  FOUND (length: ${(env.DATABASE_URL || process.env.DATABASE_URL || '').length})` : '✅ NOT FOUND (correct for production)');
+    console.log('[ENV-TRACE] ');
+    console.log('[ENV-TRACE] CLIENT-SIDE VARIABLES (safe to inject):');
+    console.log('[ENV-TRACE] - VITE_NEON_AUTH_URL:', !!(env.VITE_NEON_AUTH_URL || process.env.VITE_NEON_AUTH_URL) ? `✅ FOUND (length: ${(env.VITE_NEON_AUTH_URL || process.env.VITE_NEON_AUTH_URL || '').length})` : '❌ NOT FOUND');
+    console.log('[ENV-TRACE] - VITE_MICROSOFT_CLIENT_ID:', !!(env.VITE_MICROSOFT_CLIENT_ID || process.env.VITE_MICROSOFT_CLIENT_ID) ? `✅ FOUND (length: ${(env.VITE_MICROSOFT_CLIENT_ID || process.env.VITE_MICROSOFT_CLIENT_ID || '').length})` : '❌ NOT FOUND');
+    console.log('[ENV-TRACE] ');
+    console.log('[ENV-TRACE] INJECTION STRATEGY:');
+    if (mode === 'development') {
+        console.log('[ENV-TRACE] ✅ DEVELOPMENT MODE: All variables will be injected at build time');
+        console.log('[ENV-TRACE]    This is SAFE because it only runs on localhost');
+    } else {
+        console.log('[ENV-TRACE] ✅ PRODUCTION MODE: Only VITE_* variables will be injected at build time');
+        console.log('[ENV-TRACE]    Server-side variables will be injected at RUNTIME by inject-env.sh');
+        console.log('[ENV-TRACE]    This is SECURE: API keys never baked into bundle');
+    }
+    console.log('[ENV-TRACE] ========================================');
     
     return {
       server: {

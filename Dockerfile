@@ -17,8 +17,18 @@ RUN npm ci --silent
 COPY . .
 
 # Build without environment variables (they'll be injected at runtime)
-RUN echo "🔧 Building Research Note for runtime environment injection..." && \
-    echo "NODE_ENV: production"
+RUN echo "[ENV-TRACE] ========================================" && \
+    echo "[ENV-TRACE] DOCKER BUILD STAGE - CHECKING ENV VARS" && \
+    echo "[ENV-TRACE] ========================================" && \
+    echo "[ENV-TRACE] NODE_ENV: production" && \
+    echo "[ENV-TRACE] Checking Railway variables in build stage:" && \
+    echo "[ENV-TRACE] GEMINI_API_KEY present: $(if [ -n "$GEMINI_API_KEY" ]; then echo 'YES (length: '${#GEMINI_API_KEY}')'; else echo 'NO'; fi)" && \
+    echo "[ENV-TRACE] GOOGLE_SEARCH_KEY present: $(if [ -n "$GOOGLE_SEARCH_KEY" ]; then echo 'YES (length: '${#GOOGLE_SEARCH_KEY}')'; else echo 'NO'; fi)" && \
+    echo "[ENV-TRACE] VITE_NEON_AUTH_URL present: $(if [ -n "$VITE_NEON_AUTH_URL" ]; then echo 'YES (length: '${#VITE_NEON_AUTH_URL}')'; else echo 'NO'; fi)" && \
+    echo "[ENV-TRACE] DATABASE_URL present: $(if [ -n "$DATABASE_URL" ]; then echo 'YES (length: '${#DATABASE_URL}')'; else echo 'NO'; fi)" && \
+    echo "[ENV-TRACE] ⚠️  WARNING: If any variables show 'YES' here, they are being baked into the build!" && \
+    echo "[ENV-TRACE] ✅ EXPECTED: All should show 'NO' for runtime injection" && \
+    echo "[ENV-TRACE] ========================================"
 
 # Build the application with empty environment variables
 ENV NODE_ENV=production
