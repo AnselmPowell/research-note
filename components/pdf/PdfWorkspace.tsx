@@ -5,6 +5,7 @@ import { PdfViewer } from './PdfViewer';
 import PdfUploader from './PdfUploader';
 import { X, FileText, Loader2, Plus, ChevronDown, Upload, Link as LinkIcon, ArrowRight } from 'lucide-react';
 import { useLibrary } from '../../contexts/LibraryContext';
+import { useUI } from '../../contexts/UIContext';
 
 // Configure worker
 pdfjsLibWeb.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';

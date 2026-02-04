@@ -10,6 +10,7 @@ import {
     File,
     Menu
 } from 'lucide-react';
+import { useUI } from '../../contexts/UIContext';
 
 import { LeftArrowIcon, RightArrowIcon, NewFileIcon, CopyIcon, SearchIcon, ZoomInIcon, ZoomOutIcon } from '../ui/icons';
 
@@ -281,6 +282,7 @@ const SearchControls: React.FC<SearchControlsProps> = ({ searchQuery, setSearchQ
 };
 
 export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
+    const { handleScroll: globalHandleScroll } = useUI();
     const { pdfDoc, pdfjsLib, currentPage, numPages, onPageChange, onNewFile, zoomLevel, onZoom, searchResults, activeResultIndex, documentTextIndex, onScrollActivity } = props;
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const textLayerRef = useRef<HTMLDivElement>(null);
@@ -790,6 +792,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
 
             <div
                 ref={scrollContainerRef}
+                onScroll={globalHandleScroll}
                 className="flex-grow w-full max-w-5xl p-0 sm:p-4 mb-16 flex justify-center overflow-auto custom-scrollbar"
             >
                 <div className="flex-shrink-0">

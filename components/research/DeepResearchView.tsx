@@ -1008,7 +1008,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
   const { toggleArxivSelection, selectedArxivIds } = useResearch();
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
   const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf, failedUrlErrors, downloadingUris } = useLibrary();
-  const { setColumnVisibility, openColumn } = useUI();
+  const { setColumnVisibility, openColumn: openUIColumn } = useUI();
 
   const isSelected = isLocal ? isPdfInContext(paper.id) : selectedArxivIds.has(paper.id);
   const isSaved = isPaperSaved(paper.pdfUri);
@@ -1051,7 +1051,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     e.stopPropagation();
     if (isLocal) {
       setActivePdf(paper.id);
-      setColumnVisibility(prev => ({ ...prev, right: true }));
+      openUIColumn('right');
     } else if (onView) {
       onView();
     }
@@ -1076,7 +1076,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     };
 
     savePaper(paperData);
-    openColumn('left');
+    openUIColumn('left');
   };
 
   return (
@@ -1097,43 +1097,43 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                 <span>•</span>
                 <span className="truncate max-w-[200px] opacity-70">{paper.authors.slice(0, 2).join(', ')}{paper.authors.length > 2 ? ' et al.' : ''}</span>
 
-                  <div className="flex items-center gap-2 ml-4 opacity-100 sm:opacity-0 sm:group-hover/paper:opacity-100 transition-opacity">
-                    {paper.pdfUri ? (
-                      <a
-                        href={paper.pdfUri}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(ev) => ev.stopPropagation()}
-                        className="text-gray-400 hover:text-gray-600 mr-1"
-                        title="Open PDF externally"
-                      >
-                        <ExternalLinkIcon className="h-4 w-4" />
-                      </a>
-                    ) : null}
-
-                    <button onClick={handleOpenPdf} className="text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 ">
-                      <BookText size={12} /> View
-                    </button>
-
-
-                    <button
-                      onClick={handleAddToSources}
-                      disabled={downloadingUris.has(paper.pdfUri)}
-                      className={`text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm
-                        ${isSaved
-                          ? 'bg-scholar-100 text-scholar-700 border border-scholar-200 hover:bg-scholar-200 dark:bg-scholar-900/40 dark:text-scholar-300 dark:border-scholar-800'
-                          : 'bg-white text-scholar-600 border border-scholar-200 hover:bg-scholar-50 dark:bg-gray-800 dark:text-scholar-400 dark:border-gray-700 dark:hover:bg-gray-700'
-                        }
-                      `}
+                <div className="flex items-center gap-2 ml-4 opacity-100 sm:opacity-0 sm:group-hover/paper:opacity-100 transition-opacity">
+                  {paper.pdfUri ? (
+                    <a
+                      href={paper.pdfUri}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(ev) => ev.stopPropagation()}
+                      className="text-gray-400 hover:text-gray-600 mr-1"
+                      title="Open PDF externally"
                     >
-                      {downloadingUris.has(paper.pdfUri) ? (
-                        <Loader2 size={12} className="animate-spin" />
-                      ) : (
-                        isSaved ? <Check size={12} /> : <Plus size={12} />
-                      )}
-                      {isSaved ? 'Added' : 'Add to Sources'}
-                    </button>
-                  </div>
+                      <ExternalLinkIcon className="h-4 w-4" />
+                    </a>
+                  ) : null}
+
+                  <button onClick={handleOpenPdf} className="text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 ">
+                    <BookText size={12} /> View
+                  </button>
+
+
+                  <button
+                    onClick={handleAddToSources}
+                    disabled={downloadingUris.has(paper.pdfUri)}
+                    className={`text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm
+                        ${isSaved
+                        ? 'bg-scholar-100 text-scholar-700 border border-scholar-200 hover:bg-scholar-200 dark:bg-scholar-900/40 dark:text-scholar-300 dark:border-scholar-800'
+                        : 'bg-white text-scholar-600 border border-scholar-200 hover:bg-scholar-50 dark:bg-gray-800 dark:text-scholar-400 dark:border-gray-700 dark:hover:bg-gray-700'
+                      }
+                      `}
+                  >
+                    {downloadingUris.has(paper.pdfUri) ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      isSaved ? <Check size={12} /> : <Plus size={12} />
+                    )}
+                    {isSaved ? 'Added' : 'Add to Sources'}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1226,10 +1226,10 @@ const ResearchCardNote: React.FC<{
   const [isExpanded, setIsExpanded] = useState(false);
   const [justCopied, setJustCopied] = useState(false);
 
-  const { toggleContextNote, isNoteInContext } = useResearch();
+  const { toggleContextNote, isNoteInContext, setActiveSearchMode } = useResearch();
   const { isNoteSaved, deleteNote, saveNote, savedNotes } = useDatabase();
   const { setSearchHighlight, loadPdfFromUrl, setActivePdf } = useLibrary();
-  const { setColumnVisibility } = useUI();
+  const { openColumn: openUIColumn } = useUI();
 
   // Helper function for smart paper metadata extraction with multiple fallbacks
   const createPaperMetadata = useCallback((
@@ -1318,7 +1318,7 @@ const ResearchCardNote: React.FC<{
     loadPdfFromUrl(note.pdfUri, sourceTitle);
     setActivePdf(note.pdfUri);
     setSearchHighlight(cleanedQuote);
-    setColumnVisibility(prev => ({ ...prev, right: true }));
+    openUIColumn('right');
   };
 
   return (

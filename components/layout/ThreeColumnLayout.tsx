@@ -17,7 +17,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
   libraryContent,
   rightContent
 }) => {
-  const { columnVisibility, toggleColumn, setColumnVisibility, columnLocks, toggleLock } = useUI();
+  const { columnVisibility, toggleColumn, setColumnVisibility, columnLocks, toggleLock, handleAutoHeaderHide, handleScroll } = useUI();
   const { setActiveSearchMode } = useResearch();
 
   const showLeft = columnVisibility.left;
@@ -34,8 +34,8 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
   const isResizing = useRef<ColumnKey | null>(null);
 
   // Memoize active column count calculation
-  const activeColumnCount = useMemo(() => 
-    (showLeft ? 1 : 0) + (showMiddle ? 1 : 0) + (showLibrary ? 1 : 0) + (showRight ? 1 : 0), 
+  const activeColumnCount = useMemo(() =>
+    (showLeft ? 1 : 0) + (showMiddle ? 1 : 0) + (showLibrary ? 1 : 0) + (showRight ? 1 : 0),
     [showLeft, showMiddle, showLibrary, showRight]
   );
 
@@ -145,16 +145,16 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         setLeftWidth(Math.min(Math.max(mousePercent, 15), 30));
       } else if (isResizing.current === 'middle') {
         const leftOffset = showLeft ? leftWidth : 0;
-          // If Right is visible, ensure Middle doesn't grow so large that Right falls below 40%
-          if (showRight) {
-            const leftOffsetLocal = showLeft ? leftWidth : 0;
-            const libraryOffset = showLibrary ? libraryWidth : 0;
-            const remainingSpaceLocal = 100 - leftOffsetLocal - libraryOffset;
-            const maxMiddleLocal = Math.max(10, remainingSpaceLocal - 45);
-            setMiddleWidth(Math.min(Math.max(mousePercent - leftOffset, 10), maxMiddleLocal));
-          } else {
-            setMiddleWidth(Math.min(Math.max(mousePercent - leftOffset, 10), 80));
-          }
+        // If Right is visible, ensure Middle doesn't grow so large that Right falls below 40%
+        if (showRight) {
+          const leftOffsetLocal = showLeft ? leftWidth : 0;
+          const libraryOffset = showLibrary ? libraryWidth : 0;
+          const remainingSpaceLocal = 100 - leftOffsetLocal - libraryOffset;
+          const maxMiddleLocal = Math.max(10, remainingSpaceLocal - 45);
+          setMiddleWidth(Math.min(Math.max(mousePercent - leftOffset, 10), maxMiddleLocal));
+        } else {
+          setMiddleWidth(Math.min(Math.max(mousePercent - leftOffset, 10), 80));
+        }
       } else if (isResizing.current === 'library') {
         const leftOffset = showLeft ? leftWidth : 0;
         const middleOffset = showMiddle ? middleWidth : 0;
@@ -164,8 +164,8 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         const leftOffset = showLeft ? leftWidth : 0;
         const middleOffset = showMiddle ? middleWidth : 0;
         const libraryOffset = showLibrary ? libraryWidth : 0;
-            // Right must not be smaller than 45% and not larger than 80%
-            setRightWidth(Math.min(Math.max(mousePercent - leftOffset - middleOffset - libraryOffset, 45), 80));
+        // Right must not be smaller than 45% and not larger than 80%
+        setRightWidth(Math.min(Math.max(mousePercent - leftOffset - middleOffset - libraryOffset, 45), 80));
       }
     };
 
@@ -204,29 +204,37 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
     if (colKey === 'right') setActiveSearchMode('upload');
   }, [setActiveSearchMode]);
 
-  const RenderHeader = ({
+  const ColumnHeader = React.memo(({
     title,
     icon: Icon,
     colKey,
     onClose,
-    isLocked
+    isLocked,
+    activeColumnCount,
+    onExpand,
+    onTitleClick,
+    onToggleLock
   }: {
     title: string,
     icon: any,
     colKey: ColumnKey,
     onClose: () => void,
-    isLocked: boolean
+    isLocked: boolean,
+    activeColumnCount: number,
+    onExpand: (colKey: ColumnKey) => void,
+    onTitleClick: (colKey: ColumnKey) => void,
+    onToggleLock: (colKey: ColumnKey) => void
   }) => (
     <div className="flex-none px-4 py-3 bg-cream dark:border-gray-700 dark:bg-gray-800/50 flex justify-between items-center border-b border-gray-100 dark:border-gray-700/50">
       <span
-        onClick={() => handleTitleClick(colKey)}
+        onClick={() => onTitleClick(colKey)}
         className="text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wide flex items-center gap-3 cursor-pointer hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors select-none"
       >
         <Icon size={20} className="flex-shrink-0" /> {title}
       </span>
       <div className="flex items-center gap-1.5">
         <button
-          onClick={() => toggleLock(colKey)}
+          onClick={() => onToggleLock(colKey)}
           title={isLocked ? "Unlock column (it will close automatically when other columns open)" : "Lock column (it will stay open even if other columns are opened)"}
           className={`transition-all p-1.5 rounded-md ${isLocked ? 'text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30' : 'text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400'}`}
         >
@@ -235,7 +243,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
 
         {activeColumnCount > 1 && (
           <button
-            onClick={() => handleExpand(colKey)}
+            onClick={() => onExpand(colKey)}
             className="text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 transition-all p-1.5 rounded-md hover:bg-scholar-50 dark:hover:bg-scholar-900/30"
           >
             <Maximize2 size={18} />
@@ -250,7 +258,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         </button>
       </div>
     </div>
-  );
+  ));
 
   const ResizeHandle = React.memo(({ onMouseDown }: { onMouseDown: () => void }) => (
     <div
@@ -272,8 +280,18 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
             style={{ width: getColumnWidth('left') }}
             className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 transition-[width] duration-75 ease-out shadow-sm min-w-[320px] relative`}
           >
-            <RenderHeader title="Sources" icon={FolderOpen} colKey="left" onClose={() => toggleColumn('left')} isLocked={columnLocks.left} />
-            <div className="flex-1 overflow-y-auto custom-scrollbar">{sourcesContent}</div>
+            <ColumnHeader
+              title="Sources"
+              icon={FolderOpen}
+              colKey="left"
+              onClose={() => toggleColumn('left')}
+              isLocked={columnLocks.left}
+              activeColumnCount={activeColumnCount}
+              onExpand={handleExpand}
+              onTitleClick={handleTitleClick}
+              onToggleLock={toggleLock}
+            />
+            <div onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar">{sourcesContent}</div>
           </div>
         )}
 
@@ -285,8 +303,18 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
             style={{ width: getColumnWidth('middle') }}
             className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-75 ease-out shadow-sm min-w-[320px]`}
           >
-            <RenderHeader title="Research" icon={BookOpenText} colKey="middle" onClose={() => toggleColumn('middle')} isLocked={columnLocks.middle} />
-            <div className="flex-1 overflow-y-auto custom-scrollbar relative">{middleContent}</div>
+            <ColumnHeader
+              title="Research"
+              icon={BookOpenText}
+              colKey="middle"
+              onClose={() => toggleColumn('middle')}
+              isLocked={columnLocks.middle}
+              activeColumnCount={activeColumnCount}
+              onExpand={handleExpand}
+              onTitleClick={handleTitleClick}
+              onToggleLock={toggleLock}
+            />
+            <div onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar relative">{middleContent}</div>
           </div>
         )}
 
@@ -298,7 +326,17 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
             style={{ width: getColumnWidth('library'), minWidth: '45%' }}
             className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-75 ease-out shadow-sm`}
           >
-            <RenderHeader title="Research Library" icon={Library} colKey="library" onClose={() => toggleColumn('library')} isLocked={columnLocks.library} />
+            <ColumnHeader
+              title="Research Library"
+              icon={Library}
+              colKey="library"
+              onClose={() => toggleColumn('library')}
+              isLocked={columnLocks.library}
+              activeColumnCount={activeColumnCount}
+              onExpand={handleExpand}
+              onTitleClick={handleTitleClick}
+              onToggleLock={toggleLock}
+            />
             <div className="flex-1 overflow-hidden relative">{libraryContent}</div>
           </div>
         )}
@@ -307,12 +345,22 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
 
         {/* Paper View */}
         {showRight && (
-            <div
-              style={{ width: getColumnWidth('right'), minWidth: '45%' }}
-              className={`flex flex-col h-full bg-cream dark:bg-dark-card border rounded-xl dark:border-gray-700 overflow-hidden shadow-sm transition-[width] duration-75 ease-out`}
-            >
-            <RenderHeader title="Paper View" icon={FileText} colKey="right" onClose={() => toggleColumn('right')} isLocked={columnLocks.right} />
-            <div className="flex-1 overflow-y-auto custom-scrollbar relative">{rightContent}</div>
+          <div
+            style={{ width: getColumnWidth('right'), minWidth: '45%' }}
+            className={`flex flex-col h-full bg-cream dark:bg-dark-card border rounded-xl dark:border-gray-700 overflow-hidden shadow-sm transition-[width] duration-75 ease-out`}
+          >
+            <ColumnHeader
+              title="Paper View"
+              icon={FileText}
+              colKey="right"
+              onClose={() => toggleColumn('right')}
+              isLocked={columnLocks.right}
+              activeColumnCount={activeColumnCount}
+              onExpand={handleExpand}
+              onTitleClick={handleTitleClick}
+              onToggleLock={toggleLock}
+            />
+            <div onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar relative">{rightContent}</div>
           </div>
         )}
       </div>

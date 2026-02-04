@@ -47,6 +47,7 @@ export const LayoutControls: React.FC<LayoutControlsProps> = ({ inSidebar = fals
     darkMode,
     isLibraryOpen,
     setLibraryOpen,
+    setHeaderVisible
   } = useUI();
   const { setActiveSearchMode } = useResearch();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -91,13 +92,12 @@ export const LayoutControls: React.FC<LayoutControlsProps> = ({ inSidebar = fals
       <div className="md:hidden">
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className={`p-2.5 rounded-xl transition-all ${
-            isMobileMenuOpen
-              ? 'bg-white dark:bg-gray-800 border border-scholar-200 dark:border-scholar-900 text-scholar-600 shadow-sm'
-              : inSidebar
-                ? 'bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 shadow-sm'
-                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
-          }`}
+          className={`p-2.5 rounded-xl transition-all ${isMobileMenuOpen
+            ? 'bg-white dark:bg-gray-800 border border-scholar-200 dark:border-scholar-900 text-scholar-600 shadow-sm'
+            : inSidebar
+              ? 'bg-gray-50/80 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 shadow-sm'
+              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
+            }`}
         >
           <Menu size={24} />
         </button>

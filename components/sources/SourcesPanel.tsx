@@ -7,7 +7,7 @@ import { FileText, X, Plus, Upload, Link, Search, Loader2, AlertCircle, CheckSqu
 export const SourcesPanel: React.FC = () => {
     const { savedPapers, deletePaper, savePaper } = useDatabase();
     const { setActivePdf, loadPdfFromUrl, addPdfFile, addPdfFileAndReturn, isPdfInContext, togglePdfContext, loadedPdfs, downloadingUris, removePdf } = useLibrary();
-    const { setColumnVisibility } = useUI();
+    const { openColumn } = useUI();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -51,14 +51,14 @@ export const SourcesPanel: React.FC = () => {
         try {
             await loadPdfFromUrl(uri, title);
             setActivePdf(uri);
-            setColumnVisibility(prev => ({ ...prev, right: true }));
+            openColumn('right');
         } catch (error) {
             console.error('[SourcesPanel] Failed to open paper:', error);
         }
-    }, [loadPdfFromUrl, setActivePdf, setColumnVisibility]);
+    }, [loadPdfFromUrl, setActivePdf, openColumn]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
+        const files = Array.from(e.target.files || []) as File[];
         if (files.length === 0) return;
 
         // Validate all files first

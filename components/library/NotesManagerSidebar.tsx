@@ -220,11 +220,12 @@ export const SidebarNav: React.FC<{
   resetCallbacks?: (() => void)[];
 }> = ({ onClose, onShowAuthModal, resetCallbacks }) => {
   const { savedNotes, savedPapers } = useDatabase();
-  const { libraryActiveView, setLibraryActiveView, openColumn, columnVisibility } = useUI();
+  const { libraryActiveView, setLibraryActiveView, openColumn, columnVisibility, setHeaderVisible } = useUI();
 
   const handleSelect = (view: LibraryView) => {
     setLibraryActiveView(view);
     openColumn('library');
+    setHeaderVisible(false);
     if (onClose) onClose();
   };
 
@@ -266,7 +267,7 @@ export const SidebarNav: React.FC<{
 
         <div className="mt-4 px-3 md:px-4">
           <button
-            onClick={() => { openColumn('library'); if (onClose) onClose(); }}
+            onClick={() => { openColumn('library'); setHeaderVisible(false); if (onClose) onClose(); }}
             className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shadow-sm"
           >
             <div className="flex items-center gap-3">
