@@ -1,4 +1,8 @@
-const API_BASE = '/api/v1';
+// In development, point to backend on port 3001
+// In production, use relative path (nginx proxies to backend)
+const API_BASE = import.meta.env.DEV
+  ? 'http://localhost:3001/api/v1'
+  : '/api/v1';
 
 export interface ApiResponse<T> {
   success: boolean;

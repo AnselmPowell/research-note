@@ -62,44 +62,67 @@ export const buildArxivQueries = (
 };
 
 /**
- * Optimized fetch with re-ordered strategies based on production logs.
- * Strategy 1: CorsProxy.io (Fastest observed in production)
- * Strategy 2: AllOrigins (Reliable but often slow/congested)
+ * Fetch arXiv data through backend proxy or fallback to CORS proxies
+ * Strategy 1: Backend proxy (most reliable, works in both dev and production)
+ * Strategy 2: CorsProxy.io (fallback for localhost)
+ * Strategy 3: AllOrigins (last resort)
  */
 const fetchWithFallback = async (apiUrl: string): Promise<string> => {
   const startTime = performance.now();
-  console.log(`[ArXiv Debug] Starting optimized fetch for: ${apiUrl}`);
+  console.log(`[ArXiv Debug] Starting fetch for: ${apiUrl}`);
 
-  // Strategy 1: CorsProxy.io (Promoted to Primary)
+  // Strategy 1: Backend Proxy (PRODUCTION & DEV)
   try {
     const s1Start = performance.now();
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`;
-    console.log(`[ArXiv Debug] Strategy 1: Attempting CorsProxy.io (High Priority)...`);
-    
-    const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) }); // 6s timeout for fast lane
+    const API_BASE = import.meta.env.DEV
+      ? 'http://localhost:3001/api/v1'
+      : '/api/v1';
+    const proxyUrl = `${API_BASE}/arxiv/proxy?url=${encodeURIComponent(apiUrl)}`;
+    console.log(`[ArXiv Debug] Strategy 1: Attempting Backend Proxy...`);
+
+    const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
     if (response.ok) {
-      console.log(`[ArXiv Debug] ✅ Strategy 1 (CorsProxy) SUCCEEDED in ${Math.round(performance.now() - s1Start)}ms`);
-      return await response.text();
+      const result = await response.json();
+      if (result.success && result.data) {
+        console.log(`[ArXiv Debug] ✅ Strategy 1 (Backend) SUCCEEDED in ${Math.round(performance.now() - s1Start)}ms`);
+        return result.data;
+      }
     }
-    console.warn(`[ArXiv Debug] ❌ Strategy 1 (CorsProxy) returned status: ${response.status}`);
+    console.warn(`[ArXiv Debug] ❌ Strategy 1 (Backend) returned status: ${response.status}`);
   } catch (e: any) {
-    console.warn(`[ArXiv Debug] ❌ Strategy 1 (CorsProxy) FAILED/TIMED OUT: ${e.message}`);
+    console.warn(`[ArXiv Debug] ❌ Strategy 1 (Backend) FAILED: ${e.message}`);
   }
 
-  // Strategy 2: AllOrigins (Secondary Fallback)
-  const s2Start = performance.now();
+  // Strategy 2: CorsProxy.io (Fallback for localhost only)
   try {
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
-    console.log(`[ArXiv Debug] Strategy 2: Attempting AllOrigins Proxy (Fallback)...`);
-    
-    const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) }); // 10s timeout for fallback
+    const s2Start = performance.now();
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`;
+    console.log(`[ArXiv Debug] Strategy 2: Attempting CorsProxy.io...`);
+
+    const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) });
     if (response.ok) {
-      console.log(`[ArXiv Debug] ✅ Strategy 2 (AllOrigins) SUCCEEDED in ${Math.round(performance.now() - s2Start)}ms`);
+      console.log(`[ArXiv Debug] ✅ Strategy 2 (CorsProxy) SUCCEEDED in ${Math.round(performance.now() - s2Start)}ms`);
       return await response.text();
     }
-    console.error(`[ArXiv Debug] ❌ Strategy 2 (AllOrigins) FAILED with status: ${response.status}`);
+    console.warn(`[ArXiv Debug] ❌ Strategy 2 (CorsProxy) returned status: ${response.status}`);
   } catch (e: any) {
-    console.error(`[ArXiv Debug] ❌ Strategy 2 (AllOrigins) ERROR: ${e.message}`);
+    console.warn(`[ArXiv Debug] ❌ Strategy 2 (CorsProxy) FAILED: ${e.message}`);
+  }
+
+  // Strategy 3: AllOrigins (Last resort)
+  const s3Start = performance.now();
+  try {
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
+    console.log(`[ArXiv Debug] Strategy 3: Attempting AllOrigins Proxy...`);
+
+    const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+    if (response.ok) {
+      console.log(`[ArXiv Debug] ✅ Strategy 3 (AllOrigins) SUCCEEDED in ${Math.round(performance.now() - s3Start)}ms`);
+      return await response.text();
+    }
+    console.error(`[ArXiv Debug] ❌ Strategy 3 (AllOrigins) FAILED with status: ${response.status}`);
+  } catch (e: any) {
+    console.error(`[ArXiv Debug] ❌ Strategy 3 (AllOrigins) ERROR: ${e.message}`);
   }
 
   console.error(`[ArXiv Debug] 🚨 ALL STRATEGIES EXHAUSTED for URL: ${apiUrl}`);
