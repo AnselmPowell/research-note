@@ -39,11 +39,12 @@ COPY backend/ .
 RUN echo "✅ Backend dependencies installed"
 
 # ============================================
-# Stage 3: Production Runtime (Node + Nginx)
+# Stage 3: Production Runtime (Nginx with Node)
 # ============================================
-FROM node:20-alpine AS production
+FROM nginx:alpine AS production
 
-RUN apk add --no-cache nginx
+# Install Node.js
+RUN apk add --no-cache nodejs npm
 
 RUN mkdir -p /run/nginx /var/log/nginx
 
