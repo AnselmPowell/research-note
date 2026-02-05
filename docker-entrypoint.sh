@@ -60,15 +60,13 @@ if [ "$BACKEND_HEALTHY" = "false" ]; then
   ps aux | grep node || echo "No node processes found"
 fi
 
-# 4. Configure nginx port (Railway uses PORT env var)
-NGINX_PORT=${PORT:-8080}
+# 4. Configure nginx port - use 3000 to avoid Railway's auto-nginx on 8080
+NGINX_PORT=3000
 echo "[Entrypoint] Railway PORT env var: $PORT"
+echo "[Entrypoint] WORKAROUND: Using port 3000 instead of $PORT to avoid conflicts"
 echo "[Entrypoint] Configuring Nginx to listen on port $NGINX_PORT..."
-echo "[Entrypoint] Checking what's using port $NGINX_PORT..."
-netstat -tlnp 2>/dev/null | grep :$NGINX_PORT || echo "Port $NGINX_PORT is free"
 sed -i "s/listen 8080;/listen $NGINX_PORT;/" /etc/nginx/nginx.conf
-echo "[Entrypoint] Nginx config updated. Verifying..."
-grep "listen" /etc/nginx/nginx.conf | head -5
+echo "[Entrypoint] Nginx config updated to port $NGINX_PORT"
 
 # 5. Start Nginx
 echo "[Entrypoint] Starting Nginx..."
