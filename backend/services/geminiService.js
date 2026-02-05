@@ -446,3 +446,39 @@ module.exports = {
   extractNotesFromPages,
   performSearch
 };
+
+async function generateInsightQueries(userQuestions, contextQuery) {
+  const prompt = `Context: The user has gathered several academic PDF papers regarding "${contextQuery}".
+User Goal: They want to answer the following specific questions from these papers: "${userQuestions}".
+Task: Generate 5 semantic search phrases or short questions.
+Return ONLY the 5 phrases as a JSON array of strings.`;
+
+  try {
+    if (!genAI) throw new Error('Gemini not initialized');
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: 'application/json' }
+    });
+
+    const response = await result.response;
+    const queries = JSON.parse(cleanJson(response.text()));
+    return Array.isArray(queries) ? queries : [];
+  } catch (error) {
+    logger.warn('Gemini failed for insight queries, using fallback');
+    return [userQuestions];
+  }
+}
+
+module.exports = {
+  enhanceMetadata,
+  generateSearchVariations,
+  generateArxivSearchTerms,
+  getEmbedding,
+  getBatchEmbeddings,
+  filterRelevantPapers,
+  extractNotesFromPages,
+  performSearch,
+  generateInsightQueries
+};

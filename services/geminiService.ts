@@ -79,3 +79,7 @@ export const extractNotesFromPages = async (
 export const performSearch = async (query: string): Promise<SearchResultData> => {
   return await api.gemini.search(query);
 };
+
+export const generateInsightQueries = async (userQuestions: string, contextQuery: string): Promise<string[]> => {
+  return await api.gemini.insightQueries(userQuestions, contextQuery);
+};

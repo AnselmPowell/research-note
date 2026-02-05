@@ -38,6 +38,8 @@ export const api = {
       apiCall('/gemini/filter-papers', 'POST', { papers, userQuestions, keywords }),
     extractNotes: (data: any) => apiCall('/gemini/extract-notes', 'POST', data),
     search: (query: string) => apiCall('/gemini/search', 'POST', { query }),
+    insightQueries: (userQuestions: string, contextQuery: string) =>
+      apiCall('/gemini/insight-queries', 'POST', { userQuestions, contextQuery }),
   },
 
   database: {

@@ -66,4 +66,12 @@ router.post('/search', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.post('/insight-queries', async (req, res, next) => {
+  try {
+    const { userQuestions, contextQuery } = req.body.data;
+    const result = await geminiService.generateInsightQueries(userQuestions, contextQuery);
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
