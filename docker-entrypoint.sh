@@ -5,11 +5,11 @@ echo "[Entrypoint] ========================================"
 echo "[Entrypoint] Research Note - Starting Services"
 echo "[Entrypoint] ========================================"
 
-# 0. Stop any existing nginx (from base image)
+# 0. Kill any existing nginx processes
 echo "[Entrypoint] Stopping default nginx..."
-nginx -s stop 2>/dev/null || true
-pkill nginx 2>/dev/null || true
-sleep 1
+pkill -9 nginx 2>/dev/null || true
+killall -9 nginx 2>/dev/null || true
+sleep 2
 
 # 1. Inject frontend env vars
 echo "[Entrypoint] Injecting frontend environment..."
@@ -25,17 +25,22 @@ echo "[Entrypoint] ✅ Backend started (PID: $BACKEND_PID)"
 
 # 3. Wait for backend health
 echo "[Entrypoint] Waiting for backend..."
+BACKEND_HEALTHY=false
 for i in $(seq 1 30); do
   if wget --quiet --spider http://localhost:3001/api/health 2>/dev/null; then
     echo "[Entrypoint] ✅ Backend healthy"
+    BACKEND_HEALTHY=true
     break
-  fi
-  if [ $i -eq 30 ]; then
-    echo "[Entrypoint] ⚠️  Backend health timeout - showing backend logs:"
-    tail -50 /var/log/backend.log
   fi
   sleep 1
 done
+
+if [ "$BACKEND_HEALTHY" = "false" ]; then
+  echo "[Entrypoint] ⚠️  Backend health timeout - showing backend logs:"
+  cat /var/log/backend.log 2>/dev/null || echo "No backend logs found"
+  echo "[Entrypoint] Checking if backend process is running..."
+  ps aux | grep node || echo "No node processes found"
+fi
 
 # 4. Start Nginx
 echo "[Entrypoint] Starting Nginx..."
