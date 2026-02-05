@@ -5,6 +5,12 @@ echo "[Entrypoint] ========================================"
 echo "[Entrypoint] Research Note - Starting Services"
 echo "[Entrypoint] ========================================"
 
+# 0. Stop any existing nginx (from base image)
+echo "[Entrypoint] Stopping default nginx..."
+nginx -s stop 2>/dev/null || true
+pkill nginx 2>/dev/null || true
+sleep 1
+
 # 1. Inject frontend env vars
 echo "[Entrypoint] Injecting frontend environment..."
 /inject-env.sh > /dev/null 2>&1 &
@@ -13,7 +19,7 @@ sleep 2
 # 2. Start backend
 echo "[Entrypoint] Starting backend API..."
 cd /app/backend
-NODE_ENV=production node server.js > /var/log/backend.log 2>&1 &
+NODE_ENV=production node server.js 2>&1 | tee /var/log/backend.log &
 BACKEND_PID=$!
 echo "[Entrypoint] ✅ Backend started (PID: $BACKEND_PID)"
 
@@ -25,7 +31,8 @@ for i in $(seq 1 30); do
     break
   fi
   if [ $i -eq 30 ]; then
-    echo "[Entrypoint] ⚠️  Backend health timeout"
+    echo "[Entrypoint] ⚠️  Backend health timeout - showing backend logs:"
+    tail -50 /var/log/backend.log
   fi
   sleep 1
 done
