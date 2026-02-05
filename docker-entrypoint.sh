@@ -5,16 +5,22 @@ echo "[Entrypoint] ========================================"
 echo "[Entrypoint] Research Note - Starting Services"
 echo "[Entrypoint] ========================================"
 
-# 0. Kill any existing nginx processes and free port 8080
-echo "[Entrypoint] Stopping default nginx..."
-echo "[Entrypoint] Checking what's on port 8080..."
-netstat -tlnp 2>/dev/null | grep :8080 || echo "Nothing on 8080 yet"
-lsof -ti:8080 2>/dev/null | xargs kill -9 2>/dev/null || true
+# 0. Kill ALL nginx processes (including PID 25 from base image)
+echo "[Entrypoint] Stopping ALL nginx processes..."
+ps aux | grep nginx | grep -v grep || echo "No nginx processes"
+# Kill by PID found on port 8080
+PORT_8080_PID=$(netstat -tlnp 2>/dev/null | grep :8080 | awk '{print $7}' | cut -d'/' -f1)
+if [ -n "$PORT_8080_PID" ]; then
+  echo "[Entrypoint] Killing nginx on port 8080 (PID: $PORT_8080_PID)"
+  kill -9 $PORT_8080_PID 2>/dev/null || true
+fi
+# Kill all nginx processes by name
 pkill -9 nginx 2>/dev/null || true
 killall -9 nginx 2>/dev/null || true
 sleep 2
-echo "[Entrypoint] Port 8080 after cleanup:"
-netstat -tlnp 2>/dev/null | grep :8080 || echo "Port 8080 is free"
+echo "[Entrypoint] After cleanup - checking port 8080:"
+netstat -tlnp 2>/dev/null | grep :8080 || echo "✅ Port 8080 is free"
+ps aux | grep nginx | grep -v grep || echo "✅ No nginx processes running"
 
 # 1. Inject frontend env vars
 echo "[Entrypoint] Injecting frontend environment..."
