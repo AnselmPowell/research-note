@@ -54,7 +54,12 @@ if [ "$BACKEND_HEALTHY" = "false" ]; then
   ps aux | grep node || echo "No node processes found"
 fi
 
-# 4. Start Nginx
+# 4. Configure nginx port (Railway uses PORT env var)
+NGINX_PORT=${PORT:-8080}
+echo "[Entrypoint] Configuring Nginx to listen on port $NGINX_PORT..."
+sed -i "s/listen 8080;/listen $NGINX_PORT;/" /etc/nginx/nginx.conf
+
+# 5. Start Nginx
 echo "[Entrypoint] Starting Nginx..."
 echo "[Entrypoint] ========================================"
 exec nginx -g "daemon off;"
