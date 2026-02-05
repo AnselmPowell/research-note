@@ -56,8 +56,13 @@ fi
 
 # 4. Configure nginx port (Railway uses PORT env var)
 NGINX_PORT=${PORT:-8080}
+echo "[Entrypoint] Railway PORT env var: $PORT"
 echo "[Entrypoint] Configuring Nginx to listen on port $NGINX_PORT..."
+echo "[Entrypoint] Checking what's using port $NGINX_PORT..."
+netstat -tlnp 2>/dev/null | grep :$NGINX_PORT || echo "Port $NGINX_PORT is free"
 sed -i "s/listen 8080;/listen $NGINX_PORT;/" /etc/nginx/nginx.conf
+echo "[Entrypoint] Nginx config updated. Verifying..."
+grep "listen" /etc/nginx/nginx.conf | head -5
 
 # 5. Start Nginx
 echo "[Entrypoint] Starting Nginx..."
