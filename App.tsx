@@ -183,7 +183,9 @@ const App: React.FC = () => {
         performWebSearch(query);
         openColumn('middle'); // Open Research column for web searches
       } else if (mode === 'deep') {
-        if (deepResearchResults.length > 0 || arxivCandidates.length > 0) {
+        // Only show pending dialog if there are VISIBLE results (filtered candidates or deep research results)
+        // arxivCandidates alone doesn't count - they might have been filtered out to 0
+        if (deepResearchResults.length > 0 || filteredCandidates.length > 0) {
           setPendingDeepResearchQuery(query);
         } else {
           performDeepResearch(query);
@@ -195,7 +197,7 @@ const App: React.FC = () => {
         setIsHomeExiting(false);
       }, 500);
     }, 50);
-  }, [isLibraryOpen, setLibraryOpen, searchState.hasSearched, researchPhase, arxivCandidates.length, setIsHomeExiting, performWebSearch, openColumn, deepResearchResults.length, setPendingDeepResearchQuery, performDeepResearch]);
+  }, [isLibraryOpen, setLibraryOpen, searchState.hasSearched, researchPhase, arxivCandidates.length, filteredCandidates.length, setIsHomeExiting, performWebSearch, openColumn, deepResearchResults.length, setPendingDeepResearchQuery, performDeepResearch]);
 
   const allColumnsClosed = useMemo(() => !columnVisibility.left && !columnVisibility.middle && !columnVisibility.library && !columnVisibility.right, [columnVisibility]);
   const showHeaderSearch = useMemo(() => !allColumnsClosed, [allColumnsClosed]);

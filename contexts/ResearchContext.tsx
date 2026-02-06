@@ -220,8 +220,9 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Auto-save deep research results whenever they change (debounced to prevent excessive writes)
   useEffect(() => {
-    // Only save if we have actual data (not initial empty state)
-    if (filteredCandidates.length > 0 || deepResearchResults.length > 0 || arxivCandidates.length > 0) {
+    // Only save if we have VISIBLE results (filtered candidates or deep research notes)
+    // arxivCandidates alone doesn't count - they might have been filtered out to 0
+    if (filteredCandidates.length > 0 || deepResearchResults.length > 0) {
       const debouncedSave = debounce(() => {
         console.log('[ResearchContext] Auto-saving deep research results to localStorage:', {
           arxivKeywords: arxivKeywords.length,
@@ -240,6 +241,10 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       debouncedSave();
       return () => debouncedSave.cancel();
+    } else if (arxivCandidates.length === 0 && filteredCandidates.length === 0 && deepResearchResults.length === 0) {
+      // Clear localStorage if there are no results at all
+      console.log('[ResearchContext] Clearing deep research cache - no visible results');
+      localStorageService.clearDeepResearchResults();
     }
   }, [arxivKeywords, arxivCandidates, filteredCandidates, deepResearchResults, searchBarState]);
 
