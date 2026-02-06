@@ -173,7 +173,7 @@ async function getEmbedding(text, taskType) {
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const model = genAI.getGenerativeModel({ model: 'text-embedding-004' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
       const result = await model.embedContent({
         content: { parts: [{ text }] },
         taskType
@@ -230,7 +230,7 @@ async function getBatchEmbeddings(texts, taskType) {
 
   await asyncPool(3, batches, async (batch) => {
     const requests = batch.texts.map(t => ({
-      model: 'models/text-embedding-004',
+      model: 'models/gemini-embedding-001',
       content: { parts: [{ text: t }] },
       taskType
     }));
@@ -238,7 +238,7 @@ async function getBatchEmbeddings(texts, taskType) {
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents?key=${config.geminiApiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents?key=${config.geminiApiKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
