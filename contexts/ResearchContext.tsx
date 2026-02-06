@@ -578,7 +578,24 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (candidates.length > 0) {
         setResearchPhase('filtering');
         setGatheringStatus("Verifying relevance...");
+
+        console.log('[ResearchContext] 🔍 Starting paper filtering:', {
+          candidatesCount: candidates.length,
+          questionsCount: query.questions.length,
+          questions: query.questions,
+          keywordsCount: displayKeywords.length,
+          keywords: displayKeywords,
+          firstCandidateTitle: candidates[0]?.title
+        });
+
         const filtered = await filterRelevantPapers(candidates, query.questions, displayKeywords);
+
+        console.log('[ResearchContext] ✅ Filtering complete:', {
+          inputCount: candidates.length,
+          outputCount: filtered.length,
+          firstFilteredTitle: filtered[0]?.title,
+          firstFilteredScore: filtered[0]?.relevanceScore
+        });
 
         if (signal.aborted) return;
         setResearchPhase('extracting');

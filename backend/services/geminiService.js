@@ -183,12 +183,21 @@ async function getEmbedding(text, taskType) {
       if (vec.length > 0) cache.set(cacheKey, vec);
       return vec;
     } catch (error) {
+      console.error('[getEmbedding] Error on attempt', attempt + 1, ':', {
+        status: error?.status,
+        message: error?.message,
+        model: 'gemini-embedding-001'
+      });
+
       if (error?.status === 429 && attempt < 2) {
         const backoff = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
         await delay(backoff);
         continue;
       }
-      if (attempt === 2) return [];
+      if (attempt === 2) {
+        logger.error('[getEmbedding] All attempts failed, returning empty vector');
+        return [];
+      }
     }
   }
   return [];
@@ -247,10 +256,19 @@ async function getBatchEmbeddings(texts, taskType) {
         );
 
         if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[getBatchEmbeddings] API error:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText,
+            model: 'gemini-embedding-001',
+            attempt: attempt + 1
+          });
+
           if (response.status === 429 || response.status === 503) {
             throw new Error('Rate Limit');
           }
-          throw new Error('HTTP ' + response.status);
+          throw new Error('HTTP ' + response.status + ': ' + errorText);
         }
 
         const data = await response.json();
