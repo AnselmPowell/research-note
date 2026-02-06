@@ -47,14 +47,14 @@ export const SourcesPanel: React.FC = () => {
 
 
 
-    const handleOpenPaper = useCallback(async (uri: string, title: string) => {
-        try {
-            await loadPdfFromUrl(uri, title);
-            setActivePdf(uri);
-            openColumn('right');
-        } catch (error) {
-            console.error('[SourcesPanel] Failed to open paper:', error);
-        }
+    const handleOpenPaper = useCallback((uri: string, title: string) => {
+        setActivePdf(uri);
+        openColumn('right');
+        loadPdfFromUrl(uri, title).then(result => {
+            if (!result.success && result.error) {
+                setActivePdf(null);
+            }
+        });
     }, [loadPdfFromUrl, setActivePdf, openColumn]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

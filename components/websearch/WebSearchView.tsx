@@ -168,22 +168,22 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
                 ) : null}
 
                 <button
-                  onClick={async (e) => {
+                  onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     setViewFailed(false);
-                    try {
-                      const result = await loadPdfFromUrl(source.uri, source.title);
+                    setActivePdf(source.uri);
+                    openColumn('right');
+                    loadPdfFromUrl(source.uri, source.title).then(result => {
                       // @ts-ignore
-                      if (result && result.success) {
-                        setActivePdf(source.uri);
-                        openColumn('right');
-                      } else {
+                      if (result && !result.success && result.error) {
                         setViewFailed(true);
+                        setActivePdf(null);
                       }
-                    } catch (err) {
+                    }).catch(() => {
                       setViewFailed(true);
-                    }
+                      setActivePdf(null);
+                    });
                   }}
                   className="text-xs font-medium text-scholar-700 hover:text-scholar-800 bg-scholar-50 hover:bg-scholar-100 dark:bg-scholar-900/30 dark:text-scholar-300 dark:hover:bg-scholar-900/50 px-2 py-0.5 rounded border border-scholar-200 dark:border-scholar-800 transition-colors flex items-center gap-1"
                 >

@@ -385,21 +385,10 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSig
               author: needsAuthor ? cached.author : metadata.author,
               subject: needsSubject ? cached.subject : metadata.subject
             };
-          } else {
-            // AI enhancement
-            console.log('[PDF Service] Enhancing metadata with AI...');
-            finalMetadata = await enhanceMetadataWithAI(firstFourPages, metadata, signal);
-
-            // Only cache if AI actually enhanced something
-            const wasEnhanced = finalMetadata.title !== metadata.title ||
-              finalMetadata.author !== metadata.author ||
-              finalMetadata.subject !== metadata.subject;
-
-            if (wasEnhanced) {
-              await setCachedMetadata(firstFourPages, finalMetadata);
-              console.log('[PDF Service] Metadata enhanced and cached');
-            }
           }
+          // AI enhancement skipped — too slow for inline use.
+          // Cache hits (above) are instant. Non-cached metadata stays as-is.
+          // Callers (e.g. SourcesPanel) already pass title/author overrides.
         }
       } catch (error: any) {
         if (error.message === 'Aborted') throw error; // Re-throw abort

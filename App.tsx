@@ -127,12 +127,14 @@ const App: React.FC = () => {
           webSearchSources={searchState.data?.sources || []}
           webSearchLoading={searchState.isLoading}
           webSearchError={searchState.error}
-          onViewPdf={async (paper) => {
-            const success = await loadPdfFromUrl(paper.pdfUri, paper.title, paper.authors.join(', '));
-            if (success) {
-              setActivePdf(paper.pdfUri);
-              openColumn('right');
-            }
+          onViewPdf={(paper) => {
+            setActivePdf(paper.pdfUri);
+            openColumn('right');
+            loadPdfFromUrl(paper.pdfUri, paper.title, paper.authors.join(', ')).then(result => {
+              if (!result.success && result.error) {
+                setActivePdf(null);
+              }
+            });
           }}
         />
       );
