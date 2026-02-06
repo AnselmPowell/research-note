@@ -45,7 +45,18 @@ router.post('/batch-embeddings', async (req, res, next) => {
 router.post('/filter-papers', async (req, res, next) => {
   try {
     const { papers, userQuestions, keywords } = req.body.data;
+    console.log('[FILTER-PAPERS] Received:', {
+      papersCount: papers?.length,
+      userQuestionsCount: userQuestions?.length,
+      keywordsCount: keywords?.length,
+      firstPaperTitle: papers?.[0]?.title
+    });
     const result = await geminiService.filterRelevantPapers(papers, userQuestions, keywords);
+    console.log('[FILTER-PAPERS] Returning:', {
+      resultCount: result?.length,
+      firstResultTitle: result?.[0]?.title,
+      firstResultScore: result?.[0]?.relevanceScore
+    });
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
 });

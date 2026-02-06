@@ -286,10 +286,13 @@ function cosineSimilarity(vecA, vecB) {
 
 
 async function filterRelevantPapers(papers, userQuestions, keywords) {
+  console.log('[filterRelevantPapers] START:', { papersCount: papers.length, userQuestions, keywords });
   if (papers.length === 0) return [];
 
   const userIntentText = 'Questions: ' + userQuestions.join('\n') + '\nKeywords: ' + keywords.join(', ');
+  console.log('[filterRelevantPapers] Getting embedding for:', userIntentText.substring(0, 100));
   const targetVector = await getEmbedding(userIntentText, 'RETRIEVAL_QUERY');
+  console.log('[filterRelevantPapers] Target vector length:', targetVector.length);
   if (targetVector.length === 0) return [];
 
   const paperTexts = papers.map(p => 'Title: ' + p.title + '\nAbstract: ' + p.summary);
@@ -304,10 +307,15 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
     return Object.assign({}, paper, { relevanceScore: score });
   });
 
-  return scoredPapers
-    .filter(p => (p.relevanceScore || 0) >= 0.30)
-    .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
-    .slice(0, 20);
+  console.log('[filterRelevantPapers] Scored papers sample:', scoredPapers.slice(0, 3).map(p => ({ title: p.title, score: p.relevanceScore })));
+
+  const filtered = scoredPapers.filter(p => (p.relevanceScore || 0) >= 0.30);
+  console.log('[filterRelevantPapers] After filter (>=0.30):', filtered.length, 'papers');
+
+  const result = filtered.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0)).slice(0, 20);
+  console.log('[filterRelevantPapers] Final result:', result.length, 'papers');
+
+  return result;
 }
 
 async function extractNotesFromPages(relevantPages, userQuestions, paperTitle, paperAbstract, referenceList) {
