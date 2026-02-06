@@ -1,79 +1,103 @@
 # Active Context - Research Note
 
-## Current Work Focus (January 20, 2026)
+## Current Work Focus (February 6, 2026)
 
-### Primary Active Focus: UI/UX Refinement & Interaction Polish
+### Primary Active Focus: Production Stability & Backend Migration
 
-**Immediate Priorities:**
-1. **Interactive Feedback Loop** - Ensure all asynchronous actions (loading, saving, downloading) have clear visual indicators.
-2. **Brand Consistency** - Apply the "Scholar" design system (Purple/Indigo palette) across all action buttons and status indicators.
-3. **Layout Stability** - Maintain column width constraints and responsive behavior across all view modes.
-4. **Knowledge Organization** - Improve the "Add to Sources" workflow for better research synthesis.
+**Recent Major Accomplishments:**
+1. ✅ **Backend API Proxy Architecture** - Migrated all AI/DB operations to Node.js/Express backend (port 3001)
+2. ✅ **Embedding Model Migration** - Updated from `text-embedding-004` to `gemini-embedding-001` (Google shutdown on Jan 14)
+3. ✅ **Zero Results Bug Fix** - Fixed cache clearing and retry logic when filtering returns 0 papers
+4. ✅ **Comprehensive Logging** - Added structured logging for PDF URI tracking and paper filtering
 
-### Current Session Goals
+### Latest Session Fixes (Feb 6, 2026)
 
-**Active Task: UI interaction Polish & Memory Bank Update**
-- ✅ **COMPLETED: Responsive "Add to Sources" Toggle** - Unified button with toggle states (Add/Added), brand colors, and loading spinners in `WebSearchView` and `DeepResearchView`.
-- ✅ **COMPLETED: Layout Control Optimization** - Updated `LayoutControls.tsx` icons (`Globe` -> `FolderOpen`) and labels to accurately reflect column purposes.
-- ✅ **COMPLETED: Layout Constraint Enforcement** - Fixed `ThreeColumnLayout.tsx` to prevent the Sources column from exceeding 30% width even when it's the only visible column.
-- ✅ **COMPLETED: Source Panel Interaction** - Refined `SourcesPanel.tsx` with loading indicators and unified checkmark behavior.
-- 🔄 **Currently updating Memory Bank** with today's feature polish and UI improvements.
+**Bug: Search Blocked After Zero Results**
+- **Issue**: When embedding model failed, search found 122 papers but filtered to 0. User couldn't retry search.
+- **Root Cause 1**: `App.tsx` checked `arxivCandidates.length > 0` instead of `filteredCandidates.length`
+- **Root Cause 2**: `ResearchContext` saved broken state to localStorage (papers with 0 visible results)
+- **Fix**: Check `filteredCandidates.length` for visible results, auto-clear cache when all counts = 0
+- **Commit**: `a90481f`
 
-## Recent Changes & Accomplishments
+**Bug: Embedding API 404 Errors**
+- **Issue**: All paper filtering failed silently with `text-embedding-004` returning 404
+- **Root Cause**: Google shut down embedding model on January 14, 2026
+- **Fix**: Updated to `gemini-embedding-001` (768-dim → 768-dim, same API)
+- **Commit**: `0066128`
 
-### 🎨 UI/UX Interaction Polish (January 20, 2026)
-**Unified Source Management and Visual Feedback**
+## Current Technical State
 
-- **Interactive "Add to Sources" Button**: 
-    - Replaced the confusing "Save paper" and "Add to Sources" dual-button setup with a single, state-aware toggle.
-    - Integrated `downloadingUris` from `LibraryContext` to show real-time `Loader2` spinners on the button themselves.
-    - Added safety checks in `DeepResearchView` to prevent removing papers that have associated saved notes.
-- **Brand System Integration**:
-    - Standardized action buttons using `bg-scholar-100` and `text-scholar-700` for active/saved states.
-    - Ensured "Added" state provides clear visual confirmation with `Check` icons.
-- **Improved Layout Controls**:
-    - Changed the "Web Search" (Globe) icon to "Sources" (FolderOpen) to better match the left column's primary function.
-    - Updated mobile dropdown labels and icons for consistency between desktop and mobile.
-- **Robust Column Resizing**:
-    - Implemented strict clamping in `getColumnWidth` for the left column (sources) to stay between 20-30% width, preventing UI breakage when solitary.
+### Backend Architecture (Node.js + Express)
+```javascript
+// server.js - Port 3001
+app.use('/api/v1/gemini', geminiRoutes);    // AI operations
+app.use('/api/v1/database', databaseRoutes); // CRUD operations
+app.use('/api/v1/agent', agentRoutes);       // Research assistant
+app.use('/api/v1/arxiv', arxivRoutes);       // ArXiv proxy (CORS fix)
+```
 
-### 🔒 Authentication & Security Wins (January 7-15, 2026)
-**Production-Grade Security System Implemented**
+### Production Deployment (Railway + Docker + Nginx)
+- **Multi-stage Docker**: Frontend build → Backend build → Nginx runtime
+- **Nginx Proxy**: Port 3000 → Frontend (static) + `/api/*` → Backend (3001)
+- **Environment Injection**: Runtime env vars via `inject-env.sh`
 
-- **Multi-tier Auth**: Validated Neon, Google, and Microsoft OAuth providers.
-- **Microsoft OAuth with PKCE**: Custom implementation with state verification and deterministic password recovery.
-- **Environment Variable Security**: Isolated client-safe vs server-side variables using `inject-env.sh` and multi-stage Docker builds.
-- **Data Migration**: Supported seamless transfer of anonymous user data from `localStorage` to PostgreSQL upon sign-in.
+### Critical Services Status
+- ✅ **Gemini AI**: `gemini-2.0-flash-exp` for generation, `gemini-embedding-001` for embeddings
+- ✅ **Database**: Neon Serverless Postgres with user-scoped queries
+- ✅ **ArXiv**: Backend proxy eliminates CORS issues
+- ⚠️ **OpenAI**: Fallback only (not primary)
 
-## Code Quality Standards
+## Recent Code Patterns
 
-**React Context Architecture:**
-- Always use `useCallback` for functions passed to child components.
-- Implement `useMemo` for expensive computations (tree building, filtering).
-- Use `Set` data structures for O(1) membership testing and ensuring unique entries.
+### Error Recovery Pattern
+```typescript
+// ResearchContext.tsx - Auto-clear cache on zero results
+useEffect(() => {
+  if (filteredCandidates.length > 0 || deepResearchResults.length > 0) {
+    localStorageService.saveDeepResearchResults({...});
+  } else if (arxivCandidates.length === 0 && filteredCandidates.length === 0) {
+    console.log('[ResearchContext] Clearing cache - no visible results');
+    localStorageService.clearDeepResearchResults();
+  }
+}, [filteredCandidates, deepResearchResults, arxivCandidates]);
+```
 
-**UI Component Patterns:**
-- **Loading States**: Every async action must show a loading spinner (e.g., `Loader2`) and disable the triggering element.
-- **State Toggles**: Use semantic labeling (e.g., "Add" vs "Added") and icon changes to reflect toggle states.
-- **Propagation Control**: Use `e.stopPropagation()` in nested click handlers to avoid accidental parent triggers.
+### Structured Logging Pattern
+```javascript
+// backend/routes/gemini.js
+console.log('╔════════════════════════════════════════╗');
+console.log('║ [ROUTE] /extract-notes - REQUEST START║');
+console.log('╚════════════════════════════════════════╝');
+console.log('📄 Paper:', paperTitle);
+console.log('🔍 First page pdfUri:', relevantPages[0]?.pdfUri);
+```
 
-## Project Insights & Learnings
+### Batch Processing Pattern
+```javascript
+// geminiService.js - Extract notes with concurrency control
+const BATCH_SIZE = 8;        // Pages per batch
+const CONCURRENCY = 3;       // Parallel batches
+const results = await asyncPool(CONCURRENCY, batches, processBatch);
+```
 
-### UI/UX Discoveries
-- **Unified Action Buttons**: Combining "Save" and "Add to Context" logic into a single "Source Management" flow reduces cognitive overhead for researchers.
-- **Visual Continuity**: When a paper is "Added", opening the Sources panel immediately (via `openColumn('left')`) provides instant confirmation of where the resource went.
-- **Layout Constraints**: Enforcing minimum/maximum widths for sidebars is critical for maintaining readability of the central "Research" column.
+## Active Challenges
 
-### Technical Insights
-- **Context Synchronization**: Exposing `downloadingUris` across all view components allows for ubiquitous loading state feedback without redundant state management.
-- **CORS Management**: The proxy fallback system in `pdfService.ts` handles ~95% of academic repository download issues.
+### Performance
+- **Large Result Sets**: 100+ papers can slow UI rendering
+- **Solution In Progress**: Virtual scrolling for note lists
 
-## Current Challenges & Solutions
+### User Experience
+- **PDF Search Highlighting**: Canvas rendering errors on rapid page navigation
+- **Status**: Known issue, non-blocking, deferred to future sprint
 
-### Performance Challenges
-- **Large PDF Collections**: Memory growth in `LibraryContext` when 50+ PDFs are loaded.
-- **Solution:** Implementing LRU cache with buffer cleanup.
+## Next Priorities
+1. Remove excessive debug logging from production
+2. Implement rate limiting on backend API
+3. Add Redis cache for embeddings (replace in-memory cache)
+4. Monitor Gemini API quota usage
 
-### Design Challenges
-- **Feature Discovery**: Ensuring users understand the difference between selecting for AI context and adding to the permanent library.
-- **Solution:** Clearer labeling ("Add to Sources") and unified icons.
+## Key Files Recently Modified
+- `App.tsx` - Search retry logic (line 186)
+- `contexts/ResearchContext.tsx` - Cache management (line 224)
+- `backend/services/geminiService.js` - Embedding model update (line 176, 242)
+- `backend/routes/gemini.js` - Structured logging (line 64)
