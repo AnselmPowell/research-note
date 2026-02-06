@@ -1314,6 +1314,16 @@ const ResearchCardNote: React.FC<{
 
   const handleViewPdf = (e: React.MouseEvent) => {
     e.stopPropagation();
+
+    console.log('\n🔍 [VIEW PDF] User clicked "View PDF" button');
+    console.log('   📄 Paper:', sourceTitle);
+    console.log('   📝 Note quote:', note.quote.substring(0, 60) + '...');
+    console.log('   📍 Page number:', note.pageNumber);
+    console.log('   🔗 Note pdfUri:', note.pdfUri);
+    console.log('   ❓ Is pdfUri defined:', !!note.pdfUri);
+    console.log('   ❓ pdfUri type:', typeof note.pdfUri);
+    console.log('   ❓ pdfUri value:', note.pdfUri === undefined ? 'UNDEFINED' : note.pdfUri);
+
     const cleanedQuote = note.quote.replace(/^[\W\d]+|[\W\d]+$/g, '').trim();
     loadPdfFromUrl(note.pdfUri, sourceTitle);
     setActivePdf(note.pdfUri);

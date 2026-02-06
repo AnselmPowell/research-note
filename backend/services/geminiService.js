@@ -337,6 +337,12 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
 }
 
 async function extractNotesFromPages(relevantPages, userQuestions, paperTitle, paperAbstract, referenceList) {
+  console.log('\n🔬 [SERVICE] extractNotesFromPages - STARTING');
+  console.log('   📄 Paper:', paperTitle);
+  console.log('   📊 Relevant pages:', relevantPages?.length);
+  console.log('   🔍 First page has pdfUri:', !!relevantPages?.[0]?.pdfUri);
+  console.log('   📍 First page pdfUri:', relevantPages?.[0]?.pdfUri);
+
   if (!genAI && !config.openaiApiKey) {
     logger.warn('No AI services for note extraction');
     return [];
@@ -350,7 +356,13 @@ async function extractNotesFromPages(relevantPages, userQuestions, paperTitle, p
     batches.push(relevantPages.slice(i, i + BATCH_SIZE));
   }
 
-  const processBatch = async (batch) => {
+  console.log('   📦 Created', batches.length, 'batches for processing\n');
+
+  const processBatch = async (batch, batchIndex) => {
+    console.log(`\n   🔄 [BATCH ${batchIndex + 1}/${batches.length}] Processing ${batch.length} pages`);
+    console.log(`      First page in batch has pdfUri: ${!!batch[0]?.pdfUri}`);
+    console.log(`      First page pdfUri: ${batch[0]?.pdfUri}`);
+
     await delay(Math.random() * 2000);
 
     const contextText = batch.map(p =>
@@ -389,7 +401,10 @@ ${contextText}`;
       const parsed = JSON.parse(cleanJson(response.text()));
       const notes = Array.isArray(parsed) ? parsed : (parsed.notes || []);
 
-      return notes.map(note => ({
+      console.log(`      ✅ AI returned ${notes.length} notes`);
+      console.log(`      🔗 Assigning pdfUri from batch[0]: ${batch[0]?.pdfUri}`);
+
+      const mappedNotes = notes.map(note => ({
         quote: note.quote || '',
         justification: note.justification || 'Relevant.',
         relatedQuestion: note.relatedQuestion || 'General',
@@ -398,16 +413,42 @@ ${contextText}`;
         relevanceScore: note.relevanceScore || 0.75,
         citations: note.citations || []
       }));
+
+      console.log(`      📝 First note mapped: pdfUri=${mappedNotes[0]?.pdfUri}, page=${mappedNotes[0]?.pageNumber}\n`);
+
+      return mappedNotes;
     } catch (error) {
       logger.warn('Gemini extraction failed, trying OpenAI');
       const parsed = await callOpenAI(prompt);
       const notes = Array.isArray(parsed) ? parsed : (parsed.notes || []);
-      return notes;
+
+      console.log(`      ⚠️  OpenAI fallback: ${notes.length} notes returned`);
+      console.log(`      🔗 Assigning pdfUri from batch[0]: ${batch[0]?.pdfUri}`);
+
+      const mappedNotes = notes.map(note => ({
+        quote: note.quote || '',
+        justification: note.justification || 'Relevant.',
+        relatedQuestion: note.relatedQuestion || 'General',
+        pageNumber: note.pageNumber,
+        pdfUri: batch[0]?.pdfUri || '',
+        relevanceScore: note.relevanceScore || 0.75,
+        citations: note.citations || []
+      }));
+
+      return mappedNotes;
     }
   };
 
-  const results = await asyncPool(CONCURRENCY, batches, processBatch);
-  return results.flat().filter(n => n !== null);
+  const results = await asyncPool(CONCURRENCY, batches, (batch, index) => processBatch(batch, index));
+  const finalNotes = results.flat().filter(n => n !== null);
+
+  console.log('\n✅ [SERVICE] extractNotesFromPages - COMPLETE');
+  console.log('   📊 Total notes:', finalNotes.length);
+  console.log('   🔗 First note pdfUri:', finalNotes[0]?.pdfUri);
+  console.log('   📄 First note page:', finalNotes[0]?.pageNumber);
+  console.log('   📝 First note quote:', finalNotes[0]?.quote?.substring(0, 60) + '...\n');
+
+  return finalNotes;
 }
 
 
