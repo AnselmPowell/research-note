@@ -71,7 +71,8 @@ export const PdfWorkspace: React.FC = () => {
     const documentTextIndexCache = useRef<PageTextIndex[] | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const activePdf = internalPdfs.find(p => p.id === activePdfUri) || internalPdfs[0];
+    const activePdf = internalPdfs.find(p => p.id === activePdfUri) || null;
+    const isNewPdfLoading = activePdfUri !== null && !internalPdfs.some(p => p.id === activePdfUri);
 
     useEffect(() => { setPdfjsLib(pdfjsLibWeb); }, []);
 
@@ -360,8 +361,8 @@ export const PdfWorkspace: React.FC = () => {
                 />
             )}
 
-            {isLoading || isIndexing ? (
-                <div className="flex-1 flex flex-col items-center justify-center gap-4"><Loader2 className="w-10 h-10 text-scholar-600 animate-spin" /><p className="text-sm font-medium">{isIndexing ? 'Indexing...' : 'Loading...'}</p></div>
+            {isLoading || isIndexing || (isNewPdfLoading && internalPdfs.length === 0) ? (
+                <div className="flex-1 flex flex-col items-center justify-center gap-4"><Loader2 className="w-10 h-10 text-scholar-600 animate-spin" /><p className="text-sm font-medium text-gray-500 dark:text-gray-400">{isIndexing ? 'Indexing...' : 'Preparing document...'}</p></div>
             ) : internalPdfs.length === 0 ? (
                 <div className="flex-1 flex items-center justify-center bg-cream dark:bg-dark-bg p-6">
                     <PdfUploader
@@ -464,7 +465,14 @@ export const PdfWorkspace: React.FC = () => {
                                 documentTextIndex={documentTextIndexCache.current}
                                 onScrollActivity={handleScrollActivity}
                             />
-                        ) : <div className="flex-1 flex items-center justify-center text-gray-400">Select a document</div>}
+                        ) : isNewPdfLoading ? (
+                            <div className="flex-1 flex flex-col items-center justify-center gap-4">
+                                <Loader2 className="w-10 h-10 text-scholar-600 animate-spin" />
+                                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Preparing document...</p>
+                            </div>
+                        ) : (
+                            <div className="flex-1 flex items-center justify-center text-gray-400">Select a document</div>
+                        )}
                     </div>
                 </>
             )}

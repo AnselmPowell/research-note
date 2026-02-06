@@ -482,14 +482,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 const start = (currentPageIndex === result.startPageIndex) ? result.startCharIndex : 0;
                 const end = (currentPageIndex === result.endPageIndex) ? result.endCharIndex : pageTextIndex.combinedText.length;
 
-                // Debug: Show what text is being matched
-                const matchedText = pageTextIndex.combinedText.substring(start, end);
-                console.log('🔍 SEARCH HIGHLIGHT:', {
-                    matchedText: `"${matchedText}"`,
-                    charRange: `${start} → ${end}`,
-                    isActive
-                });
-
                 const itemIndicesToHighlight = new Set<number>();
                 for (let i = start; i < end; i++) {
                     const mapEntry = pageTextIndex.charToItemMap[i];
@@ -497,15 +489,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                         itemIndicesToHighlight.add(mapEntry.itemIndex);
                     }
                 }
-
-                console.log('🎯 SPANS TO HIGHLIGHT:', {
-                    itemIndices: Array.from(itemIndicesToHighlight),
-                    textDivsLength: textDivsRef.current.length,
-                    spanTexts: Array.from(itemIndicesToHighlight).map(idx => {
-                        const span = textDivsRef.current[idx];
-                        return span ? `"${span.textContent}"` : `NOT FOUND (idx ${idx} > length ${textDivsRef.current.length})`;
-                    })
-                });
 
                 // Determine column information for this match once
                 let startClass: string | null = null;
@@ -548,7 +531,6 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 itemIndicesToHighlight.forEach(itemIndex => {
                     const span = textDivsRef.current[itemIndex];
                     if (!span) {
-                        console.warn(`⚠️ Span not found for itemIndex ${itemIndex} (textDivs length: ${textDivsRef.current.length})`);
                         return;
                     }
 
