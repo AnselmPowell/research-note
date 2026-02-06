@@ -305,7 +305,7 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
   });
 
   return scoredPapers
-    .filter(p => (p.relevanceScore || 0) >= 0.48)
+    .filter(p => (p.relevanceScore || 0) >= 0.30)
     .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
     .slice(0, 20);
 }
