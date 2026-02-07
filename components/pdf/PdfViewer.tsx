@@ -254,7 +254,7 @@ const SearchControls: React.FC<SearchControlsProps> = ({ searchQuery, setSearchQ
                     />
                     {searchResults.length > 0 && activeResultIndex !== null ? (
                         <>
-                            <span className="text-gray-600 dark:text-gray-400 text-sm font-medium">
+                            <span className="text-green-600 dark:text-green-400 text-sm font-medium">
                                 {activeResultIndex + 1} / {searchResults.length}
                             </span>
                             <button
@@ -273,7 +273,7 @@ const SearchControls: React.FC<SearchControlsProps> = ({ searchQuery, setSearchQ
                             </button>
                         </>
                     ) : searchQuery && (
-                        <span className="text-gray-500 dark:text-gray-400 text-sm">No results</span>
+                        <span className="text-red-500 dark:text-red-400 text-sm font-medium">Not found</span>
                     )}
                 </div>
             )}

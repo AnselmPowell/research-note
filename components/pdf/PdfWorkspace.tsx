@@ -328,17 +328,23 @@ export const PdfWorkspace: React.FC = () => {
 
         setSearchResults(results);
         if (results.length > 0) { setActiveResultIndex(0); handlePageChange(results[0].startPageIndex + 1); }
+        return results.length;
     }, [activePdf, handlePageChange]);
 
     useEffect(() => {
         if (searchHighlight && activePdf && !isIndexing && !isLoading) {
-            setSearchQuery(searchHighlight);
-            setTimeout(() => {
-                performSearch(searchHighlight);
+            const { text, fallbackPage } = searchHighlight;
+            setSearchQuery(text);
+            setTimeout(async () => {
+                const resultCount = await performSearch(text);
+                // If no results and we have a fallback page, navigate there
+                if (resultCount === 0 && fallbackPage && fallbackPage >= 1 && fallbackPage <= activePdf.numPages) {
+                    handlePageChange(fallbackPage);
+                }
                 setSearchHighlight(null);
             }, 500);
         }
-    }, [searchHighlight, activePdf, isIndexing, isLoading, performSearch, setSearchHighlight]);
+    }, [searchHighlight, activePdf, isIndexing, isLoading, performSearch, setSearchHighlight, handlePageChange]);
 
 
     const navigateToResult = useCallback((dir: 'next' | 'prev') => {

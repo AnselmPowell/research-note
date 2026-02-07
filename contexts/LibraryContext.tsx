@@ -10,10 +10,10 @@ interface LibraryContextType {
   downloadingUris: Set<string>;
   failedUris: Set<string>;
   failedUrlErrors: Record<string, { reason: string, actionableMsg: string }>; // New friendly errors
-  searchHighlight: string | null;
+  searchHighlight: { text: string; fallbackPage?: number } | null;
   contextUris: Set<string>;
 
-  setSearchHighlight: (text: string | null) => void;
+  setSearchHighlight: (highlight: { text: string; fallbackPage?: number } | null) => void;
   loadPdfFromUrl: (uri: string, title?: string, author?: string) => Promise<{ success: boolean, pdf?: LoadedPdf, error?: { reason: string, actionableMsg: string } }>;
   addPdfFile: (file: File) => Promise<void>;
   addPdfFileAndReturn: (file: File) => Promise<LoadedPdf>; // New: returns the PDF object directly
@@ -39,7 +39,7 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [downloadingUris, setDownloadingUris] = useState<Set<string>>(new Set());
   const [failedUris, setFailedUris] = useState<Set<string>>(new Set());
   const [contextUris, setContextUris] = useState<Set<string>>(new Set());
-  const [searchHighlight, setSearchHighlight] = useState<string | null>(null);
+  const [searchHighlight, setSearchHighlight] = useState<{ text: string; fallbackPage?: number } | null>(null);
 
   /**
    * Downloads and parses a PDF into memory.

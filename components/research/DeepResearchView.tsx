@@ -1327,7 +1327,7 @@ const ResearchCardNote: React.FC<{
     const cleanedQuote = note.quote.replace(/^[\W\d]+|[\W\d]+$/g, '').trim();
     loadPdfFromUrl(note.pdfUri, sourceTitle);
     setActivePdf(note.pdfUri);
-    setSearchHighlight(cleanedQuote);
+    setSearchHighlight({ text: cleanedQuote, fallbackPage: note.pageNumber });
     openUIColumn('right');
   };
 

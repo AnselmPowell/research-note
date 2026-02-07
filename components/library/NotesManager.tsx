@@ -316,7 +316,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
     loadPdfFromUrl(note.paper_uri, paper?.title);
     setActivePdf(note.paper_uri);
-    setSearchHighlight(cleanedQuote);
+    setSearchHighlight({ text: cleanedQuote, fallbackPage: note.page_number });
     setColumnVisibility(prev => ({ ...prev, right: true }));
   }, [paperByUri, loadPdfFromUrl, setActivePdf, setSearchHighlight, setColumnVisibility]);
 
@@ -940,7 +940,7 @@ function LibraryPaperCard({ paper, isSelected, isExpanded, onSelect, onToggleExp
     const cleanedQuote = note.content.replace(/^[\W\d]+|[\W\d]+$/g, '').trim();
     loadPdfFromUrl(paper.uri, paper.title);
     setActivePdf(paper.uri);
-    setSearchHighlight(cleanedQuote);
+    setSearchHighlight({ text: cleanedQuote, fallbackPage: note.page_number });
     setColumnVisibility(prev => ({ ...prev, right: true }));
     setLibraryExpanded(false);
     setLibraryOpen(false);
@@ -1097,7 +1097,7 @@ function NoteCard({
     const cleanedQuote = note.content.replace(/^[\W\d]+|[\W\d]+$/g, '').trim();
     loadPdfFromUrl(note.paper_uri, paper?.title);
     setActivePdf(note.paper_uri);
-    setSearchHighlight(cleanedQuote);
+    setSearchHighlight({ text: cleanedQuote, fallbackPage: note.page_number });
     setColumnVisibility(prev => ({ ...prev, right: true }));
     setLibraryExpanded(false);
     setLibraryOpen(false);
