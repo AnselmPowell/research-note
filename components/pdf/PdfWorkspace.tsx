@@ -48,6 +48,137 @@ const TabBar = ({ internalPdfs, activePdfUri, onTabChange, onClosePdf, onAddClic
     </div>
 );
 
+/**
+ * HELPER FUNCTION: Builds a PageTextIndex (combinedText + charToItemMap) from textContent.items
+ * This is the same index format that applyHighlights() consumes
+ * 
+ * Extracted from the existing performSearch() indexing loop so both
+ * performSearch and performNoteSearch can reuse it
+ */
+function buildPageTextIndex(items: any[]): PageTextIndex {
+    let combinedText = '';
+    const charToItemMap: (MapEntry | null)[] = [];
+    let lastItem: any = null;
+
+    for (const item of items) {
+        const originalItemIndex = items.indexOf(item);
+
+        if (lastItem) {
+            const lastY = lastItem.transform[5];
+            const currentY = item.transform[5];
+            const lastXEnd = lastItem.transform[4] + lastItem.width;
+            const currentX = item.transform[4];
+            const lineHeight = lastItem.height || 10;
+            const isNewLine = Math.abs(currentY - lastY) > lineHeight * 0.6;
+
+            if (isNewLine) {
+                if (combinedText.endsWith('-')) {
+                    combinedText = combinedText.slice(0, -1);
+                    charToItemMap.pop();
+                } else {
+                    combinedText += ' ';
+                    charToItemMap.push(null);
+                }
+            } else if (currentX > lastXEnd + 2) {
+                combinedText += ' ';
+                charToItemMap.push(null);
+            }
+        }
+
+        for (let k = 0; k < item.str.length; k++) {
+            charToItemMap.push({ itemIndex: originalItemIndex, charInItemIndex: k });
+        }
+        combinedText += item.str;
+        lastItem = item;
+    }
+
+    return { combinedText, charToItemMap };
+}
+
+/**
+ * BRIDGE FUNCTION: Converts fuzzy match results into SearchResult format
+ * that applyHighlights() already understands
+ * 
+ * Maps from word-level matches (itemIndex + charStart/End) to character positions
+ * in the combinedText string using the charToItemMap
+ */
+function convertMatchToSearchResult(
+    match: import('../../services/fuzzyPdfSearch').MatchResult,
+    pageIndex: number,
+    pageTextIndex: PageTextIndex
+): SearchResult {
+    const { matchedWords } = match;
+
+    if (matchedWords.length === 0) {
+        // Fallback: no highlighting
+        return {
+            startPageIndex: pageIndex,
+            startCharIndex: 0,
+            endPageIndex: pageIndex,
+            endCharIndex: 0,
+        };
+    }
+
+    // Find the character positions in combinedText that correspond to:
+    // - First matched word's start
+    // - Last matched word's end
+
+    const firstWord = matchedWords[0];
+    const lastWord = matchedWords[matchedWords.length - 1];
+
+    let startCharIndex = -1;
+    let endCharIndex = -1;
+
+    // Walk the charToItemMap to find where these words appear in combinedText
+    for (let i = 0; i < pageTextIndex.charToItemMap.length; i++) {
+        const entry = pageTextIndex.charToItemMap[i];
+        if (!entry) continue;
+
+        // Find start: first character of the first matched word
+        if (startCharIndex === -1 &&
+            entry.itemIndex === firstWord.itemIndex &&
+            entry.charInItemIndex === firstWord.charStart) {
+            startCharIndex = i;
+        }
+
+        // Find end: last character of the last matched word
+        // (charEnd is exclusive, so last char is charEnd - 1)
+        if (entry.itemIndex === lastWord.itemIndex &&
+            entry.charInItemIndex === lastWord.charEnd - 1) {
+            endCharIndex = i + 1; // +1 because SearchResult endCharIndex is exclusive
+        }
+    }
+
+    // Safety fallback: if we couldn't map precisely, highlight all matched item indices
+    if (startCharIndex === -1 || endCharIndex === -1) {
+        const allItemIndices = new Set(matchedWords.map(w => w.itemIndex));
+
+        startCharIndex = -1;
+        endCharIndex = -1;
+
+        for (let i = 0; i < pageTextIndex.charToItemMap.length; i++) {
+            const entry = pageTextIndex.charToItemMap[i];
+            if (!entry) continue;
+
+            if (allItemIndices.has(entry.itemIndex)) {
+                if (startCharIndex === -1) startCharIndex = i;
+                endCharIndex = i + 1;
+            }
+        }
+    }
+
+    // Final safety: if still nothing, return empty range
+    if (startCharIndex === -1) startCharIndex = 0;
+    if (endCharIndex === -1) endCharIndex = 0;
+
+    return {
+        startPageIndex: pageIndex,
+        startCharIndex,
+        endPageIndex: pageIndex,
+        endCharIndex,
+    };
+}
+
 export const PdfWorkspace: React.FC = () => {
     const { loadedPdfs, activePdfUri, loadPdfFromUrl, addPdfFile, removePdf, setActivePdf, searchHighlight, setSearchHighlight, failedUrlErrors } = useLibrary();
 
@@ -197,51 +328,22 @@ export const PdfWorkspace: React.FC = () => {
             return;
         }
 
-        if (!documentTextIndexCache.current) {
+        // Check if we need to build or rebuild the full index
+        // We rebuild if:
+        // 1. Cache doesn't exist at all
+        // 2. Cache is sparse (some pages are null) - happens after note search
+        const needsFullIndex = !documentTextIndexCache.current || 
+                               documentTextIndexCache.current.some((page) => page === null);
+
+        if (needsFullIndex) {
             setIsIndexing(true);
             const textIndex: PageTextIndex[] = [];
             for (let i = 1; i <= activePdf.doc.numPages; i++) {
                 const page = await activePdf.doc.getPage(i);
                 const textContent = await page.getTextContent();
 
-                // CRITICAL FIX: Do NOT sort by Y-coordinate!
-                // PDF.js provides items in the correct reading order (Column-by-Column).
-                // Sorting by Y merges columns (Row-by-Row), causing search to fail on multi-column text.
-                const itemsToProcess = textContent.items;
-
-                let combinedText = '';
-                const charToItemMap: (MapEntry | null)[] = [];
-                let lastItem: any = null;
-
-                for (const item of itemsToProcess) {
-                    const originalItemIndex = textContent.items.indexOf(item);
-                    if (lastItem) {
-                        const lastY = lastItem.transform[5];
-                        const currentY = item.transform[5];
-                        const lastXEnd = lastItem.transform[4] + lastItem.width;
-                        const currentX = item.transform[4];
-                        const lineHeight = lastItem.height || 10;
-                        const isNewLine = Math.abs(currentY - lastY) > lineHeight * 0.6;
-                        if (isNewLine) {
-                            if (combinedText.endsWith('-')) {
-                                combinedText = combinedText.slice(0, -1);
-                                charToItemMap.pop();
-                            } else {
-                                combinedText += ' ';
-                                charToItemMap.push(null);
-                            }
-                        } else if (currentX > lastXEnd + 2) {
-                            combinedText += ' ';
-                            charToItemMap.push(null);
-                        }
-                    }
-                    for (let k = 0; k < item.str.length; k++) {
-                        charToItemMap.push({ itemIndex: originalItemIndex, charInItemIndex: k });
-                    }
-                    combinedText += item.str;
-                    lastItem = item;
-                }
-                textIndex.push({ combinedText, charToItemMap });
+                // Use extracted helper function
+                textIndex.push(buildPageTextIndex(textContent.items));
             }
             documentTextIndexCache.current = textIndex;
             setIsIndexing(false);
@@ -331,20 +433,93 @@ export const PdfWorkspace: React.FC = () => {
         return results.length;
     }, [activePdf, handlePageChange]);
 
+    /**
+     * NEW: Fuzzy search function for note-to-PDF matching
+     * Uses word-level fuzzy matching with OCR tolerance
+     * Falls back to page navigation if no match found
+     */
+    const performNoteSearch = useCallback(async (noteText: string, fallbackPage: number) => {
+        if (!activePdf || !noteText) {
+            setSearchResults([]);
+            setActiveResultIndex(null);
+            return false;
+        }
+
+        try {
+            // Import the fuzzy search logic
+            const { fuzzyFindInPage } = await import('../../services/fuzzyPdfSearch');
+
+            // Run the fuzzy search (tries target page, then ±1)
+            const result = await fuzzyFindInPage(
+                activePdf.doc,
+                fallbackPage,
+                noteText,
+                activePdf.numPages
+            );
+
+            // Navigate to the matched (or fallback) page
+            handlePageChange(result.pageNumber);
+
+            // If we found a match, build the highlight data
+            if (result.match) {
+                const pageIndex = result.pageNumber - 1; // Convert to 0-based
+
+                // Get the page's textContent to build the index
+                const page = await activePdf.doc.getPage(result.pageNumber);
+                const textContent = await page.getTextContent();
+
+                // Build the PageTextIndex for this page
+                const pageTextIndex = buildPageTextIndex(textContent.items);
+
+                // Ensure documentTextIndexCache exists (create sparse array if needed)
+                if (!documentTextIndexCache.current) {
+                    documentTextIndexCache.current = new Array(activePdf.numPages).fill(null);
+                }
+                // Store this page's index (sparse array is OK - performSearch will rebuild if needed)
+                documentTextIndexCache.current[pageIndex] = pageTextIndex;
+
+                // Convert the fuzzy match into a SearchResult
+                const searchResult = convertMatchToSearchResult(result.match, pageIndex, pageTextIndex);
+
+                // Set the results so applyHighlights() can render them
+                setSearchResults([searchResult]);
+                setActiveResultIndex(0);
+
+                return true; // Match found and highlighted
+            } else {
+                // No match — just navigated to fallback page
+                setSearchResults([]);
+                setActiveResultIndex(null);
+                return false;
+            }
+
+        } catch (error) {
+            console.error('[performNoteSearch] Error:', error);
+            // Fallback: just navigate to the page
+            handlePageChange(fallbackPage);
+            setSearchResults([]);
+            setActiveResultIndex(null);
+            return false;
+        }
+    }, [activePdf, handlePageChange]);
+
     useEffect(() => {
         if (searchHighlight && activePdf && !isIndexing && !isLoading) {
             const { text, fallbackPage } = searchHighlight;
-            setSearchQuery(text);
+            setSearchQuery(text); // Still show the text in the search bar
+
             setTimeout(async () => {
-                const resultCount = await performSearch(text);
-                // If no results and we have a fallback page, navigate there
-                if (resultCount === 0 && fallbackPage && fallbackPage >= 1 && fallbackPage <= activePdf.numPages) {
-                    handlePageChange(fallbackPage);
+                if (fallbackPage && fallbackPage >= 1 && fallbackPage <= activePdf.numPages) {
+                    // Note click: use fuzzy word matching with page knowledge
+                    await performNoteSearch(text, fallbackPage);
+                } else {
+                    // Manual search from search bar: use existing substring search
+                    await performSearch(text);
                 }
                 setSearchHighlight(null);
-            }, 500);
+            }, 400); // Reduced from 500ms since fuzzy search is page-scoped
         }
-    }, [searchHighlight, activePdf, isIndexing, isLoading, performSearch, setSearchHighlight, handlePageChange]);
+    }, [searchHighlight, activePdf, isIndexing, isLoading, performSearch, performNoteSearch, setSearchHighlight, handlePageChange]);
 
 
     const navigateToResult = useCallback((dir: 'next' | 'prev') => {
