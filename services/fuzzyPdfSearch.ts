@@ -84,7 +84,7 @@ export function fuzzyWordMatch(word1: string, word2: string): boolean {
     // Handles: "self-organizing" vs "selforganizing", "John's" vs "johns", "build-step" vs "buildstep"
     const collapsed1 = word1.replace(/[^a-z0-9]/g, '');
     const collapsed2 = word2.replace(/[^a-z0-9]/g, '');
-    
+
     if (collapsed1.length > 0 && collapsed1 === collapsed2) return true;
 
     // Protect against very short words matching everything
@@ -272,7 +272,7 @@ export function findBestMatch(pageWords: WordToken[], noteWords: string[]): Matc
                     consecutiveSkips = 0; // Reset skip counter
                 } else {
                     consecutiveSkips++;
-                    
+
                     // If too many consecutive skips, try skipping a note word instead
                     if (consecutiveSkips > MAX_SKIP_GAP) {
                         // Check if the NEXT note word matches this page word
@@ -350,7 +350,7 @@ export async function fuzzyFindInPage(
     noteText: string,
     numPages: number
 ): Promise<FuzzySearchResult> {
-    
+
     const noteWords = tokenizeNoteText(noteText);
 
     // If note text is too short to match meaningfully, fallback to navigation
@@ -358,38 +358,52 @@ export async function fuzzyFindInPage(
         return { pageNumber: targetPage, match: null };
     }
 
-    // Build list of pages to try: target first, then ±1
-    const pagesToTry: number[] = [targetPage];
-    if (targetPage > 1) pagesToTry.push(targetPage - 1);
-    if (targetPage < numPages) pagesToTry.push(targetPage + 1);
+    // Track pages searched to avoid redundant processing as we expand the radius
+    const searchedPages = new Set<number>();
 
-    // Try each page
-    for (const pageNum of pagesToTry) {
-        if (pageNum < 1 || pageNum > numPages) continue;
+    // Helper: Internal function to search a specific page and track it
+    const trySearchOnPage = async (pageNum: number): Promise<MatchResult | null> => {
+        if (pageNum < 1 || pageNum > numPages || searchedPages.has(pageNum)) return null;
 
+        searchedPages.add(pageNum);
         try {
             const page = await pdfDoc.getPage(pageNum);
             const textContent = await page.getTextContent();
-
-            // Extract words from this page's raw text items
             const pageWords = tokenizeTextItems(textContent.items);
+            if (pageWords.length === 0) return null;
 
-            if (pageWords.length === 0) continue;
-
-            // Run the fuzzy matching algorithm
             const match = findBestMatch(pageWords, noteWords);
-
             // Accept matches with score ≥ 0.40
-            if (match !== null && match.score >= 0.40) {
-                return { pageNumber: pageNum, match };
-            }
-
+            if (match !== null && match.score >= 0.40) return match;
         } catch (err) {
-            console.error(`[fuzzyPdfSearch] Error processing page ${pageNum}:`, err);
-            continue;
+            // Silently fail for individual page errors to allow the loop to continue
         }
+        return null;
+    };
+
+    // TIER 1: Target Page (Highest probability)
+    let match = await trySearchOnPage(targetPage);
+    if (match) return { pageNumber: targetPage, match };
+
+    // TIER 2: Immediate Neighbors (±1)
+    for (const p of [targetPage - 1, targetPage + 1]) {
+        match = await trySearchOnPage(p);
+        if (match) return { pageNumber: p, match };
     }
 
-    // No match found on any of the 3 pages — fallback to navigation
+    // TIER 3: Extended Neighbors (±2)
+    for (const p of [targetPage - 2, targetPage + 2]) {
+        match = await trySearchOnPage(p);
+        if (match) return { pageNumber: p, match };
+    }
+
+    // TIER 4: Full Document Scan (Deep Scan)
+    // Last resort search from beginning to end
+    for (let p = 1; p <= numPages; p++) {
+        match = await trySearchOnPage(p);
+        if (match) return { pageNumber: p, match };
+    }
+
+    // No match found anywhere — fallback to just navigating to the target page
     return { pageNumber: targetPage, match: null };
 }

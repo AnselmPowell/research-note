@@ -55,11 +55,10 @@ export const validatePdfUrl = async (uri: string): Promise<boolean> => {
     ]);
 
     // Clean up
-    doc.destroy();
+    if (doc) (doc as any).destroy();
     return true;
 
   } catch (error: any) {
-    console.log(`[PDF Validation] URL ${uri} is not a valid PDF:`, error.message);
     return false;
   }
 };
@@ -74,7 +73,6 @@ export const fetchPdfBuffer = async (uri: string): Promise<ArrayBuffer> => {
     throw new Error('Direct fetch failed');
   } catch (directError) {
     // 2. Fallback to Proxy
-    console.log(`[PDF Service] Direct fetch failed for ${uri}, trying proxy...`);
     try {
       const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(uri)}`;
       const response = await fetch(proxyUrl);
@@ -379,7 +377,6 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSig
           // Check cache first
           const cached = await getCachedMetadata(firstFourPages);
           if (cached) {
-            console.log('[PDF Service] Using cached metadata');
             finalMetadata = {
               title: needsTitle ? cached.title : metadata.title,
               author: needsAuthor ? cached.author : metadata.author,
