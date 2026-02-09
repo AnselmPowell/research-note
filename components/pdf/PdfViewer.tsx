@@ -214,47 +214,71 @@ const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[]
 
 
 type SearchControlsProps = Pick<PdfViewerProps, 'searchQuery' | 'setSearchQuery' | 'performSearch' | 'searchResults' | 'activeResultIndex' | 'navigateToResult'> & {
-    isSearchOpen: boolean;
-    setIsSearchOpen: (open: boolean) => void;
+    isSearchFocused: boolean;
+    setIsSearchFocused: (focused: boolean) => void;
+    isCompact: boolean;
 };
 
-const SearchControls: React.FC<SearchControlsProps> = ({ searchQuery, setSearchQuery, performSearch, searchResults, activeResultIndex, navigateToResult, isSearchOpen, setIsSearchOpen }) => {
+const SearchControls: React.FC<SearchControlsProps> = ({ searchQuery, setSearchQuery, performSearch, searchResults, activeResultIndex, navigateToResult, isSearchFocused, setIsSearchFocused, isCompact }) => {
+    const [hasAttemptedSearch, setHasAttemptedSearch] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
             performSearch(searchQuery);
+            setHasAttemptedSearch(true);
         }
     };
 
     useEffect(() => {
         if (searchQuery === '') {
             performSearch('');
+            setHasAttemptedSearch(false);
+        } else {
+            setHasAttemptedSearch(false);
         }
     }, [searchQuery, performSearch]);
 
+    useEffect(() => {
+        if (isSearchFocused && inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, [isSearchFocused]);
+
+    const isSearchExpanded = isSearchFocused || !!searchQuery;
+
     return (
-        <>
-            <button
-                onClick={() => setIsSearchOpen(!isSearchOpen)}
-                className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                title="Search Document"
-            >
-                <SearchIcon className="w-5 h-5" />
-            </button>
-            {isSearchOpen && (
-                <div className="flex items-center space-x-2 border-l border-gray-300 dark:border-gray-600 ml-2 pl-2">
-                    <input
-                        type="text"
-                        placeholder="Search..."
-                        value={searchQuery}
-                        onChange={(e) => { setSearchQuery(e.target.value); setIsSearchOpen(true); }}
-                        onFocus={() => setIsSearchOpen(true)}
-                        onKeyDown={handleSearchKeyDown}
-                        className="w-32 sm:w-40 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+        <div className="flex items-center space-x-1 border-l border-gray-300 dark:border-gray-600 ml-1 pl-1">
+            <div className="flex items-center">
+                {!isSearchExpanded ? (
+                    <button
+                        onClick={() => setIsSearchFocused(true)}
+                        className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                        title="Search Document"
+                    >
+                        <SearchIcon className="w-5 h-5" />
+                    </button>
+                ) : (
+                    <div className={`overflow-hidden transition-all duration-300 ${isSearchExpanded ? (isCompact ? 'w-24 sm:w-32' : 'w-32 sm:w-48') : 'w-0'} opacity-100`}>
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            placeholder="Search document..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onFocus={() => setIsSearchFocused(true)}
+                            onBlur={() => setIsSearchFocused(false)}
+                            onKeyDown={handleSearchKeyDown}
+                            className="w-full bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md px-3 py-1 text-sm focus:outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                        />
+                    </div>
+                )}
+            </div>
+            {(isSearchExpanded || searchResults.length > 0) && (
+                <div className="flex items-center space-x-1">
                     {searchResults.length > 0 && activeResultIndex !== null ? (
                         <>
-                            <span className="text-green-600 dark:text-green-400 text-sm font-medium">
+                            <span className="text-gray-800 dark:text-neutral-200 text-xs font-medium whitespace-nowrap">
                                 {activeResultIndex + 1} / {searchResults.length}
                             </span>
                             <button
@@ -269,15 +293,15 @@ const SearchControls: React.FC<SearchControlsProps> = ({ searchQuery, setSearchQ
                                 className="p-1 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
                                 title="Next Result"
                             >
-                                <RightArrowIcon className="w-4 h-4" />
+                                <LeftArrowIcon className="w-4 h-4 rotate-180" />
                             </button>
                         </>
-                    ) : searchQuery && (
-                        <span className="text-red-500 dark:text-red-400 text-sm font-medium">Not found</span>
+                    ) : (searchQuery && hasAttemptedSearch) && (
+                        <span className="text-gray-500 dark:text-neutral-400 text-xs font-medium whitespace-nowrap px-1">Not found</span>
                     )}
                 </div>
             )}
-        </>
+        </div>
     );
 };
 
@@ -302,8 +326,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
     const toastTimer = useRef<number | null>(null);
     const textDivsRef = useRef<HTMLElement[]>([]);
     const [isUiVisible, setIsUiVisible] = useState(true);
-    const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
     const [pageInput, setPageInput] = useState(currentPage.toString());
+
+    const [isCompact, setIsCompact] = useState(false);
+    const isSearchExpanded = isSearchFocused || !!props.searchQuery;
+    const effectiveCompact = isCompact || isSearchExpanded;
     const isInteractingWithUi = useRef(false);
     const controlBarRef = useRef<HTMLDivElement>(null);
     const [controlBarStyle, setControlBarStyle] = useState<React.CSSProperties | null>(null);
@@ -373,8 +401,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
         if (!scrollEl) return;
 
         const handleScroll = () => {
-            // Keep UI visible when user is interacting with controls OR when search is open
-            if (isUiVisible && !isInteractingWithUi.current && !isSearchOpen) {
+            // Keep UI visible when user is interacting with controls OR when search is expanded
+            if (isUiVisible && !isInteractingWithUi.current && !isSearchExpanded) {
                 setIsUiVisible(false);
                 if (onScrollActivity) onScrollActivity();
             }
@@ -382,7 +410,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
 
         scrollEl.addEventListener('scroll', handleScroll, { passive: true });
         return () => scrollEl.removeEventListener('scroll', handleScroll);
-    }, [isUiVisible, onScrollActivity, isSearchOpen]);
+    }, [isUiVisible, onScrollActivity, isSearchExpanded]);
 
     // Keep the control bar positioned and sized to the viewer container (responsive)
     useEffect(() => {
@@ -393,10 +421,20 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 return;
             }
             const rect = container.getBoundingClientRect();
+
+            // Toggle compact mode for narrow columns (< 650px)
+            setIsCompact(rect.width < 650);
+
             const maxWidth = Math.max(240, rect.width - 24); // ensure some min width
             const left = rect.left + rect.width / 2 + window.scrollX;
             const bottom = 16; // keep small gap from bottom
-            setControlBarStyle({ left, width: Math.min(maxWidth, 1200), bottom, transform: 'translateX(-50%)' });
+            setControlBarStyle({
+                left: `${left}px`,
+                width: 'max-content',
+                maxWidth: `${maxWidth}px`,
+                bottom: `${bottom}px`,
+                transform: 'translateX(-50%)'
+            });
         };
 
         updateControlBar();
@@ -760,7 +798,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
             <div
                 ref={controlBarRef}
                 style={controlBarStyle || undefined}
-                className={`fixed bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-full shadow-xl px-3 py-2 flex items-center justify-center gap-2 sm:gap-4 z-[60] transition-all duration-300 transform ${isUiVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'} flex-wrap sm:flex-nowrap overflow-hidden`}
+                className={`fixed bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-full shadow-xl px-3 py-1.5 flex items-center justify-center gap-1 z-[60] transition-all duration-300 transform ${isUiVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'} flex-nowrap overflow-hidden`}
                 onMouseEnter={() => { isInteractingWithUi.current = true; }}
                 onMouseLeave={() => { isInteractingWithUi.current = false; }}
                 onFocus={() => { isInteractingWithUi.current = true; }}
@@ -773,60 +811,60 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 >
                     <NewFileIcon className="w-5 h-5" />
                 </button>
-                <div className="flex items-center space-x-2 border-l border-r border-gray-300 dark:border-gray-600 px-2 sm:px-4 flex-shrink-0">
+                <div className={`flex items-center border-l border-r border-gray-300 dark:border-gray-600 px-0.5 sm:px-1 flex-shrink-0 ${effectiveCompact ? 'space-x-0.5' : 'space-x-1'}`}>
                     <button
                         onClick={() => onPageChange(currentPage - 1)}
                         disabled={currentPage <= 1}
-                        className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="p-1.5 sm:p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         title="Previous Page"
                     >
-                        <LeftArrowIcon className="w-5 h-5" />
+                        <LeftArrowIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
-
-                    <div className="flex items-center text-gray-800 dark:text-gray-200 font-medium text-sm tabular-nums min-w-[120px] justify-center">
-                        <span className="mr-1">Page</span>
+                    <div className="flex items-center text-gray-800 dark:text-gray-200 font-medium text-xs sm:text-sm tabular-nums min-w-fit justify-center">
+                        {!effectiveCompact && <span className="mr-1">Page</span>}
                         <input
                             type="text"
                             value={pageInput}
                             onChange={handlePageInputChange}
                             onKeyDown={handlePageInputKeyDown}
                             onBlur={handlePageInputSubmit}
-                            className="w-10 bg-gray-100 dark:bg-gray-700 border-none rounded px-1 text-center focus:ring-2 focus:ring-scholar-500 outline-none transition-all"
+                            className={`${effectiveCompact ? 'w-8' : 'w-10'} bg-gray-100 dark:bg-gray-700 border-none rounded px-1 text-center focus:ring-2 focus:ring-scholar-500 outline-none transition-all`}
                         />
-                        <span className="ml-1 whitespace-nowrap">of {numPages}</span>
+                        <span className="ml-1 whitespace-nowrap">{effectiveCompact ? `/ ${numPages}` : `of ${numPages}`}</span>
                     </div>
-
                     <button
                         onClick={() => onPageChange(currentPage + 1)}
                         disabled={currentPage >= numPages}
-                        className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="p-1.5 sm:p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         title="Next Page"
                     >
-                        <RightArrowIcon className="w-5 h-5" />
+                        <RightArrowIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                 </div>
-                <div className="flex items-center space-x-2 flex-shrink-0">
+                <div className={`flex items-center flex-shrink-0 ${effectiveCompact ? 'space-x-0.5' : 'space-x-1'}`}>
                     <button
                         onClick={() => onZoom('out')}
                         disabled={zoomLevel <= 0.25}
-                        className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="p-1.5 sm:p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         title="Zoom Out"
                     >
-                        <ZoomOutIcon className="w-5 h-5" />
+                        <ZoomOutIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
-                    <span className="text-gray-800 dark:text-gray-200 font-medium text-sm tabular-nums w-12 text-center">
-                        {Math.round(zoomLevel * 100)}%
-                    </span>
+                    {!effectiveCompact && (
+                        <span className="text-gray-800 dark:text-gray-200 font-medium text-xs sm:text-sm tabular-nums w-10 sm:w-12 text-center">
+                            {Math.round(zoomLevel * 100)}%
+                        </span>
+                    )}
                     <button
                         onClick={() => onZoom('in')}
                         disabled={zoomLevel >= 5}
-                        className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="p-1.5 sm:p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         title="Zoom In"
                     >
-                        <ZoomInIcon className="w-5 h-5" />
+                        <ZoomInIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                 </div>
-                <SearchControls {...props} isSearchOpen={isSearchOpen} setIsSearchOpen={setIsSearchOpen} />
+                <SearchControls {...props} isSearchFocused={isSearchFocused} setIsSearchFocused={setIsSearchFocused} isCompact={isCompact} />
             </div>
         </div>
     );
