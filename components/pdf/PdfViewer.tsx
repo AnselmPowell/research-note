@@ -201,7 +201,7 @@ const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[]
         );
 
     } catch (error) {
-        console.error('Error in regroupSpansByVisualLayout:', error);
+        // Regrouping failed - fallback to simple layout
         // Fallback: just append spans as-is (this is actually what works!)
         container.innerHTML = '';
         spans.forEach(span => {
@@ -279,6 +279,16 @@ const SearchControls: React.FC<SearchControlsProps> = ({ searchQuery, setSearchQ
             )}
         </>
     );
+};
+
+const escapeHTML = (str: string) => {
+    return str.replace(/[&<>"']/g, (m) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    })[m] || m);
 };
 
 export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
@@ -402,200 +412,131 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
     }, []);
 
     const applyHighlights = useCallback(() => {
-        if (!textLayerRef.current || !documentTextIndex) return;
+        if (!textLayerRef.current || !documentTextIndex || !textDivsRef.current?.length) return;
 
-        const spans = Array.from(textLayerRef.current.querySelectorAll('span'));
-        spans.forEach(span => {
-            (span as HTMLElement).classList.remove('search-highlight', 'search-highlight-active');
-        });
-
+        const spans = textDivsRef.current;
         const currentPageIndex = currentPage - 1;
         const pageTextIndex = documentTextIndex[currentPageIndex];
         if (!pageTextIndex) return;
 
-        // Build a span-based column detection for this page (fallback when column classes are absent)
-        const computeColumnBoundsFromSpans = () => {
+        // 1. Reset all spans (safely remove previous marks and classes)
+        spans.forEach(span => {
+            if (!span) return;
+            const originalText = span.getAttribute('data-original-text') || span.textContent || '';
+            if (!span.hasAttribute('data-original-text')) {
+                span.setAttribute('data-original-text', originalText);
+            }
+            span.textContent = originalText;
+            span.classList.remove('search-highlight', 'search-highlight-active');
+        });
+
+        // 2. Compute column bounds for smart filtering (to avoid "crossing" matches)
+        const computeBounds = () => {
             try {
-                const spansForBounds = textDivsRef.current.filter(s => !!s);
+                const spansForBounds = spans.filter(s => !!s);
                 if (!spansForBounds.length) return null;
                 const rects = spansForBounds.map(s => s.getBoundingClientRect());
-                const allXStarts = rects.map(r => r.left);
-                const allXEnds = rects.map(r => r.right);
-                const pageLeft = Math.min(...allXStarts);
-                const pageRight = Math.max(...allXEnds);
-                const pageWidth = pageRight - pageLeft || (textLayerRef.current ? textLayerRef.current.clientWidth : window.innerWidth);
+                const pageLeft = Math.min(...rects.map(r => r.left));
+                const pageRight = Math.max(...rects.map(r => r.right));
+                const pageWidth = pageRight - pageLeft || (textLayerRef.current?.clientWidth || window.innerWidth);
 
                 const buckets = 100;
-                const bucketWidth = pageWidth / buckets;
                 const density = new Array(buckets).fill(0);
-
                 rects.forEach(r => {
-                    const center = r.left + (r.width || 0) / 2 - pageLeft;
-                    let b = Math.floor(center / bucketWidth);
-                    if (b < 0) b = 0;
-                    if (b >= buckets) b = buckets - 1;
-                    density[b]++;
+                    const center = (r.left + r.right) / 2 - pageLeft;
+                    let b = Math.floor(center / (pageWidth / buckets));
+                    if (b >= 0 && b < buckets) density[b]++;
                 });
 
                 const searchStart = Math.floor(buckets * 0.25);
                 const searchEnd = Math.floor(buckets * 0.75);
-                let bestGapStart = -1;
-                let bestGapWidth = 0;
-                let currentGapStart = -1;
+                let bestGapStart = -1, bestGapWidth = 0, curGapStart = -1;
                 for (let i = searchStart; i < searchEnd; i++) {
                     if (density[i] === 0) {
-                        if (currentGapStart === -1) currentGapStart = i;
+                        if (curGapStart === -1) curGapStart = i;
                     } else {
-                        if (currentGapStart !== -1) {
-                            const gapWidth = i - currentGapStart;
-                            if (gapWidth > bestGapWidth) {
-                                bestGapWidth = gapWidth;
-                                bestGapStart = currentGapStart;
-                            }
-                            currentGapStart = -1;
+                        if (curGapStart !== -1) {
+                            if (i - curGapStart > bestGapWidth) { bestGapWidth = i - curGapStart; bestGapStart = curGapStart; }
+                            curGapStart = -1;
                         }
                     }
                 }
-                if (currentGapStart !== -1) {
-                    const gapWidth = searchEnd - currentGapStart;
-                    if (gapWidth > bestGapWidth) {
-                        bestGapWidth = gapWidth;
-                        bestGapStart = currentGapStart;
-                    }
-                }
-
-                const leftEnd = bestGapStart >= 0 ? pageLeft + (bestGapStart * bucketWidth) : pageLeft + pageWidth * 0.5;
-                const rightStart = bestGapStart >= 0 ? pageLeft + ((bestGapStart + bestGapWidth) * bucketWidth) : pageLeft + pageWidth * 0.5;
+                const leftEnd = bestGapStart >= 0 ? pageLeft + (bestGapStart * (pageWidth / buckets)) : pageLeft + pageWidth * 0.5;
+                const rightStart = bestGapStart >= 0 ? pageLeft + ((bestGapStart + bestGapWidth) * (pageWidth / buckets)) : pageLeft + pageWidth * 0.5;
                 return { leftEnd, rightStart, isTwoColumn: bestGapStart >= 0 && bestGapWidth > 2 };
-            } catch (e) {
-                return null;
-            }
+            } catch (e) { return null; }
         };
+        const columnBounds = computeBounds();
 
-        const columnBoundsFromSpans = computeColumnBoundsFromSpans();
+        // 3. Map search results to specific character ranges in spans
+        const spanHighlights = new Map<number, { start: number, end: number, isActive: boolean }[]>();
 
-        searchResults.forEach((result, index) => {
+        searchResults.forEach((result, resIdx) => {
             if (currentPageIndex >= result.startPageIndex && currentPageIndex <= result.endPageIndex) {
-                const isActive = activeResultIndex === index;
-                const highlightClass = isActive ? 'search-highlight-active' : 'search-highlight';
-
+                const isActive = resIdx === activeResultIndex;
                 const start = (currentPageIndex === result.startPageIndex) ? result.startCharIndex : 0;
                 const end = (currentPageIndex === result.endPageIndex) ? result.endCharIndex : pageTextIndex.combinedText.length;
 
-                const itemIndicesToHighlight = new Set<number>();
+                let startSide: string | null = null;
+
                 for (let i = start; i < end; i++) {
                     const mapEntry = pageTextIndex.charToItemMap[i];
                     if (mapEntry) {
-                        itemIndicesToHighlight.add(mapEntry.itemIndex);
-                    }
-                }
+                        const { itemIndex, charInItemIndex } = mapEntry;
+                        const span = spans[itemIndex];
+                        if (!span) continue;
 
-                // Determine column information for this match once
-                let startClass: string | null = null;
-                try {
-                    const startMapEntry = pageTextIndex.charToItemMap[start];
-                    if (startMapEntry) {
-                        const startSpan = textDivsRef.current[startMapEntry.itemIndex];
-                        if (startSpan) {
-                            if (startSpan.classList.contains('column-left')) startClass = 'column-left';
-                            else if (startSpan.classList.contains('column-right')) startClass = 'column-right';
-                            else if (startSpan.classList.contains('column-header')) startClass = 'column-header';
-                        }
-                    }
-                } catch (e) {
-                    startClass = null;
-                }
-
-                // Compute which columns/sides the matched spans live in (use span bounds if classes absent)
-                const matchedSides = new Set<string>();
-                itemIndicesToHighlight.forEach(idx => {
-                    const s = textDivsRef.current[idx];
-                    if (!s) return;
-                    const classSide = s.classList.contains('column-left') ? 'left' : s.classList.contains('column-right') ? 'right' : s.classList.contains('column-header') ? 'header' : null;
-                    if (classSide) matchedSides.add(classSide);
-                    else if (columnBoundsFromSpans) {
-                        const r = s.getBoundingClientRect();
-                        if (r.right <= columnBoundsFromSpans.leftEnd + 2) matchedSides.add('left');
-                        else if (r.left >= columnBoundsFromSpans.rightStart - 2) matchedSides.add('right');
-                        else matchedSides.add('header');
-                    } else {
-                        // fallback to center-based side
-                        const r = s.getBoundingClientRect();
-                        const pageMid = (textLayerRef.current ? (textLayerRef.current.getBoundingClientRect().left + (textLayerRef.current.clientWidth || 0) / 2) : (window.innerWidth / 2));
-                        if (r.left + r.width / 2 <= pageMid) matchedSides.add('left');
-                        else matchedSides.add('right');
-                    }
-                });
-
-                // Now highlight each span, using detected sides with X-distance fallback
-                itemIndicesToHighlight.forEach(itemIndex => {
-                    const span = textDivsRef.current[itemIndex];
-                    if (!span) {
-                        return;
-                    }
-
-                    let shouldHighlight = true;
-
-                    // If the match legitimately spans multiple sides, allow all matched spans
-                    if (matchedSides.size > 1) {
-                        shouldHighlight = true;
-                    } else {
-                        // Determine this span's side
-                        let spanSide: string | null = null;
-                        if (span.classList.contains('column-left')) spanSide = 'left';
-                        else if (span.classList.contains('column-right')) spanSide = 'right';
-                        else if (span.classList.contains('column-header')) spanSide = 'header';
-                        else if (columnBoundsFromSpans) {
+                        if (columnBounds) {
                             const r = span.getBoundingClientRect();
-                            if (r.right <= columnBoundsFromSpans.leftEnd + 2) spanSide = 'left';
-                            else if (r.left >= columnBoundsFromSpans.rightStart - 2) spanSide = 'right';
-                            else spanSide = 'header';
+                            const side = r.right <= columnBounds.leftEnd + 5 ? 'left' : r.left >= columnBounds.rightStart - 5 ? 'right' : 'header';
+                            if (i === start) startSide = side;
+                            if (startSide && side !== startSide && startSide !== 'header' && side !== 'header') continue;
                         }
 
-                        if (spanSide && startClass) {
-                            // If we detected a startClass earlier, map it to side and require match
-                            const startSide = startClass === 'column-left' ? 'left' : startClass === 'column-right' ? 'right' : 'header';
-                            shouldHighlight = (spanSide === startSide);
-                        } else if (spanSide && !startClass) {
-                            // No startClass but we have a spanSide: only highlight if it matches the single matched side
-                            const onlySide = Array.from(matchedSides)[0];
-                            shouldHighlight = (spanSide === onlySide);
+                        if (!spanHighlights.has(itemIndex)) spanHighlights.set(itemIndex, []);
+                        const ranges = spanHighlights.get(itemIndex)!;
+                        const last = ranges[ranges.length - 1];
+                        if (last && last.end === charInItemIndex) {
+                            if (isActive) last.isActive = true;
+                            last.end++;
                         } else {
-                            // Final fallback: X-distance from start span
-                            try {
-                                const startMapEntry = pageTextIndex.charToItemMap[start];
-                                if (startMapEntry) {
-                                    const startSpan = textDivsRef.current[startMapEntry.itemIndex];
-                                    if (startSpan) {
-                                        const startRect = startSpan.getBoundingClientRect();
-                                        const spanRect = span.getBoundingClientRect();
-                                        const pageWidth = (textLayerRef.current && textLayerRef.current.clientWidth) || window.innerWidth;
-                                        const threshold = Math.max(48, pageWidth * 0.35);
-                                        if (Math.abs(spanRect.left - startRect.left) > threshold) {
-                                            shouldHighlight = false;
-                                        }
-                                    }
-                                }
-                            } catch (e) {
-                                shouldHighlight = true;
-                            }
+                            ranges.push({ start: charInItemIndex, end: charInItemIndex + 1, isActive });
                         }
-                    }
-
-                    if (shouldHighlight) {
-                        (span as HTMLElement).classList.add(highlightClass);
-                    }
-                });
-
-                if (isActive) {
-                    const firstMapEntry = pageTextIndex.charToItemMap[start];
-                    if (firstMapEntry) {
-                        const activeSpan = textDivsRef.current[firstMapEntry.itemIndex];
-                        activeSpan?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
                 }
             }
         });
+
+        // 4. Inject highlight spans into PDF text spans
+        spanHighlights.forEach((ranges, itemIdx) => {
+            const span = spans[itemIdx];
+            if (!span) return;
+            const text = span.getAttribute('data-original-text') || "";
+            let html = '', lastIdx = 0;
+            ranges.sort((a, b) => a.start - b.start);
+
+            ranges.forEach(r => {
+                if (r.start < lastIdx) return;
+                html += escapeHTML(text.substring(lastIdx, r.start));
+                const cls = r.isActive ? 'search-highlight-active' : 'search-highlight';
+                // Use span instead of mark to avoid browser-native styles and stacking issues
+                html += `<span class="${cls}">${escapeHTML(text.substring(r.start, r.end))}</span>`;
+                lastIdx = r.end;
+            });
+            html += escapeHTML(text.substring(lastIdx));
+            span.innerHTML = html;
+        });
+
+        // 5. Scroll active into view
+        if (activeResultIndex !== null && searchResults[activeResultIndex]) {
+            const res = searchResults[activeResultIndex];
+            if (res.startPageIndex === currentPageIndex) {
+                const mapEntry = pageTextIndex.charToItemMap[res.startCharIndex];
+                if (mapEntry) {
+                    spans[mapEntry.itemIndex]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        }
     }, [searchResults, activeResultIndex, currentPage, documentTextIndex]);
 
     useEffect(() => {
@@ -651,9 +592,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
             renderTaskRef.current = task;
 
             try {
-                await task.promise;
+                // Clear previous spans early to avoid ghost highlighting during transition
+                textDivsRef.current = [];
+                if (textLayerRef.current) textLayerRef.current.innerHTML = '';
 
-                textLayer.innerHTML = '';
+                await task.promise;
                 textLayer.style.width = `${cssViewport.width}px`;
                 textLayer.style.height = `${cssViewport.height}px`;
                 (textLayer as HTMLElement).style.setProperty('--scale-factor', cssViewport.scale.toString());
@@ -682,9 +625,8 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 applyHighlights();
 
             } catch (error: any) {
-                if (error.name !== 'RenderingCancelledException') {
-                    console.error("Error rendering page:", error);
-                }
+                // Silently handle rendering errors (except expected cancellations)
+                // RenderingCancelledException is expected when switching pages quickly
             } finally {
                 if (renderTaskRef.current === task) {
                     renderTaskRef.current = null;

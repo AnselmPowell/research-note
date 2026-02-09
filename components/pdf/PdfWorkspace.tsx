@@ -60,18 +60,27 @@ function buildPageTextIndex(items: any[]): PageTextIndex {
     const charToItemMap: (MapEntry | null)[] = [];
     let lastItem: any = null;
 
-    for (const item of items) {
-        const originalItemIndex = items.indexOf(item);
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const originalItemIndex = i;
 
         if (lastItem) {
             const lastY = lastItem.transform[5];
             const currentY = item.transform[5];
-            const lastXEnd = lastItem.transform[4] + lastItem.width;
+            const lastXEnd = lastItem.transform[4] + (lastItem.width || 0);
             const currentX = item.transform[4];
             const lineHeight = lastItem.height || 10;
-            const isNewLine = Math.abs(currentY - lastY) > lineHeight * 0.6;
+
+            // Check for significant vertical movement (new line)
+            const isNewLine = Math.abs(currentY - lastY) > lineHeight * 0.4;
+
+            // Check for horizontal gap (more than ~1.5 average chars)
+            // Average char width estimate
+            const charWidth = lastItem.width / (lastItem.str.length || 1) || 5;
+            const isHorizontalGap = currentX > lastXEnd + (charWidth * 0.5);
 
             if (isNewLine) {
+                // Remove trailing hyphen if it exists at line end
                 if (combinedText.endsWith('-')) {
                     combinedText = combinedText.slice(0, -1);
                     charToItemMap.pop();
@@ -79,7 +88,7 @@ function buildPageTextIndex(items: any[]): PageTextIndex {
                     combinedText += ' ';
                     charToItemMap.push(null);
                 }
-            } else if (currentX > lastXEnd + 2) {
+            } else if (isHorizontalGap) {
                 combinedText += ' ';
                 charToItemMap.push(null);
             }
@@ -222,7 +231,9 @@ export const PdfWorkspace: React.FC = () => {
                     const loadingTask = pdfjsLib.getDocument({ data: p.data.slice(0) });
                     const doc = await loadingTask.promise;
                     newInternalPdfs.push({ id: p.uri, file: p.file, doc: doc, numPages: doc.numPages, currentPage: 1, zoomLevel: 1.0 });
-                } catch (err) { console.error(`Failed to load PDF ${p.uri}`, err); }
+                } catch (err) {
+                    // PDF loading failed - silently skip
+                }
             }
 
             if (keptPdfs.length !== internalPdfs.length || newInternalPdfs.length > 0) {
@@ -328,12 +339,8 @@ export const PdfWorkspace: React.FC = () => {
             return;
         }
 
-        // Check if we need to build or rebuild the full index
-        // We rebuild if:
-        // 1. Cache doesn't exist at all
-        // 2. Cache is sparse (some pages are null) - happens after note search
-        const needsFullIndex = !documentTextIndexCache.current || 
-                               documentTextIndexCache.current.some((page) => page === null);
+        const needsFullIndex = !documentTextIndexCache.current ||
+            documentTextIndexCache.current.some((page) => page === null);
 
         if (needsFullIndex) {
             setIsIndexing(true);
@@ -341,8 +348,6 @@ export const PdfWorkspace: React.FC = () => {
             for (let i = 1; i <= activePdf.doc.numPages; i++) {
                 const page = await activePdf.doc.getPage(i);
                 const textContent = await page.getTextContent();
-
-                // Use extracted helper function
                 textIndex.push(buildPageTextIndex(textContent.items));
             }
             documentTextIndexCache.current = textIndex;
@@ -494,7 +499,7 @@ export const PdfWorkspace: React.FC = () => {
             }
 
         } catch (error) {
-            console.error('[performNoteSearch] Error:', error);
+            // Fuzzy search failed - fallback to page navigation
             // Fallback: just navigate to the page
             handlePageChange(fallbackPage);
             setSearchResults([]);

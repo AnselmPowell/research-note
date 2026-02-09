@@ -71,7 +71,7 @@
   }
 }
 
-/* PDF.js Text Layer Styles */
+/* PDF.js Text Layer Styles - Enhanced Transparency */
 .textLayer {
   position: absolute;
   left: 0;
@@ -79,115 +79,58 @@
   right: 0;
   bottom: 0;
   overflow: hidden;
-  opacity: 0.3;
+  opacity: 1;
   line-height: 1.0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* Base spans are absolute from PDF.js */
 .textLayer span,
 .textLayer br {
-  color: transparent;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
   position: absolute;
   white-space: pre;
   cursor: text;
   transform-origin: 0% 0%;
 }
 
-.textLayer span.highlight {
-  color: transparent;
-  background: rgba(255, 255, 0, 0.4);
+/* Highlight wrappers - MUST be inline and static to avoid stacking glitch */
+.textLayer .search-highlight,
+.textLayer .search-highlight-active {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+  position: static !important;
+  display: inline !important;
+  font: inherit !important;
+  vertical-align: inherit !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  outline: none !important;
+  border: none !important;
 }
 
-.textLayer .highlight.begin {
-  background: rgba(255, 255, 0, 0.4);
+.textLayer .search-highlight {
+  background-color: rgba(255, 255, 0, 0.45) !important;
+  /* Brighter yellow */
 }
 
-.textLayer .highlight.end {
-  background: rgba(255, 255, 0, 0.4);
-}
-
-.textLayer .highlight.middle {
-  background: rgba(255, 255, 0, 0.4);
-}
-
-.textLayer .highlight.selected {
-  background: rgba(255, 255, 0, 0.6);
-}
-
-.textLayer ::selection {
-  background: rgba(0, 0, 255, 0.3);
-}
-
-.textLayer br::selection {
-  background: transparent;
-}
-
-.textLayer .endOfContent {
-  display: block;
-  position: absolute;
-  left: 0px;
-  top: 100%;
-  right: 0px;
-  bottom: 0px;
-  z-index: -1;
-  cursor: default;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-}
-
-.textLayer .endOfContent.active {
-  top: 0px;
-}
-
-/* PDF.js Text Layer Styles */
-.textLayer {
-  position: absolute;
-  left: 0;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  overflow: hidden;
-  opacity: 0.3;
-  line-height: 1.0;
-}
-
-.textLayer span,
-.textLayer br {
-  color: transparent;
-  position: absolute;
-  white-space: pre;
-  cursor: text;
-  transform-origin: 0% 0%;
+.textLayer .search-highlight-active {
+  background-color: rgba(255, 120, 0, 0.6) !important;
+  /* Orange */
+  box-shadow: 0 0 0 1px rgba(255, 100, 0, 0.8);
 }
 
 .textLayer span.highlight {
-  color: transparent;
-  background: rgba(255, 255, 0, 0.4);
-}
-
-.textLayer .highlight.begin {
-  background: rgba(255, 255, 0, 0.4);
-}
-
-.textLayer .highlight.end {
-  background: rgba(255, 255, 0, 0.4);
-}
-
-.textLayer .highlight.middle {
-  background: rgba(255, 255, 0, 0.4);
-}
-
-.textLayer .highlight.selected {
-  background: rgba(255, 255, 0, 0.6);
+  background: rgba(255, 255, 0, 0.3);
 }
 
 .textLayer ::selection {
-  background: rgba(0, 0, 255, 0.3);
-}
-
-.textLayer br::selection {
-  background: transparent;
+  background: rgba(0, 0, 255, 0.2) !important;
+  -webkit-text-fill-color: transparent !important;
 }
 
 .textLayer .endOfContent {
