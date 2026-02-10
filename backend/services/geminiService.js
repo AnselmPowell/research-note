@@ -509,8 +509,10 @@ JUSTIFICATION REQUIREMENT:
 CITATION INSTRUCTIONS:
 1. Include any citation references (like "[1]" or "[Smith et al., 2020]") found in the extracted text
 2. Keep citations in the extracted text exactly as they appear
-3. When available, extract the full reference details for each citation
-4. Format citations as an array to maintain clarity
+3. IMPORTANT: Match inline citations to the REFERENCE LIST provided at the top of the prompt
+4. For each inline citation found in the extracted text, look up the full reference from the REFERENCE LIST
+5. Format citations as an array: [{"inline": "[1]", "full": "Complete reference from the list"}]
+6. If you cannot find a matching reference in the list, use the inline citation text as the full reference
 
 RESPONSE FORMAT (STRICT JSON):
 {
@@ -520,16 +522,30 @@ RESPONSE FORMAT (STRICT JSON):
     "relatedQuestion": "The exact user query this answers",
     "pageNumber": 12,
     "relevanceScore": 0.95,
-    "citations": [{"inline": "[1]", "full": "Smith et al., 2020"}]
+    "citations": [
+      {"inline": "[1]", "full": "Vaswani, A., et al. (2017). Attention is all you need. In Advances in neural information processing systems (pp. 5998-6008)."},
+      {"inline": "[Smith et al., 2020]", "full": "Smith, J., et al. (2020). Deep learning approaches to natural language processing."}
+    ]
   }]
 }
 
 Remember: Be STRICT! You must understand the user intent by the query wording and what they are truly asking for. Only extract content that DIRECTLY answers the user's queries. If nothing is directly relevant, return {"notes": []}.`;
 
-    // ✅ ENHANCED USER PROMPT
+    // ✅ ENHANCED USER PROMPT WITH REFERENCE LIST
     const userPrompt = `PAPER CONTEXT:
 Title: "${paperTitle || 'Unknown'}"
-Abstract: "${paperSummary || 'Not available'}"
+Abstract: "${paperAbstract || 'Not available'}"
+
+REFERENCE LIST FROM THIS PAPER:
+${referenceList && referenceList.length > 0 
+  ? referenceList.map((ref, idx) => `${idx + 1}. ${ref}`).join('\n')
+  : 'No references available'}
+
+####
+
+PAPER INFORMATION:
+Title: "${paperTitle || 'Unknown'}"
+Abstract: "${paperAbstract || 'Not available'}"
 
 USER'S SPECIFIC QUERIES (Extract ONLY content that DIRECTLY answers these):
 ${userQuestions}
@@ -541,6 +557,11 @@ TASK:
 Extract passages that DIRECTLY answer the user's specific queries above. 
 Be STRICT - if content only seems remotely related, DO NOT include it.
 If nothing directly answers the queries, return {"notes": []}.
+
+IMPORTANT FOR CITATIONS:
+- When you find inline citations like [1], [2], or [Smith et al., 2020] in the extracted text, match them to the REFERENCE LIST above
+- In the "citations" array, provide BOTH the inline citation AND the full reference from the list
+- Example: If text contains "[1]", find reference #1 from the list above and include it as the full reference
 
 Remember: You must justify WHY each extraction directly answers the user's query. If you cannot provide a strong justification, do not include it.`;
 
