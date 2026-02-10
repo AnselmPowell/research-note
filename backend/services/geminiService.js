@@ -547,12 +547,14 @@ PAPER INFORMATION:
 Title: "${paperTitle || 'Unknown'}"
 Abstract: "${paperAbstract || 'Not available'}"
 
-USER'S SPECIFIC QUERIES (Extract ONLY content that DIRECTLY answers these):
-${userQuestions}
 
 CONTENT FROM ACADEMIC PAPER:
-${contextText}
+${contextText}\n\n
+###################################
 
+USER'S SPECIFIC QUERIES (Extract ONLY content that DIRECTLY answers these):
+${userQuestions}
+#####################################
 TASK: 
 Extract passages that DIRECTLY answer the user's specific queries above. 
 Be STRICT - if content only seems remotely related, DO NOT include it.
