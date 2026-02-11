@@ -11,6 +11,9 @@ function initializeEnvironment() {
     openaiApiKey: process.env.OPENAI_API_KEY || '',
     databaseUrl: process.env.DATABASE_URL || '',
 
+
+
+    
     // Flags
     isDevelopment: (process.env.NODE_ENV || 'production') === 'development',
     isProduction: (process.env.NODE_ENV || 'production') === 'production'

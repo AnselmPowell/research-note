@@ -853,6 +853,8 @@ async function extractNotesFromPages(relevantPages, userQuestions, paperTitle, p
     // ✅ ENHANCED SYSTEM PROMPT (from Python v1)
     const systemPrompt = `You are an research assistant analyzing academic papers to extract relevant information based on specific user queries.  
 
+
+    
 Your Goal: Extract information from research papers that DIRECTLY relates to any of the user's queries below. Be STRICT! You must understand the user intent by the query wording and what they are truly asking for. Only extract content that DIRECTLY answers the user's queries
 
 CRITICAL INSTRUCTIONS - BE VERY STRICT:

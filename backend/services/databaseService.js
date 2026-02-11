@@ -16,6 +16,8 @@ function getDb() {
   return sql;
 }
 
+
+
 async function initSchema() {
   await getDb()`CREATE TABLE IF NOT EXISTS papers (
     uri TEXT PRIMARY KEY, title TEXT NOT NULL, abstract TEXT, authors JSONB,
