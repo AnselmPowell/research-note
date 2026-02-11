@@ -109,7 +109,8 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     setPendingDeepResearchQuery,
     performDeepResearch,
     activeSearchMode,
-    setActiveSearchMode
+    setActiveSearchMode,
+    stopDeepResearch
   } = useResearch();
 
   // State Management
@@ -707,18 +708,21 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
                   </label>
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => setLocalFilters(prev => ({ ...prev, hasNotes: !prev.hasNotes }))}
-                      className={`flex-1 px-2 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${localFilters.hasNotes
-                        ? 'bg-scholar-600 text-white shadow-md'
-                        : 'bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800'
-                        }`}
-                    >
-                      With Notes
-                    </button>
+                    {/* Hide "With Notes" filter in note view - all items are notes by definition */}
+                    {sortBy !== 'most-relevant-notes' && (
+                      <button
+                        onClick={() => setLocalFilters(prev => ({ ...prev, hasNotes: !prev.hasNotes }))}
+                        className={`flex-1 px-2 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${localFilters.hasNotes
+                          ? 'bg-scholar-600 text-white shadow-md'
+                          : 'bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800'
+                          }`}
+                      >
+                        With Notes
+                      </button>
+                    )}
                     <button
                       onClick={handleResetFilters}
-                      className="px-2 py-2.5 bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800 rounded-xl text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+                      className={`px-2 py-2.5 bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800 rounded-xl text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition-all ${sortBy === 'most-relevant-notes' ? 'flex-1' : ''}`}
                       title="Reset all filters"
                     >
                       <X size={16} />
@@ -805,9 +809,23 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
         {/* Deep Research Tab - Show results */}
         {activeTab === 'deep' && !isBlurred && currentTabCandidates.length > 0 && (
-          <div className="text-sm text-gray-500 dark:text-gray-400 font-medium px-1 flex items-center gap-2 mb-2 animate-fade-in">
-            <BookOpenText size={14} className="opacity-60" />
-            About {currentTabCandidates.length} paper{currentTabCandidates.length !== 1 ? 's' : ''} with {totalNotes} note{totalNotes !== 1 ? 's' : ''} found
+          <div className="flex items-center justify-between px-1 mb-2 animate-fade-in">
+            <div className="text-sm text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
+              <BookOpenText size={14} className="opacity-60" />
+              About {currentTabCandidates.length} paper{currentTabCandidates.length !== 1 ? 's' : ''} with {totalNotes} note{totalNotes !== 1 ? 's' : ''} found
+            </div>
+
+            {/* Abort Button - Visible during active research phases */}
+            {(['initializing', 'searching', 'filtering', 'extracting'].includes(researchPhase)) && (
+              <button
+                onClick={stopDeepResearch}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 rounded-md hover:bg-red-100 dark:hover:bg-red-900/40 transition-all animate-pulse shadow-sm"
+                title="Stop research"
+              >
+                <Square size={10} fill="currentColor" />
+                Stop Research
+              </button>
+            )}
           </div>
         )}
 
@@ -1095,7 +1113,9 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
               <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <span className="font-semibold text-scholar-600 dark:text-scholar-400 uppercase tracking-wider">{isLocal ? 'LOCAL' : new Date(paper.publishedDate).getFullYear()}</span>
                 <span>•</span>
-                <span className="truncate max-w-[200px] opacity-70">{paper.authors.slice(0, 2).join(', ')}{paper.authors.length > 2 ? ' et al.' : ''}</span>
+                <span className="truncate max-w-[400px] font-serif italic opacity-80" title={paper.harvardReference || 'No Harvard reference generated'}>
+                  {paper.harvardReference || (paper.authors.slice(0, 2).join(', ') + (paper.authors.length > 2 ? ' et al.' : ''))}
+                </span>
 
                 <div className="flex items-center gap-2 ml-4 opacity-100 sm:opacity-0 sm:group-hover/paper:opacity-100 transition-opacity">
                   {paper.pdfUri ? (
@@ -1137,7 +1157,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
               </div>
             </div>
 
-            <h3 className="text-base sm:text-xl font-medium text-gray-900 dark:text-gray-100 leading-snug mb-2 cursor-pointer hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors" onClick={handleOpenPdf}>
+            <h3 className="text-base sm:text-2xl font-bold text-gray-900 dark:text-gray-100 leading-snug mb-1 cursor-pointer hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors" onClick={handleOpenPdf}>
               {paper.title}
             </h3>
 
