@@ -22,6 +22,9 @@ export interface PdfMetadata {
   title?: string;
   author?: string;
   subject?: string;
+  harvardReference?: string;
+  publisher?: string;
+  categories?: string[];
 }
 
 export interface LoadedPdf {
@@ -29,27 +32,27 @@ export interface LoadedPdf {
   file: File;
   data: ArrayBuffer;
   metadata: PdfMetadata;
-  text: string; 
-  pages: string[]; 
-  references?: string[]; 
+  text: string;
+  pages: string[];
+  references?: string[];
   numPages: number;
 }
 
 export interface Citation {
-  inline: string; 
-  full: string;   
+  inline: string;
+  full: string;
 }
 
 export interface DeepResearchNote {
-  id?: number;            
-  quote: string;          
-  justification: string;  
+  id?: number;
+  quote: string;
+  justification: string;
   relatedQuestion: string;
   pageNumber: number;
   pdfUri: string;
   relevanceScore?: number;
   tags?: string[];
-  citations?: Citation[]; 
+  citations?: Citation[];
   created_at?: string;
 }
 
@@ -79,7 +82,7 @@ export interface FolderNode {
 }
 
 export interface ArxivPaper {
-  id: string; 
+  id: string;
   title: string;
   summary: string;
   authors: string[];
@@ -89,7 +92,10 @@ export interface ArxivPaper {
   relevanceScore?: number;
   analysisStatus?: 'pending' | 'downloading' | 'processing' | 'completed' | 'failed' | 'stopped';
   notes?: DeepResearchNote[];
-  references?: string[]; 
+  references?: string[];
+  harvardReference?: string;
+  publisher?: string;
+  categories?: string[];
 }
 
 export interface ArxivSearchStructured {

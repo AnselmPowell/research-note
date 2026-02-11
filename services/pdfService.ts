@@ -11,6 +11,9 @@ interface ExtractedData {
     title?: string;
     author?: string;
     subject?: string;
+    harvardReference?: string;
+    publisher?: string;
+    categories?: string[];
   };
   text: string;
   pages: string[];
@@ -361,37 +364,59 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSig
     const references = extractReferences(pages);
 
     // 6. Enhance metadata with AI if needed
-    let finalMetadata = metadata;
+    let finalMetadata: ExtractedData['metadata'] = metadata;
     const needsTitle = metadata.title === "Untitled Document";
     const needsAuthor = metadata.author === "Unknown Author";
     const needsSubject = metadata.subject === "";
 
-    if (needsTitle || needsAuthor || needsSubject) {
-      try {
-        // Check if aborted before processing
-        if (signal?.aborted) throw new Error('Aborted');
+    try {
+      // Check if aborted before processing
+      if (signal?.aborted) throw new Error('Aborted');
 
-        const firstFourPages = pages.slice(0, 4).join('\n\n');
-        if (firstFourPages.length > 100) { // Only if we have substantial text
+      const firstFourPages = pages.slice(0, 4).join('\n\n');
+      if (firstFourPages.length > 100) { // Only if we have substantial text
 
-          // Check cache first
-          const cached = await getCachedMetadata(firstFourPages);
-          if (cached) {
+        // Check cache first
+        const cached = await getCachedMetadata(firstFourPages);
+        if (cached) {
+          finalMetadata = {
+            title: needsTitle ? (cached.title || metadata.title) : metadata.title,
+            author: needsAuthor ? (cached.author || metadata.author) : metadata.author,
+            subject: needsSubject ? (cached.subject || metadata.subject) : metadata.subject,
+            harvardReference: cached.harvardReference,
+            publisher: cached.publisher,
+            categories: cached.categories
+          };
+        } else {
+          // Mandatory AI enhancement for detailed academic metadata
+          console.log('[PDF Service] Fetching enhanced academic metadata...');
+          const enhanced = await enhanceMetadataWithAI(firstFourPages, metadata, signal);
+
+          if (enhanced) {
             finalMetadata = {
-              title: needsTitle ? cached.title : metadata.title,
-              author: needsAuthor ? cached.author : metadata.author,
-              subject: needsSubject ? cached.subject : metadata.subject
+              title: needsTitle ? (enhanced.title || metadata.title) : metadata.title,
+              author: needsAuthor ? (enhanced.author || metadata.author) : metadata.author,
+              subject: needsSubject ? (enhanced.subject || metadata.subject) : metadata.subject,
+              harvardReference: enhanced.harvardReference,
+              publisher: enhanced.publisher,
+              categories: enhanced.categories
             };
+            // Cache the result for next time
+            setCachedMetadata(firstFourPages, {
+              title: finalMetadata.title || metadata.title || "Untitled Document",
+              author: finalMetadata.author || metadata.author || "Unknown Author",
+              subject: finalMetadata.subject || metadata.subject || "",
+              harvardReference: finalMetadata.harvardReference,
+              publisher: finalMetadata.publisher,
+              categories: finalMetadata.categories
+            });
           }
-          // AI enhancement skipped — too slow for inline use.
-          // Cache hits (above) are instant. Non-cached metadata stays as-is.
-          // Callers (e.g. SourcesPanel) already pass title/author overrides.
         }
-      } catch (error: any) {
-        if (error.message === 'Aborted') throw error; // Re-throw abort
-        console.warn('[PDF Service] Metadata enhancement failed, using original:', error);
-        finalMetadata = metadata; // Keep original if AI fails
       }
+    } catch (error: any) {
+      if (error.message === 'Aborted') throw error; // Re-throw abort
+      console.warn('[PDF Service] Metadata enhancement failed, using original:', error);
+      finalMetadata = metadata; // Keep original if AI fails
     }
 
     return {

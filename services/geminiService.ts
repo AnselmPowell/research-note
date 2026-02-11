@@ -5,7 +5,14 @@ export const enhanceMetadataWithAI = async (
   firstFourPagesText: string,
   currentMetadata: { title: string; author: string; subject: string },
   signal?: AbortSignal
-): Promise<{ title: string; author: string; subject: string }> => {
+): Promise<{
+  title: string;
+  author: string;
+  subject: string;
+  harvardReference?: string;
+  publisher?: string;
+  categories?: string[];
+}> => {
   if (signal?.aborted) throw new Error('Aborted');
   return await api.gemini.enhanceMetadata({ firstFourPagesText, currentMetadata });
 };

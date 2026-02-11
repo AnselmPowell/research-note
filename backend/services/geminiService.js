@@ -19,7 +19,7 @@ const cleanJson = (text) => text.replace(/```json/g, '').replace(/```/g, '').tri
 
 async function callOpenAI(prompt) {
   if (!config.openaiApiKey) throw new Error('OpenAI API key not configured');
-  
+
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -47,27 +47,39 @@ async function callOpenAI(prompt) {
 
 
 async function enhanceMetadata(firstFourPagesText, currentMetadata) {
-  const prompt = `You are analyzing the first 4 pages of a research paper to extract missing metadata.
+  const prompt = `You are analyzing the first 4 pages of a research paper to extract detailed academic metadata.
+  
+  Current preliminary metadata:
+  - Title: ${currentMetadata.title}
+  - Author: ${currentMetadata.author}
+  - Subject: ${currentMetadata.subject}
+  
+  Text from first 4 pages:
+  ${firstFourPagesText} \n\n 
+  #########################
+  TASK:
+  Extract accurate metadata and format it according to these requirements:
+  1. title: The exact full academic title of the paper.
+  2. author: The full name of the primary/lead author.
+  3. subject: A 2-3 sentence summary of the paper's core objective or findings (abstract-like).
+  4. harvardReference: A COMPLETE and PROPERLY FORMATTED Harvard style reference for this paper.
+  5. publisher: The Journal name, Conference name, or University/Repository (e.g., ArXiv, IEEE, Springer).
+  6. categories: Exactly THREE relevant academic categories/subjects for this paper.
 
-Current metadata:
-- Title: ${currentMetadata.title}
-- Author: ${currentMetadata.author}
-- Subject: ${currentMetadata.subject}
-
-Text from first 4 pages:
-${firstFourPagesText}
-
-Extract and return JSON:
-{
-  "title": "exact paper title",
-  "author": "main author",
-  "subject": "brief abstract"
-}`;
+  Return EXACTLY this JSON structure:
+  {
+    "title": "...",
+    "author": "...",
+    "subject": "...",
+    "harvardReference": "...",
+    "publisher": "...",
+    "categories": ["cat1", "cat2", "cat3"]
+  }`;
 
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json' }
@@ -78,7 +90,10 @@ Extract and return JSON:
     return {
       title: enhanced.title || currentMetadata.title,
       author: enhanced.author || currentMetadata.author,
-      subject: enhanced.subject || currentMetadata.subject
+      subject: enhanced.subject || currentMetadata.subject,
+      harvardReference: enhanced.harvardReference,
+      publisher: enhanced.publisher,
+      categories: enhanced.categories
     };
   } catch (error) {
     logger.warn('Gemini failed, trying OpenAI');
@@ -98,7 +113,7 @@ Return JSON array of strings.`;
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json' }
@@ -122,7 +137,7 @@ Return JSON array of strings.`;
 
 async function generateArxivSearchTerms(topics, questions) {
   console.log('📊 Generating ArXiv search terms...');
-  
+
   const systemPrompt = `You are an arXiv search expert who creates SHORT, TARGETED keywords that actually find relevant papers, to figure out the BEST keyword to get the most relevant papers, you must understand the USER'S INTENT and what be most valuable to them.
 
 CRITICAL RULES FOR ARXIV SUCCESS:
@@ -265,8 +280,8 @@ Return ONLY valid JSON matching the format specified in the system prompt.`;
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-3-flash-preview',
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',
       generationConfig: {
         responseMimeType: "application/json"
       }
@@ -303,7 +318,7 @@ Return ONLY valid JSON matching the format specified in the system prompt.`;
 
       validatedTerms[key] = parsedTerms[key].filter(term => {
         if (!term || typeof term !== 'string') return false;
-        
+
         const termWords = new Set(term.toLowerCase().split(/\s+/));
         // Check if term contains at least one keyword from original query
         const hasOverlap = [...allKeywords].some(kw => [...termWords].some(tw => tw.includes(kw) || kw.includes(tw)));
@@ -484,13 +499,13 @@ function cosineSimilarity(vecA, vecB) {
  */
 async function selectTopPapersWithLLM(papers, userQuestions, keywords, topN) {
   if (papers.length === 0) return [];
-  
+
   // If we have fewer papers than requested, return all
   if (papers.length <= topN) {
     console.log(`   📊 Only ${papers.length} papers available, returning all`);
     return papers;
   }
-  
+
   // Build the prompt with paper summaries
   const paperSummaries = papers.map((p, idx) => ({
     index: idx,
@@ -498,8 +513,8 @@ async function selectTopPapersWithLLM(papers, userQuestions, keywords, topN) {
     title: p.title,
     abstract: p.summary.substring(0, 500) // Limit for token efficiency
   }));
-  
-  const systemPrompt = `You are an expert research assistant helping to identify the most relevant academic papers for a user's research query.
+
+  const systemPrompt = `You are an expert research assistant helping to identify the most relevant academic papers for a user's research query. To help them write there assignment, you have been given a list of papers with their titles and abstracts. Your task is to perform a deeper semantic analysis to select the TOP ${topN} most relevant papers title and abstract in relation to the user's research questions and topic.
 
 CONTEXT: Your task is to perform a deeper semantic analysis to select the TOP ${topN} most relevant papers title and abstract in relation to the user's research questions and topic.
 - BE very STRICT in your selection, If the title and abstract do not clearly indicate that the paper addresses the user's specific questions, do NOT select it, even if it has some related keywords
@@ -514,7 +529,7 @@ CRITICAL INSTRUCTIONS:
 6. For each selection, return the paper ID and title for verification
 
 IMPORTANT FACTORS TO CONSIDER:
-- If the question is time and historically specific, prioritize papers that are most relevant to that time period
+- If the question is time and historically specific, prioritize papers that are most relevant to that time period, For Example DONT select papers about AI or Blockchain If the user is asking about "economic theories in the 18th century"
 - Papers must be in the same domain/field as the user's topic to be relevant
 - Papers must be english 
 - If the user talking about a specific method or concept, prioritize papers that focus on that method/concept in depth
@@ -547,7 +562,7 @@ Example:
 
 Remember: Return EXACTLY ${topN} Paper relating to the user question and topic. Using both ID and title for each paper.`;
 
-  const userPrompt = `USER'S RESEARCH CONTEXT:
+  const userPrompt = `\n \n \n  ## ARXIV PAPER SELECTION: ## \n \n\n
 
 ${paperSummaries.map(p => `
 Paper ${p.index + 1}:
@@ -559,37 +574,48 @@ Abstract: ${p.abstract}
 
 ################################\n \n 
 
-Research Questions:
+USER'S RESEARCH QUESTION:
 ${userQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
 
 Topic: ${keywords.join(', ')}
 
 PAPERS TO EVALUATE (${papers.length} total):
 
-TASK: Select the TOP ${topN} most relevant papers from the list above. Return their IDs and titles in the JSON format specified.`;
+TASK: Select the TOP ${topN} most relevant papers from the list above. Return their IDs and titles in the JSON format specified. \n
+
+IMPORTANT FACTORS TO CONSIDER:
+- If the question is time and historically specific, prioritize papers that are most relevant to that time period, For Example DONT select papers about AI or Blockchain If the user is asking about "economic theories in the 18th century"
+- Papers must be in the same domain/field as the user's topic to be relevant
+- Papers must be english 
+- If the user talking about a specific method or concept, prioritize papers that focus on that method/concept in depth
+- If the user is asking about a specific relationship between concepts, prioritize papers that explore that relationship directly
+- BE very STRICT in your selection, If the title and abstract do not clearly indicate that the paper addresses the user's specific questions, do NOT select it, even if it has some related keywords
+
+REMEMBER YOU ARE A STUDENT RESEARCH ASSISSTANT, YOUR GOAL IS TO HELP THE USER SELECT THE MOST RELEVANT PAPERS FOR THEIR SPECIFIC RESEARCH QUESTIONS. RETURN EXACTLY ${topN} PAPERS OR FEWER IF NOT ENOUGH PAPERS ARE HIGHLY RELEVANT.
+`;
 
   try {
     if (!genAI) throw new Error('Gemini not available');
-    
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-3-flash-preview',
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0.1 // Lower temperature for consistent selection
       }
     });
-    
+
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
       systemInstruction: { parts: [{ text: systemPrompt }] }
     });
-    
+
     const response = await result.response;
     const parsed = JSON.parse(cleanJson(response.text()));
     const selections = parsed.selections || [];
-    
+
     console.log(`   🤖 LLM selected ${selections.length} papers`);
-    
+
     // Verify titles match and map to original papers
     const selectedPapers = selections
       .map(selection => {
@@ -598,30 +624,30 @@ TASK: Select the TOP ${topN} most relevant papers from the list above. Return th
           console.warn(`   ⚠️  Paper ID ${selection.id} not found in batch`);
           return null;
         }
-        
+
         // Verify title matches (for debugging)
         if (paper.title !== selection.title) {
           console.warn(`   ⚠️  Title mismatch for ${selection.id}`);
           console.warn(`      Expected: ${paper.title.substring(0, 60)}...`);
           console.warn(`      Got: ${selection.title.substring(0, 60)}...`);
         }
-        
+
         return paper; // Return original paper with all data intact
       })
       .filter(p => p !== null);
-    
+
     console.log(`   ✅ Successfully mapped ${selectedPapers.length} papers`);
-    
+
     // Verify we got the expected number
     if (selectedPapers.length < selections.length) {
       console.warn(`   ⚠️  Some papers not found: expected ${selections.length}, got ${selectedPapers.length}`);
     }
-    
+
     return selectedPapers;
-    
+
   } catch (error) {
     logger.error('LLM paper selection failed:', error);
-    
+
     // FALLBACK: Return top N by cosine score (already sorted)
     console.log(`   ⚠️  LLM failed, using top ${topN} by cosine score`);
     return papers.slice(0, topN);
@@ -645,29 +671,29 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
   console.log('📊 Total papers received:', papers.length);
   console.log('❓ User questions:', userQuestions);
   console.log('🔑 Keywords:', keywords);
-  
+
   if (papers.length === 0) {
     console.log('⚠️  No papers to filter');
     return [];
   }
-  
+
   // ═══════════════════════════════════════════════════════════════
   // STAGE 1: COSINE SIMILARITY PRE-FILTER
   // ═══════════════════════════════════════════════════════════════
   console.log('\n📐 STAGE 1: Cosine Similarity Pre-Filter');
   console.log('   Creating embeddings for all', papers.length, 'papers...');
-  
+
   const userIntentText = 'Questions: ' + userQuestions.join('\n') + '\nKeywords: ' + keywords.join(', ');
   const targetVector = await getEmbedding(userIntentText, 'RETRIEVAL_QUERY');
-  
+
   if (targetVector.length === 0) {
     console.log('   ❌ Failed to create target vector');
     return [];
   }
-  
+
   const paperTexts = papers.map(p => 'Title: ' + p.title + '\nAbstract: ' + p.summary);
   const paperEmbeddings = await getBatchEmbeddings(paperTexts, 'RETRIEVAL_DOCUMENT');
-  
+
   // Calculate cosine similarity scores
   const scoredPapers = papers.map((paper, index) => {
     const paperVector = paperEmbeddings[index];
@@ -677,53 +703,53 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
     }
     return Object.assign({}, paper, { relevanceScore: score });
   });
-  
-  console.log('   📊 Sample scores:', scoredPapers.slice(0, 3).map(p => ({ 
-    title: p.title.substring(0, 40) + '...', 
-    score: p.relevanceScore.toFixed(3) 
+
+  console.log('   📊 Sample scores:', scoredPapers.slice(0, 3).map(p => ({
+    title: p.title.substring(0, 40) + '...',
+    score: p.relevanceScore.toFixed(3)
   })));
-  
+
   // Filter by threshold and sort by score
   const filtered = scoredPapers
     .filter(p => (p.relevanceScore || 0) >= 0.30)
     .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
-  
+
   console.log('   ✅ Cosine filtering complete');
   console.log('      Papers with score ≥ 0.30:', filtered.length);
   if (filtered.length > 0) {
     console.log('      Top score:', filtered[0].relevanceScore.toFixed(3));
     console.log('      Lowest score:', filtered[filtered.length - 1].relevanceScore.toFixed(3));
   }
-  
+
   if (filtered.length === 0) {
     console.log('   ⚠️  No papers passed cosine threshold');
     return [];
   }
-  
+
   // Take top 100 for first LLM selection
   const top100 = filtered.slice(0, 100);
   console.log('      Taking top', top100.length, 'papers for LLM selection');
-  
+
   // ═══════════════════════════════════════════════════════════════
   // STAGE 2: LLM SELECTION FROM TOP 100
   // ═══════════════════════════════════════════════════════════════
   console.log('\n🤖 STAGE 2: LLM Selection from Top 100 Papers');
   console.log('   Processing', top100.length, 'papers');
   if (top100.length > 0) {
-    console.log('   Cosine score range:', 
-      top100[0].relevanceScore.toFixed(3), 
-      'to', 
+    console.log('   Cosine score range:',
+      top100[0].relevanceScore.toFixed(3),
+      'to',
       top100[top100.length - 1].relevanceScore.toFixed(3)
     );
   }
-  
+
   const stage2Selected = await selectTopPapersWithLLM(
-    top100, 
-    userQuestions, 
-    keywords, 
+    top100,
+    userQuestions,
+    keywords,
     20
   );
-  
+
   console.log('   ✅ Stage 2 complete:', stage2Selected.length, 'papers selected');
   if (stage2Selected.length > 0) {
     console.log('      Sample titles:');
@@ -731,34 +757,34 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
       console.log(`      ${i + 1}. ${p.title.substring(0, 60)}...`);
     });
   }
-  
+
   // Get the IDs of selected papers to find leftovers
   const stage2SelectedIds = new Set(stage2Selected.map(p => p.id));
-  
+
   // ═══════════════════════════════════════════════════════════════
   // STAGE 3: LLM SELECTION FROM 80 LEFTOVER PAPERS
   // ═══════════════════════════════════════════════════════════════
   let stage3Selected = [];
-  
+
   // Get the papers that were NOT selected in Stage 2
   const leftoverPapers = top100.filter(p => !stage2SelectedIds.has(p.id));
-  
+
   if (leftoverPapers.length > 0) {
     console.log('\n🤖 STAGE 3: LLM Selection from Leftover Papers');
     console.log('   Processing', leftoverPapers.length, 'leftover papers');
-    console.log('   Cosine score range:', 
-      leftoverPapers[0].relevanceScore.toFixed(3), 
-      'to', 
+    console.log('   Cosine score range:',
+      leftoverPapers[0].relevanceScore.toFixed(3),
+      'to',
       leftoverPapers[leftoverPapers.length - 1].relevanceScore.toFixed(3)
     );
-    
+
     stage3Selected = await selectTopPapersWithLLM(
-      leftoverPapers, 
-      userQuestions, 
-      keywords, 
+      leftoverPapers,
+      userQuestions,
+      keywords,
       20
     );
-    
+
     console.log('   ✅ Stage 3 complete:', stage3Selected.length, 'papers selected');
     if (stage3Selected.length > 0) {
       console.log('      Sample titles:');
@@ -769,12 +795,12 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
   } else {
     console.log('\n⏭️  STAGE 3: Skipped (no leftover papers)');
   }
-  
+
   // ═══════════════════════════════════════════════════════════════
   // COMBINE RESULTS
   // ═══════════════════════════════════════════════════════════════
   const finalSelection = [...stage2Selected, ...stage3Selected];
-  
+
   console.log('\n╔════════════════════════════════════════════════════════════════╗');
   console.log('║ FINAL SELECTION COMPLETE                                       ║');
   console.log('╚════════════════════════════════════════════════════════════════╝');
@@ -787,7 +813,7 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
     ).toFixed(3));
   }
   console.log('\n');
-  
+
   return finalSelection;
 }
 
@@ -876,9 +902,9 @@ Title: "${paperTitle || 'Unknown'}"
 Abstract: "${paperAbstract || 'Not available'}"
 
 REFERENCE LIST FROM THIS PAPER:
-${referenceList && referenceList.length > 0 
-  ? referenceList.map((ref, idx) => `${idx + 1}. ${ref}`).join('\n')
-  : 'No references available'}
+${referenceList && referenceList.length > 0
+        ? referenceList.map((ref, idx) => `${idx + 1}. ${ref}`).join('\n')
+        : 'No references available'}
 
 ####
 
@@ -909,8 +935,8 @@ Remember: You must justify WHY each extraction directly answers the user's query
     try {
       if (!genAI) throw new Error('Gemini not available');
 
-      const model = genAI.getGenerativeModel({ 
-        model: 'gemini-3-flash-preview',
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
         generationConfig: {
           responseMimeType: 'application/json'
         }
@@ -949,7 +975,7 @@ Remember: You must justify WHY each extraction directly answers the user's query
       return mappedNotes;
     } catch (error) {
       logger.warn('Gemini extraction failed, trying OpenAI');
-      
+
       // ✅ OPENAI FALLBACK (same enhanced prompt)
       try {
         const openaiPrompt = `${systemPrompt}\n\n${userPrompt}`;
@@ -1065,7 +1091,7 @@ async function generateInsightQueries(userQuestions, contextQuery) {
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json' }
