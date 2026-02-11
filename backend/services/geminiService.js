@@ -67,7 +67,7 @@ Extract and return JSON:
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json' }
@@ -98,7 +98,7 @@ Return JSON array of strings.`;
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json' }
@@ -132,6 +132,13 @@ CRITICAL RULES FOR ARXIV SUCCESS:
 4. Avoid connecting words (like "for", "in", "of", "the")
 5. Generate MORE terms (4-5 each) but keep them SHORT
 
+IMPORTANT CONSIDERATIONS:
+- Focus on the CORE of what the user is looking for, not generic related terms
+- If the user asking for a specific process, method, or relationship, prioritize terms that reflect that specificity
+- If the user is asking for a specific period or historical time frame you Must priorities and include it in all search terms (e.g. "If they ask for World war 1, you should include "world war 1" in all search terms not just the word "war")
+- If the user is asking about a specific time, tool, method, or relationship, prioritize and always incluse those specifics in all search terms.
+- Understand the user's intent and generate spectific search terms not generic ones.
+
 RESPONSE FORMAT (STRICT JSON):
 {
   "exact_phrases": [3-4 phrases, 2-3 words max],
@@ -142,19 +149,7 @@ RESPONSE FORMAT (STRICT JSON):
 
 EXAMPLES OF WHAT WORKS IN ARXIV:
 
-EXAMPLE 1 - MACHINE LEARNING:
-Topic: "transformer models"
-Query: "how do attention mechanisms work"
-
-✅ PERFECT FOR ARXIV:
-{
-  "exact_phrases": ["transformer models", "attention mechanism", "self attention", "neural architecture", "sequence modeling"],
-  "title_terms": ["transformer", "attention mechanism", "neural networks", "deep learning", "language models"],
-  "abstract_terms": ["attention", "transformer", "language models"],
-  "general_terms": ["machine learning", "deep learning", "neural networks", "language models"]
-}
-
-EXAMPLE 2 - FINANCIAL MARKETS:
+EXAMPLE 1 - FINANCIAL MARKETS:
 Topic: "financial markets" 
 Query: "what is market volatility"
 
@@ -166,7 +161,7 @@ Query: "what is market volatility"
   "general_terms": ["stock market", "market volatility", "financial risk", "price movements"]
 }
 
-EXAMPLE 3 - URBAN PLANNING:
+EXAMPLE 2 - URBAN PLANNING:
 Topic: "urban planning sustainability"
 Query: "green infrastructure benefits"
 
@@ -178,13 +173,71 @@ Query: "green infrastructure benefits"
   "general_terms": ["urban sustainability", "green cities", "sustainable planning", "eco cities"]
 }
 
+EXAMPLE 3 - HISTORY (WW1 Focus)
+Topic: "World War 1" Query: "food supplies effect after the war"
+
+✅ PERFECT FOR ARXIV (Anchored):
+
+json
+{
+  "exact_phrases": ["World War 1 food supply", "post-World War One food scarcity", "World War 1 agriculture", "1914-1918 food distribution", "World War 1 rationing"],
+  "title_terms": ["World War 1", "Great War", "1914-1918", "food", "supply"],
+  "abstract_terms": ["World War 1", "World War One", "Great War", "nutrition", "1919"],
+  "general_terms": ["World War 1 economy", "post-World War 1 recovery", "1914-1918 logistics"]
+}
+
+EXAMPLE 4 - CLIMATE SCIENCE (Specific Region)
+Topic: "Great Barrier Reef" Query: "coral bleaching impact on biodiversity"
+
+✅ PERFECT FOR ARXIV (Anchored):
+
+json
+{
+  "exact_phrases": ["Great Barrier Reef bleaching", "Great Barrier Reef coral death", "Great Barrier Reef biodiversity loss", "Great Barrier Reef ecosystems", "Great Barrier Reef heat stress"],
+  "title_terms": ["Great Barrier Reef", "bleaching", "reef", "biodiversity"],
+  "abstract_terms": ["Great Barrier Reef", "Acropora", "Queensland coast"],
+  "general_terms": ["Great Barrier Reef climate change", "Great Barrier Reef ecology"]
+}
+EXAMPLE 5 - LAW / POLITICS (Specific Clause)
+Topic: "Second Amendment" Query: "legal interpretations of the well regulated militia clause"
+
+✅ PERFECT FOR ARXIV (Anchored):
+
+{
+  "exact_phrases": ["Second Amendment militia", "Second Amendment interpretation", "Second Amendment rights", "Constitution Second Amendment", "Second Amendment well regulated"],
+  "title_terms": ["Second Amendment", "Constitution", "militia", "gun rights"],
+  "abstract_terms": ["Second Amendment", "Bill of Rights", "firearms"],
+  "general_terms": ["Second Amendment law", "Second Amendment history", "2nd Amendment"]
+}
+
+EXAMPLE 6 - MEDICINE (Specific Condition)
+Topic: "Type 1 Diabetes" Query: "impact of continuous glucose monitoring on HbA1c"
+✅ PERFECT FOR ARXIV (Anchored):
+{
+  "exact_phrases": ["Type 1 Diabetes CGM", "Type 1 Diabetes glucose monitoring", "Type 1 Diabetes HbA1c", "juvenile diabetes monitoring", "T1D continuous monitoring"],
+  "title_terms": ["Type 1 Diabetes", "T1D", "glucose monitoring", "HbA1c"],
+  "abstract_terms": ["Type 1 Diabetes", "insulin", "blood sugar"],
+  "general_terms": ["Type 1 Diabetes management", "Type 1 Diabetes technology"]
+}
+
 KEY SUCCESS FACTORS:
 - Use terms that would appear in actual paper TITLES
 - Focus on the core what the user is looking for, not generic related terms
-- Keep it simple and direct
+- Place key user intent at the front of the search term 
 - Generate enough options (4-5) for good coverage
 - Think like an academic author naming their paper
 - Each search term MUST contain at least one keyword from the original user topics or questions, BUT by understanding the user's intent you can modify those keywords to be more effective for search (e.g. "Sport pychology" could become "athlete mental health" if it better matches the user's intent)
+- If the user is asking for a specific period or historical time frame you Must priorities and include it in all search terms (e.g. "If they ask for World war 1, you should include "world war 1" in all search terms not just the word "war")
+- If the user is asking about a specific time, tool, method, or relationship, prioritize and always incluse those specifics in all search terms.
+- Understand the user's intent and generate spectific search terms not generic ones.
+
+RESPONSE FORMAT (STRICT JSON):
+{
+  "exact_phrases": [3-4 phrases, 2-3 words max],
+  "title_terms": [3-4 terms, 2-3 words max], 
+  "abstract_terms": [3 single keywords, 1 word only, MUST PROVIDE MIN OF 3 KEYWORDS],
+  "general_terms": [3-4 terms, 2-3 words max]
+}
 `;
 
   const userPrompt = `RESEARCH TOPICS: ${topics.join(', ')}
@@ -213,7 +266,7 @@ Return ONLY valid JSON matching the format specified in the system prompt.`;
     if (!genAI) throw new Error('Gemini not initialized');
 
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-3-flash-preview',
       generationConfig: {
         responseMimeType: "application/json"
       }
@@ -419,19 +472,203 @@ function cosineSimilarity(vecA, vecB) {
 }
 
 
-async function filterRelevantPapers(papers, userQuestions, keywords) {
-  console.log('[filterRelevantPapers] START:', { papersCount: papers.length, userQuestions, keywords });
+/**
+ * Uses LLM to intelligently select the most relevant papers
+ * LLM returns paper IDs and titles for verification
+ * 
+ * @param {Array} papers - Array of ArxivPaper objects (pre-sorted by cosine score)
+ * @param {Array} userQuestions - User's research questions
+ * @param {Array} keywords - Search keywords
+ * @param {number} topN - Number of papers to select
+ * @returns {Promise<Array>} - Selected papers with original data intact
+ */
+async function selectTopPapersWithLLM(papers, userQuestions, keywords, topN) {
   if (papers.length === 0) return [];
+  
+  // If we have fewer papers than requested, return all
+  if (papers.length <= topN) {
+    console.log(`   📊 Only ${papers.length} papers available, returning all`);
+    return papers;
+  }
+  
+  // Build the prompt with paper summaries
+  const paperSummaries = papers.map((p, idx) => ({
+    index: idx,
+    id: p.id, // ArXiv ID (e.g., "2301.12345")
+    title: p.title,
+    abstract: p.summary.substring(0, 500) // Limit for token efficiency
+  }));
+  
+  const systemPrompt = `You are an expert research assistant helping to identify the most relevant academic papers for a user's research query.
 
+CONTEXT: Your task is to perform a deeper semantic analysis to select the TOP ${topN} most relevant papers title and abstract in relation to the user's research questions and topic.
+- BE very STRICT in your selection, If the title and abstract do not clearly indicate that the paper addresses the user's specific questions, do NOT select it, even if it has some related keywords
+
+#
+CRITICAL INSTRUCTIONS:
+1. Consider BOTH the title AND abstract when evaluating relevance to the users' specific research questions and keywords
+2. Prioritize papers that DIRECTLY address the user's specific questions
+3. Look for papers that cover the core concepts mentioned in the user's questions, even if they use different wording
+4. Select papers that would provide the most valuable insights for the research
+5. Return EXACTLY ${topN} paper selections (or fewer if less than ${topN} papers provided)
+6. For each selection, return the paper ID and title for verification
+
+IMPORTANT FACTORS TO CONSIDER:
+- If the question is time and historically specific, prioritize papers that are most relevant to that time period
+- Papers must be in the same domain/field as the user's topic to be relevant
+- Papers must be english 
+- If the user talking about a specific method or concept, prioritize papers that focus on that method/concept in depth
+- If the user is asking about a specific relationship between concepts, prioritize papers that explore that relationship directly
+- BE very STRICT in your selection, If the title and abstract do not clearly indicate that the paper addresses the user's specific questions, do NOT select it, even if it has some related keywords
+
+RESPONSE FORMAT (STRICT JSON):
+{
+  "selections": [
+    {
+      "id": "arxiv_paper_id",
+      "title": "Paper title"
+    }
+  ]
+}
+
+Example:
+{
+  "selections": [
+    {
+      "id": "2301.12345",
+      "title": "Residential Renewable Energy Solutions"
+    },
+    {
+      "id": "1706.03762",
+      "title": "Off-grid renewable energy solutions for rural areas"
+    }
+  ]
+}
+
+Remember: Return EXACTLY ${topN} Paper relating to the user question and topic. Using both ID and title for each paper.`;
+
+  const userPrompt = `USER'S RESEARCH CONTEXT:
+
+${paperSummaries.map(p => `
+Paper ${p.index + 1}:
+ID: ${p.id}
+Title: ${p.title}
+Abstract: ${p.abstract}
+`).join('\n \n ---###########################--\n \n')}
+
+
+################################\n \n 
+
+Research Questions:
+${userQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
+
+Topic: ${keywords.join(', ')}
+
+PAPERS TO EVALUATE (${papers.length} total):
+
+TASK: Select the TOP ${topN} most relevant papers from the list above. Return their IDs and titles in the JSON format specified.`;
+
+  try {
+    if (!genAI) throw new Error('Gemini not available');
+    
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-3-flash-preview',
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.1 // Lower temperature for consistent selection
+      }
+    });
+    
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+      systemInstruction: { parts: [{ text: systemPrompt }] }
+    });
+    
+    const response = await result.response;
+    const parsed = JSON.parse(cleanJson(response.text()));
+    const selections = parsed.selections || [];
+    
+    console.log(`   🤖 LLM selected ${selections.length} papers`);
+    
+    // Verify titles match and map to original papers
+    const selectedPapers = selections
+      .map(selection => {
+        const paper = papers.find(p => p.id === selection.id);
+        if (!paper) {
+          console.warn(`   ⚠️  Paper ID ${selection.id} not found in batch`);
+          return null;
+        }
+        
+        // Verify title matches (for debugging)
+        if (paper.title !== selection.title) {
+          console.warn(`   ⚠️  Title mismatch for ${selection.id}`);
+          console.warn(`      Expected: ${paper.title.substring(0, 60)}...`);
+          console.warn(`      Got: ${selection.title.substring(0, 60)}...`);
+        }
+        
+        return paper; // Return original paper with all data intact
+      })
+      .filter(p => p !== null);
+    
+    console.log(`   ✅ Successfully mapped ${selectedPapers.length} papers`);
+    
+    // Verify we got the expected number
+    if (selectedPapers.length < selections.length) {
+      console.warn(`   ⚠️  Some papers not found: expected ${selections.length}, got ${selectedPapers.length}`);
+    }
+    
+    return selectedPapers;
+    
+  } catch (error) {
+    logger.error('LLM paper selection failed:', error);
+    
+    // FALLBACK: Return top N by cosine score (already sorted)
+    console.log(`   ⚠️  LLM failed, using top ${topN} by cosine score`);
+    return papers.slice(0, topN);
+  }
+}
+
+
+/**
+ * Hybrid Cosine Similarity + LLM Paper Selection
+ * 
+ * Stage 1: Use cosine similarity to score and rank ALL papers
+ * Stage 2: LLM selects top 20 from first 100 papers
+ * Stage 3: LLM selects top 20 from the 80 LEFTOVER papers
+ * 
+ * Returns: Maximum 40 papers for PDF processing
+ */
+async function filterRelevantPapers(papers, userQuestions, keywords) {
+  console.log('\n╔════════════════════════════════════════════════════════════════╗');
+  console.log('║ HYBRID COSINE + LLM PAPER SELECTION                            ║');
+  console.log('╚════════════════════════════════════════════════════════════════╝');
+  console.log('📊 Total papers received:', papers.length);
+  console.log('❓ User questions:', userQuestions);
+  console.log('🔑 Keywords:', keywords);
+  
+  if (papers.length === 0) {
+    console.log('⚠️  No papers to filter');
+    return [];
+  }
+  
+  // ═══════════════════════════════════════════════════════════════
+  // STAGE 1: COSINE SIMILARITY PRE-FILTER
+  // ═══════════════════════════════════════════════════════════════
+  console.log('\n📐 STAGE 1: Cosine Similarity Pre-Filter');
+  console.log('   Creating embeddings for all', papers.length, 'papers...');
+  
   const userIntentText = 'Questions: ' + userQuestions.join('\n') + '\nKeywords: ' + keywords.join(', ');
-  console.log('[filterRelevantPapers] Getting embedding for:', userIntentText.substring(0, 100));
   const targetVector = await getEmbedding(userIntentText, 'RETRIEVAL_QUERY');
-  console.log('[filterRelevantPapers] Target vector length:', targetVector.length);
-  if (targetVector.length === 0) return [];
-
+  
+  if (targetVector.length === 0) {
+    console.log('   ❌ Failed to create target vector');
+    return [];
+  }
+  
   const paperTexts = papers.map(p => 'Title: ' + p.title + '\nAbstract: ' + p.summary);
   const paperEmbeddings = await getBatchEmbeddings(paperTexts, 'RETRIEVAL_DOCUMENT');
-
+  
+  // Calculate cosine similarity scores
   const scoredPapers = papers.map((paper, index) => {
     const paperVector = paperEmbeddings[index];
     let score = 0;
@@ -440,16 +677,118 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
     }
     return Object.assign({}, paper, { relevanceScore: score });
   });
-
-  console.log('[filterRelevantPapers] Scored papers sample:', scoredPapers.slice(0, 3).map(p => ({ title: p.title, score: p.relevanceScore })));
-
-  const filtered = scoredPapers.filter(p => (p.relevanceScore || 0) >= 0.30);
-  console.log('[filterRelevantPapers] After filter (>=0.30):', filtered.length, 'papers');
-
-  const result = filtered.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0)).slice(0, 20);
-  console.log('[filterRelevantPapers] Final result:', result.length, 'papers');
-
-  return result;
+  
+  console.log('   📊 Sample scores:', scoredPapers.slice(0, 3).map(p => ({ 
+    title: p.title.substring(0, 40) + '...', 
+    score: p.relevanceScore.toFixed(3) 
+  })));
+  
+  // Filter by threshold and sort by score
+  const filtered = scoredPapers
+    .filter(p => (p.relevanceScore || 0) >= 0.30)
+    .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+  
+  console.log('   ✅ Cosine filtering complete');
+  console.log('      Papers with score ≥ 0.30:', filtered.length);
+  if (filtered.length > 0) {
+    console.log('      Top score:', filtered[0].relevanceScore.toFixed(3));
+    console.log('      Lowest score:', filtered[filtered.length - 1].relevanceScore.toFixed(3));
+  }
+  
+  if (filtered.length === 0) {
+    console.log('   ⚠️  No papers passed cosine threshold');
+    return [];
+  }
+  
+  // Take top 100 for first LLM selection
+  const top100 = filtered.slice(0, 100);
+  console.log('      Taking top', top100.length, 'papers for LLM selection');
+  
+  // ═══════════════════════════════════════════════════════════════
+  // STAGE 2: LLM SELECTION FROM TOP 100
+  // ═══════════════════════════════════════════════════════════════
+  console.log('\n🤖 STAGE 2: LLM Selection from Top 100 Papers');
+  console.log('   Processing', top100.length, 'papers');
+  if (top100.length > 0) {
+    console.log('   Cosine score range:', 
+      top100[0].relevanceScore.toFixed(3), 
+      'to', 
+      top100[top100.length - 1].relevanceScore.toFixed(3)
+    );
+  }
+  
+  const stage2Selected = await selectTopPapersWithLLM(
+    top100, 
+    userQuestions, 
+    keywords, 
+    20
+  );
+  
+  console.log('   ✅ Stage 2 complete:', stage2Selected.length, 'papers selected');
+  if (stage2Selected.length > 0) {
+    console.log('      Sample titles:');
+    stage2Selected.slice(0, 3).forEach((p, i) => {
+      console.log(`      ${i + 1}. ${p.title.substring(0, 60)}...`);
+    });
+  }
+  
+  // Get the IDs of selected papers to find leftovers
+  const stage2SelectedIds = new Set(stage2Selected.map(p => p.id));
+  
+  // ═══════════════════════════════════════════════════════════════
+  // STAGE 3: LLM SELECTION FROM 80 LEFTOVER PAPERS
+  // ═══════════════════════════════════════════════════════════════
+  let stage3Selected = [];
+  
+  // Get the papers that were NOT selected in Stage 2
+  const leftoverPapers = top100.filter(p => !stage2SelectedIds.has(p.id));
+  
+  if (leftoverPapers.length > 0) {
+    console.log('\n🤖 STAGE 3: LLM Selection from Leftover Papers');
+    console.log('   Processing', leftoverPapers.length, 'leftover papers');
+    console.log('   Cosine score range:', 
+      leftoverPapers[0].relevanceScore.toFixed(3), 
+      'to', 
+      leftoverPapers[leftoverPapers.length - 1].relevanceScore.toFixed(3)
+    );
+    
+    stage3Selected = await selectTopPapersWithLLM(
+      leftoverPapers, 
+      userQuestions, 
+      keywords, 
+      20
+    );
+    
+    console.log('   ✅ Stage 3 complete:', stage3Selected.length, 'papers selected');
+    if (stage3Selected.length > 0) {
+      console.log('      Sample titles:');
+      stage3Selected.slice(0, 3).forEach((p, i) => {
+        console.log(`      ${i + 1}. ${p.title.substring(0, 60)}...`);
+      });
+    }
+  } else {
+    console.log('\n⏭️  STAGE 3: Skipped (no leftover papers)');
+  }
+  
+  // ═══════════════════════════════════════════════════════════════
+  // COMBINE RESULTS
+  // ═══════════════════════════════════════════════════════════════
+  const finalSelection = [...stage2Selected, ...stage3Selected];
+  
+  console.log('\n╔════════════════════════════════════════════════════════════════╗');
+  console.log('║ FINAL SELECTION COMPLETE                                       ║');
+  console.log('╚════════════════════════════════════════════════════════════════╝');
+  console.log('📊 Total papers selected:', finalSelection.length);
+  console.log('   From Stage 2 (top 100):', stage2Selected.length);
+  console.log('   From Stage 3 (leftover):', stage3Selected.length);
+  if (finalSelection.length > 0) {
+    console.log('   Average relevance score:', (
+      finalSelection.reduce((sum, p) => sum + (p.relevanceScore || 0), 0) / finalSelection.length
+    ).toFixed(3));
+  }
+  console.log('\n');
+  
+  return finalSelection;
 }
 
 async function extractNotesFromPages(relevantPages, userQuestions, paperTitle, paperAbstract, referenceList) {
@@ -571,7 +910,7 @@ Remember: You must justify WHY each extraction directly answers the user's query
       if (!genAI) throw new Error('Gemini not available');
 
       const model = genAI.getGenerativeModel({ 
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-3-flash-preview',
         generationConfig: {
           responseMimeType: 'application/json'
         }
@@ -726,7 +1065,7 @@ async function generateInsightQueries(userQuestions, contextQuery) {
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json' }
