@@ -57,7 +57,7 @@ await asyncPool(4, queries, async (query) => {
 ```
 
 ### Phase 3: Semantic Distillation
-Vector similarity filtering with **relevance threshold: 0.30** (lowered from 0.48).
+Vector similarity filtering with **relevance threshold: 0.48** (lowered from 0.48).
 
 ```typescript
 const filterRelevantPapers = async (papers: ArxivPaper[], questions: string[]) => {
@@ -74,7 +74,7 @@ const filterRelevantPapers = async (papers: ArxivPaper[], questions: string[]) =
       ...paper,
       relevanceScore: cosineSimilarity(targetVector, paperEmbeddings[i])
     }))
-    .filter(p => (p.relevanceScore || 0) >= 0.30) // ⚠️ Updated threshold
+    .filter(p => (p.relevanceScore || 0) >= 0.48) // ⚠️ Updated threshold
     .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
     .slice(0, 20);
 };

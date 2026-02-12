@@ -2,7 +2,7 @@
 import { ArxivPaper, ArxivSearchStructured } from "../types";
 
 // Results per query
-const MAX_RESULTS_PER_QUERY = 50; 
+const MAX_RESULTS_PER_QUERY = 50;
 // Concurrency Limit for ArXiv API calls - keeps us under the radar
 const CONCURRENCY_LIMIT = 4;
 
@@ -11,49 +11,55 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /** Searching arXiv: 
  * Builds specific arXiv API query strings from the structured object.
- */ 
+ */
 export const buildArxivQueries = (
-  structured: ArxivSearchStructured, 
+  structured: ArxivSearchStructured,
   originalTopics: string[],
   originalQuestions: string[]
 ): string[] => {
   const queries: string[] = [];
 
-  const clean = (s: string) => s.replace(/["\\]/g, '').trim();
+  const clean = (s: string) => s.replace(/[\\]/g, '').trim();
 
-  // 1. Exact Phrases
+  // 1. Exact Phrases - Wrap in quotes to ensure ArXiv treats as a single phrase
   structured.exact_phrases.forEach(phrase => {
-    if (clean(phrase)) queries.push(`all:${clean(phrase)}`);
+    const cleaned = clean(phrase);
+    if (cleaned) {
+      const quoted = (cleaned.startsWith('"') && cleaned.endsWith('"')) ? cleaned : `"${cleaned}"`;
+      queries.push(`all:${quoted}`);
+    }
   });
 
   // 2. Title Terms - "ti"
   structured.title_terms.forEach(term => {
-    if (clean(term)) queries.push(`ti:${clean(term)}`);
+    const cleaned = clean(term);
+    if (cleaned) queries.push(`ti:${cleaned}`);
   });
 
   // 3. Abstract Terms - "abs"
   const absTerms = structured.abstract_terms.filter(t => clean(t)).map(t => clean(t));
   if (absTerms.length > 0) {
-     const combined = absTerms.map(t => `abs:${t}`).join(' AND ');
-     queries.push(combined);
+    const combined = absTerms.map(t => `abs:${t}`).join(' AND ');
+    queries.push(combined);
   }
 
   // 4. General Terms - "all"
   structured.general_terms.forEach(term => {
-    if (clean(term)) queries.push(`all:${clean(term)}`);
+    const cleaned = clean(term);
+    if (cleaned) queries.push(`all:${cleaned}`);
   });
 
   // 5. Original User Topics (Fallback)
   originalTopics.forEach(topic => {
     if (clean(topic)) queries.push(`all:${clean(topic)}`);
   });
-  
+
   // 6. Original Questions
   originalQuestions.forEach(q => {
-     const cleaned = clean(q);
-     if (cleaned.length < 50 && cleaned.length > 3) {
-        queries.push(`all:${cleaned}`);
-     }
+    const cleaned = clean(q);
+    if (cleaned.length < 50 && cleaned.length > 3) {
+      queries.push(`all:${cleaned}`);
+    }
   });
 
   const finalQueries = Array.from(new Set(queries));
@@ -139,30 +145,30 @@ const fetchArxivQuery = async (query: string): Promise<ArxivPaper[]> => {
     const apiUrl = `https://export.arxiv.org/api/query?search_query=${encodedQuery}&start=0&max_results=${MAX_RESULTS_PER_QUERY}`;
 
     const xmlText = await fetchWithFallback(apiUrl);
-    
+
     const parseStart = performance.now();
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-    
+
     const parseError = xmlDoc.getElementsByTagName("parsererror");
     if (parseError.length > 0) {
-        console.error(`[ArXiv Debug] XML Parse Error for query "${query}"`);
-        return [];
+      console.error(`[ArXiv Debug] XML Parse Error for query "${query}"`);
+      return [];
     }
 
     const entries = xmlDoc.getElementsByTagName("entry");
     console.log(`[ArXiv Debug] Query "${query}" returned ${entries.length} results. (Parsed in ${Math.round(performance.now() - parseStart)}ms)`);
-    
+
     const papers: ArxivPaper[] = [];
 
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
-      
+
       const id = entry.getElementsByTagName("id")[0]?.textContent || "";
       const title = entry.getElementsByTagName("title")[0]?.textContent?.replace(/\s+/g, " ").trim() || "Untitled";
       const summary = entry.getElementsByTagName("summary")[0]?.textContent?.replace(/\s+/g, " ").trim() || "";
       const published = entry.getElementsByTagName("published")[0]?.textContent || "";
-      
+
       const authorTags = entry.getElementsByTagName("author");
       const authors: string[] = [];
       for (let j = 0; j < authorTags.length; j++) {
@@ -177,7 +183,7 @@ const fetchArxivQuery = async (query: string): Promise<ArxivPaper[]> => {
           pdfUri = links[j].getAttribute("href") || "";
         }
       }
-      
+
       if (!pdfUri && id) {
         pdfUri = id.replace("/abs/", "/pdf/") + ".pdf";
       }
@@ -194,7 +200,7 @@ const fetchArxivQuery = async (query: string): Promise<ArxivPaper[]> => {
         });
       }
     }
-    
+
     return papers;
   } catch (error: any) {
     console.error(`[ArXiv Debug] Fatal error in fetchArxivQuery for "${query}":`, error.message);
@@ -206,7 +212,7 @@ const fetchArxivQuery = async (query: string): Promise<ArxivPaper[]> => {
  * Step 2: Search Arxiv (Optimized with Concurrency Pool)
  */
 export const searchArxiv = async (
-  queries: string[], 
+  queries: string[],
   onStatusUpdate?: (msg: string) => void,
   fallbackTopics: string[] = []
 ): Promise<ArxivPaper[]> => {
@@ -219,14 +225,14 @@ export const searchArxiv = async (
   const worker = async (query: string): Promise<ArxivPaper[]> => {
     if (onStatusUpdate) onStatusUpdate(`Searching for papers related to "${query}"...`);
     // Reduced jitter range slightly since proxies add natural variance
-    const jitter = Math.round(Math.random() * 500); 
-    await delay(jitter); 
+    const jitter = Math.round(Math.random() * 500);
+    await delay(jitter);
     return await fetchArxivQuery(query);
   };
 
   if (queries.length > 0) {
     const results = await processConcurrent(queries, CONCURRENCY_LIMIT, worker);
-    
+
     results.flat().forEach(paper => {
       if (!seenIds.has(paper.id)) {
         seenIds.add(paper.id);
@@ -243,13 +249,13 @@ export const searchArxiv = async (
       .filter(q => !queries.includes(q));
 
     if (fallbackQueries.length > 0) {
-       const results = await processConcurrent(fallbackQueries, CONCURRENCY_LIMIT, worker);
-       results.flat().forEach(paper => {
-          if (!seenIds.has(paper.id)) {
-            seenIds.add(paper.id);
-            allPapers.push(paper);
-          }
-       });
+      const results = await processConcurrent(fallbackQueries, CONCURRENCY_LIMIT, worker);
+      results.flat().forEach(paper => {
+        if (!seenIds.has(paper.id)) {
+          seenIds.add(paper.id);
+          allPapers.push(paper);
+        }
+      });
     }
   }
 
@@ -286,13 +292,13 @@ async function processConcurrent<T, R>(
         const currentIndex = index++;
         const item = items[currentIndex];
         active++;
-        
+
         task(item)
           .then((res) => {
             finalResults.push(res);
           })
           .catch((err) => {
-             console.error(`[ArXiv Debug] Pool Task failure:`, err);
+            console.error(`[ArXiv Debug] Pool Task failure:`, err);
           })
           .finally(() => {
             active--;

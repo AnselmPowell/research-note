@@ -17,6 +17,18 @@ if (config.geminiApiKey) {
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const cleanJson = (text) => text.replace(/```json/g, '').replace(/```/g, '').trim();
 
+/**
+ * Utility to wrap a promise with a timeout
+ */
+function withTimeout(promise, ms, operationName = 'Operation') {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${operationName} timed out after ${ms}ms`)), ms)
+    )
+  ]);
+}
+
 async function callOpenAI(prompt) {
   if (!config.openaiApiKey) throw new Error('OpenAI API key not configured');
 
@@ -79,7 +91,7 @@ async function enhanceMetadata(firstFourPagesText, currentMetadata) {
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json' }
@@ -113,7 +125,7 @@ Return JSON array of strings.`;
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json' }
@@ -268,6 +280,7 @@ IMPORTANT:
 - Each search term MUST contain at least one keyword from the original user topics or questions, BUT by understanding the user's intent you can modify those keywords to be more effective for search (e.g. "Sport pychology" could become "athlete mental health" if it better matches the user's intent)
 - These terms will be passed to arXiv API but don't make them generic one-word phrases
 - These terms will be passed to arXiv API to look for matching paper titles and abstracts.
+- Must contain at least 3 keywords for the abstrct_terms 
 Return ONLY valid JSON matching the format specified in the system prompt.`;
 
   const fallback = {
@@ -281,7 +294,7 @@ Return ONLY valid JSON matching the format specified in the system prompt.`;
     if (!genAI) throw new Error('Gemini not initialized');
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-3-flash-preview',
       generationConfig: {
         responseMimeType: "application/json"
       }
@@ -298,6 +311,7 @@ Return ONLY valid JSON matching the format specified in the system prompt.`;
     // ✅ VALIDATION LAYER (from Python v1)
     // Extract keywords from original topics/questions (words > 3 chars)
     const allKeywords = new Set();
+
     topics.forEach(topic => {
       topic.split(/\s+/).forEach(word => {
         if (word.length > 3) allKeywords.add(word.toLowerCase());
@@ -511,7 +525,7 @@ async function selectTopPapersWithLLM(papers, userQuestions, keywords, topN) {
     index: idx,
     id: p.id, // ArXiv ID (e.g., "2301.12345")
     title: p.title,
-    abstract: p.summary.substring(0, 500) // Limit for token efficiency
+    abstract: p.summary.split(/\s+/).slice(0, 200).join(' ') // First 200 words for token efficiency
   }));
 
   const systemPrompt = `You are an expert research assistant helping to identify the most relevant academic papers for a user's research query. To help them write there assignment, you have been given a list of papers with their titles and abstracts. Your task is to perform a deeper semantic analysis to select the TOP ${topN} most relevant papers title and abstract in relation to the user's research questions and topic.
@@ -526,7 +540,7 @@ CRITICAL INSTRUCTIONS:
 3. Look for papers that cover the core concepts mentioned in the user's questions, even if they use different wording
 4. Select papers that would provide the most valuable insights for the research
 5. Return EXACTLY ${topN} paper selections (or fewer if less than ${topN} papers provided)
-6. For each selection, return the paper ID and title for verification
+6. For each selection, return the paper index (number from the list), ID, and title for verification
 
 IMPORTANT FACTORS TO CONSIDER:
 - If the question is time and historically specific, prioritize papers that are most relevant to that time period, For Example DONT select papers about AI or Blockchain If the user is asking about "economic theories in the 18th century"
@@ -540,6 +554,7 @@ RESPONSE FORMAT (STRICT JSON):
 {
   "selections": [
     {
+      "index": 0,
       "id": "arxiv_paper_id",
       "title": "Paper title"
     }
@@ -550,17 +565,19 @@ Example:
 {
   "selections": [
     {
+      "index": 5,
       "id": "2301.12345",
       "title": "Residential Renewable Energy Solutions"
     },
     {
+      "index": 12,
       "id": "1706.03762",
       "title": "Off-grid renewable energy solutions for rural areas"
     }
   ]
 }
 
-Remember: Return EXACTLY ${topN} Paper relating to the user question and topic. Using both ID and title for each paper.`;
+Remember: Return EXACTLY ${topN} Paper relating to the user question and topic. Using index, ID and title for each paper.`;
 
   const userPrompt = `\n \n \n  ## ARXIV PAPER SELECTION: ## \n \n\n
 
@@ -573,6 +590,7 @@ Abstract: ${p.abstract}
 
 
 ################################\n \n 
+
 
 USER'S RESEARCH QUESTION:
 ${userQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
@@ -597,60 +615,125 @@ REMEMBER YOU ARE A STUDENT RESEARCH ASSISSTANT, YOUR GOAL IS TO HELP THE USER SE
   try {
     if (!genAI) throw new Error('Gemini not available');
 
+    console.log(`   📏 [LLM-SELECT] Prompt sizes: systemPrompt=${systemPrompt.length} chars, userPrompt=${userPrompt.length} chars, total=${systemPrompt.length + userPrompt.length} chars`);
+    console.log(`   📏 [LLM-SELECT] Papers in prompt: ${paperSummaries.length}, topN requested: ${topN}`);
+    console.log(`   ⏱️  [LLM-SELECT] Calling generateContent at ${new Date().toISOString()}...`);
+
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0.1 // Lower temperature for consistent selection
       }
     });
 
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      systemInstruction: { parts: [{ text: systemPrompt }] }
-    });
+    const result = await withTimeout(
+      model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] }
+      }),
+      45000, // 45 seconds
+      'Gemini Paper Selection'
+    );
+
+    console.log(`   ⏱️  [LLM-SELECT] generateContent returned at ${new Date().toISOString()}`);
 
     const response = await result.response;
+    const usage = response.usageMetadata;
+    if (usage) {
+      const inputCost = (usage.promptTokenCount / 1000000) * 0.10;
+      const outputCost = (usage.candidatesTokenCount / 1000000) * 0.40;
+      console.log(`   💰 [LLM-SELECT] Usage: ${usage.promptTokenCount} in, ${usage.candidatesTokenCount} out. Est Cost: $${(inputCost + outputCost).toFixed(4)}`);
+    }
+    console.log(`   ⏱️  [LLM-SELECT] response.text() ready at ${new Date().toISOString()}`);
     const parsed = JSON.parse(cleanJson(response.text()));
     const selections = parsed.selections || [];
 
     console.log(`   🤖 LLM selected ${selections.length} papers`);
 
-    // Verify titles match and map to original papers
+    // Verify and map to original papers using multi-layered matching
     const selectedPapers = selections
       .map(selection => {
-        const paper = papers.find(p => p.id === selection.id);
-        if (!paper) {
-          console.warn(`   ⚠️  Paper ID ${selection.id} not found in batch`);
-          return null;
+        // 1. Try Index match (most reliable)
+        if (typeof selection.index === 'number' && papers[selection.index]) {
+          return papers[selection.index];
         }
 
-        // Verify title matches (for debugging)
-        if (paper.title !== selection.title) {
-          console.warn(`   ⚠️  Title mismatch for ${selection.id}`);
-          console.warn(`      Expected: ${paper.title.substring(0, 60)}...`);
-          console.warn(`      Got: ${selection.title.substring(0, 60)}...`);
+        // 2. Try Exact ID match
+        let paper = papers.find(p => p.id === selection.id);
+        if (paper) return paper;
+
+        // 3. Try Partial ID match (ArXiv IDs are URLs, LLMs often return just the ID part)
+        if (typeof selection.id === 'string') {
+          paper = papers.find(p => p.id.includes(selection.id) || selection.id.includes(p.id));
+          if (paper) return paper;
         }
 
-        return paper; // Return original paper with all data intact
+        // 4. Try Title match (Fuzzy last resort)
+        if (selection.title) {
+          paper = papers.find(p => p.title.toLowerCase().includes(selection.title.toLowerCase()) ||
+            selection.title.toLowerCase().includes(p.title.toLowerCase()));
+          if (paper) return paper;
+        }
+
+        return null;
       })
-      .filter(p => p !== null);
+      .filter(p => !!p);
 
     console.log(`   ✅ Successfully mapped ${selectedPapers.length} papers`);
 
-    // Verify we got the expected number
-    if (selectedPapers.length < selections.length) {
-      console.warn(`   ⚠️  Some papers not found: expected ${selections.length}, got ${selectedPapers.length}`);
+    // RESCUE FALLBACK: If LLM selected papers but mapping failed completely, don't return 0
+    if (selectedPapers.length === 0 && selections.length > 0) {
+      console.warn(`   ⚠️  Mapping failed for all ${selections.length} selections, rescuing with top ${topN} by cosine`);
+      // Use the provided papers (which are already sorted by cosine)
+      return papers.slice(0, topN);
     }
 
     return selectedPapers;
 
   } catch (error) {
-    logger.error('LLM paper selection failed:', error);
+    logger.error('Gemini paper selection failed, trying OpenAI fallback:', error);
 
-    // FALLBACK: Return top N by cosine score (already sorted)
-    console.log(`   ⚠️  LLM failed, using top ${topN} by cosine score`);
-    return papers.slice(0, topN);
+    try {
+      const openaiPrompt = `${systemPrompt}\n\n${userPrompt}`;
+      const parsed = await callOpenAI(openaiPrompt);
+      const selections = parsed.selections || [];
+
+      console.log(`   🤖 OpenAI selected ${selections.length} papers`);
+
+      const selectedPapers = selections
+        .map(selection => {
+          // Same multi-layered matching for OpenAI
+          if (typeof selection.index === 'number' && papers[selection.index]) return papers[selection.index];
+          let paper = papers.find(p => p.id === selection.id);
+          if (paper) return paper;
+          if (typeof selection.id === 'string') {
+            paper = papers.find(p => p.id.includes(selection.id) || selection.id.includes(p.id));
+            if (paper) return paper;
+          }
+          if (selection.title) {
+            paper = papers.find(p => p.title.toLowerCase().includes(selection.title.toLowerCase()));
+            if (paper) return paper;
+          }
+          return null;
+        })
+        .filter(p => !!p);
+
+      console.log(`   ✅ OpenAI successfully mapped ${selectedPapers.length} papers`);
+
+      // RESCUE FALLBACK
+      if (selectedPapers.length === 0 && selections.length > 0) {
+        console.warn(`   ⚠️  OpenAI mapping failed, rescuing with top ${topN} by cosine`);
+        return papers.slice(0, topN);
+      }
+
+      return selectedPapers;
+    } catch (openaiError) {
+      logger.error('Both Gemini and OpenAI failed for paper selection:', openaiError);
+      // FALLBACK: Return top N by cosine score (already sorted)
+      console.log(`   ⚠️  ALL LLMs failed, using top ${topN} by cosine score`);
+      return papers.slice(0, topN);
+    }
   }
 }
 
@@ -711,14 +794,19 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
 
   // Filter by threshold and sort by score
   const filtered = scoredPapers
-    .filter(p => (p.relevanceScore || 0) >= 0.30)
+    .filter(p => (p.relevanceScore || 0) >= 0.48)
     .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
 
   console.log('   ✅ Cosine filtering complete');
-  console.log('      Papers with score ≥ 0.30:', filtered.length);
+  console.log('      Papers with score ≥ 0.48:', filtered.length);
   if (filtered.length > 0) {
     console.log('      Top score:', filtered[0].relevanceScore.toFixed(3));
     console.log('      Lowest score:', filtered[filtered.length - 1].relevanceScore.toFixed(3));
+
+    console.log('\n      📋 Top 20 PDF titles after Stage 1 (Cosine Sorting):');
+    filtered.slice(0, 20).forEach((p, i) => {
+      console.log(`      ${i + 1}. [${p.relevanceScore.toFixed(3)}] ${p.title.substring(0, 80)}${p.title.length > 80 ? '...' : ''}`);
+    });
   }
 
   if (filtered.length === 0) {
@@ -754,7 +842,9 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
   if (stage2Selected.length > 0) {
     console.log('      Sample titles:');
     stage2Selected.slice(0, 3).forEach((p, i) => {
-      console.log(`      ${i + 1}. ${p.title.substring(0, 60)}...`);
+      if (p && p.title) {
+        console.log(`      ${i + 1}. ${p.title.substring(0, 60)}...`);
+      }
     });
   }
 
@@ -789,7 +879,9 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
     if (stage3Selected.length > 0) {
       console.log('      Sample titles:');
       stage3Selected.slice(0, 3).forEach((p, i) => {
-        console.log(`      ${i + 1}. ${p.title.substring(0, 60)}...`);
+        if (p && p.title) {
+          console.log(`      ${i + 1}. ${p.title.substring(0, 60)}...`);
+        }
       });
     }
   } else {
@@ -797,9 +889,18 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // COMBINE RESULTS
+  // COMBINE RESULTS & DEDUPLICATE
   // ═══════════════════════════════════════════════════════════════
-  const finalSelection = [...stage2Selected, ...stage3Selected];
+  const combined = [...stage2Selected, ...stage3Selected];
+  const finalSelection = [];
+  const seenFinalIds = new Set();
+
+  combined.forEach(p => {
+    if (p && p.id && !seenFinalIds.has(p.id)) {
+      seenFinalIds.add(p.id);
+      finalSelection.push(p);
+    }
+  });
 
   console.log('\n╔════════════════════════════════════════════════════════════════╗');
   console.log('║ FINAL SELECTION COMPLETE                                       ║');
@@ -817,7 +918,7 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
   return finalSelection;
 }
 
-async function extractNotesFromPages(relevantPages, userQuestions, paperTitle, paperAbstract, referenceList) {
+async function extractNotesFromPages(relevantPages, userQuestions, paperTitle, paperAbstract, referenceList, onStreamCallback) {
   console.log('\n🔬 [SERVICE] extractNotesFromPages - STARTING');
   console.log('   📄 Paper:', paperTitle);
   console.log('   📊 Relevant pages:', relevantPages?.length);
@@ -854,7 +955,7 @@ async function extractNotesFromPages(relevantPages, userQuestions, paperTitle, p
     const systemPrompt = `You are an research assistant analyzing academic papers to extract relevant information based on specific user queries.  
 
 
-    
+
 Your Goal: Extract information from research papers that DIRECTLY relates to any of the user's queries below. Be STRICT! You must understand the user intent by the query wording and what they are truly asking for. Only extract content that DIRECTLY answers the user's queries
 
 CRITICAL INSTRUCTIONS - BE VERY STRICT:
@@ -938,18 +1039,28 @@ Remember: You must justify WHY each extraction directly answers the user's query
       if (!genAI) throw new Error('Gemini not available');
 
       const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-3-flash-preview',
         generationConfig: {
           responseMimeType: 'application/json'
         }
       });
 
-      const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        systemInstruction: { parts: [{ text: systemPrompt }] }
-      });
+      const result = await withTimeout(
+        model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] }
+        }),
+        45000, // 45 seconds
+        'Gemini Note Extraction'
+      );
 
       const response = await result.response;
+      const usage = response.usageMetadata;
+      if (usage) {
+        const inputCost = (usage.promptTokenCount / 1000000) * 0.10;
+        const outputCost = (usage.candidatesTokenCount / 1000000) * 0.40;
+        console.log(`      💰 [LLM-EXTRACT] Usage: ${usage.promptTokenCount} in, ${usage.candidatesTokenCount} out. Est Cost: $${(inputCost + outputCost).toFixed(4)}`);
+      }
       const parsed = JSON.parse(cleanJson(response.text()));
       const notes = Array.isArray(parsed) ? parsed : (parsed.notes || []);
 
@@ -1093,11 +1204,12 @@ async function generateInsightQueries(userQuestions, contextQuery) {
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
     const result = await model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { responseMimeType: 'application/json' }
     });
+
 
     const response = await result.response;
     const queries = JSON.parse(cleanJson(response.text()));

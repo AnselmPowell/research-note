@@ -86,7 +86,7 @@ app.get('/api/arxiv-proxy', async (req, res) => {
 ```
 
 ### ⚠️ Relevance Threshold Adjustment
-**Change:** 0.48 → 0.30
+**Change:** 0.48 → 0.48
 **Reason:** Higher threshold was too restrictive, missing relevant papers.
 
 ### ⚠️ Structured Logging System

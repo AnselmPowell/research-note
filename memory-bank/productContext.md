@@ -22,7 +22,7 @@ Automate the mechanical 60% of academic research (searching, downloading, extrac
 ### The Systematic Reviewer
 **Goal:** Find every relevant paper on a medical/technical topic.
 **Pain:** Manually searching PubMed/ArXiv, filtering hundreds of results.
-**Solution:** Deep research generates ArXiv queries, filters by semantic relevance (threshold: 0.30), downloads top 20 papers.
+**Solution:** Deep research generates ArXiv queries, filters by semantic relevance (threshold: 0.48), downloads top 20 papers.
 
 ### The Literature Synthesizer
 **Goal:** Find specific evidence to support/refute hypothesis.

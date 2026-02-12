@@ -291,7 +291,7 @@ const filterRelevantPapers = async (papers: ArxivPaper[], questions: string[]) =
    ↓
 4. Backend proxy fetches ArXiv XML
    ↓
-5. Frontend filters by vector similarity (threshold: 0.30)
+5. Frontend filters by vector similarity (threshold: 0.48)
    ↓
 6. LibraryContext downloads PDFs (asyncPool: 3 concurrent)
    ↓

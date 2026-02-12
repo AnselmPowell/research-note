@@ -43,7 +43,7 @@
 
 ### 2. Extraction
 - Geometric PDF analysis (2-column layouts)
-- Semantic filtering (relevance threshold: 0.30)
+- Semantic filtering (relevance threshold: 0.48)
 - RAG-based extraction with justifications
 - Batch processing (8 pages/batch, 3 concurrent)
 
@@ -69,7 +69,7 @@ AI Intent Modeling (Gemini Flash)
   ↓
 ArXiv API (via backend proxy)
   ↓
-Semantic Filtering (vector similarity, threshold: 0.30)
+Semantic Filtering (vector similarity, threshold: 0.48)
   ↓
 PDF Download (asyncPool: 3 concurrent)
   ↓
@@ -124,7 +124,6 @@ AuthContext         → Multi-tier auth, data migration
 - ⚠️ **Embedding model migration:** text-embedding-004 → gemini-embedding-001 (Feb 6 shutdown)
 - ⚠️ **Zero results fix:** Cache clearing + retry logic (commit a90481f)
 - ⚠️ **ArXiv CORS:** Backend proxy for API access
-- ⚠️ **Relevance threshold:** 0.48 → 0.30 (less restrictive)
 - ⚠️ **Structured logging:** Emojis + formatted boxes for debugging
 
 ### Known Issues

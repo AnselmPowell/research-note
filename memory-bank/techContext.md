@@ -54,7 +54,7 @@ POST /enhance-metadata      // Extract title/author from PDF first 4 pages
 POST /arxiv-search-terms   // Generate structured ArXiv queries
 POST /embedding            // Get single embedding (768-dim)
 POST /batch-embeddings     // Batch embed up to 50 texts
-POST /filter-papers        // Cosine similarity filtering (threshold: 0.30)
+POST /filter-papers        // Cosine similarity filtering (threshold: 0.48)
 POST /extract-notes        // Extract quotes + justifications from pages
 POST /search               // Google Custom Search API
 ```
