@@ -148,146 +148,159 @@ Return JSON array of strings.`;
 
 
 async function generateArxivSearchTerms(topics, questions) {
-  console.log('📊 Generating ArXiv search terms...');
+  console.log('📊 Generating ArXiv search terms (keyword-focused)...');
 
-  const systemPrompt = `You are an arXiv search expert who creates SHORT, TARGETED keywords that actually find relevant papers, to figure out the BEST keyword to get the most relevant papers, you must understand the USER'S INTENT and what be most valuable to them.
+  const userQuery = [...topics, ...questions].join('. ');
 
-CRITICAL RULES FOR ARXIV SUCCESS:
-1. arXiv search works BEST with 1-3 word phrases, to figure out the BEST keyword you must understand the USER'S INTENT and what be most valuable to them.
-2. Use EXACT keywords that appear in academic paper titles
-3. Start with the MAIN SUBJECT/DOMAIN first
-4. Avoid connecting words (like "for", "in", "of", "the")
-5. Generate MORE terms (4-5 each) but keep them SHORT
+  const systemPrompt = `You are an academic keyword generation engine.
 
-IMPORTANT CONSIDERATIONS:
-- Focus on the CORE of what the user is looking for, not generic related terms
-- If the user asking for a specific process, method, or relationship, prioritize terms that reflect that specificity
-- If the user is asking for a specific period or historical time frame you Must priorities and include it in all search terms (e.g. "If they ask for World war 1, you should include "world war 1" in all search terms not just the word "war")
-- If the user is asking about a specific time, tool, method, or relationship, prioritize and always incluse those specifics in all search terms.
-- Understand the user's intent and generate spectific search terms not generic ones.
+Your sole task is to convert a user's natural-language research question into high-quality academic search keywords suitable for abstract-only searches in academic paper databases.
 
-RESPONSE FORMAT (STRICT JSON):
+You must follow the rules below exactly.
+
+OBJECTIVE
+Given a user research question, generate:
+One primary keyword phrase that captures the core academic subject
+Three secondary keyword phrases that represent: key variables, mechanisms, scope (e.g. global, longitudinal, comparative, psychological, economic)
+Then generate multiple keyword combinations using strict AND logic, prioritised from most specific → slightly broader.
+
+CRITICAL RULES
+1. Preserve academic entities
+If the query contains a named historical event, theory, discipline, or proper noun, it must remain intact as a single phrase
+Example:
+✅ "world war 1"
+❌ "world" AND "war" AND "1"
+
+2. Use academic phrasing
+Convert informal language into terminology commonly used in academic literature
+Example:
+User: "athlete mental state and wellbeing"
+Output: "sports psychology", "mental health"
+
+3. Avoid noise
+Do NOT include:
+filler words
+verbs
+questions
+adjectives unless academically meaningful
+Every keyword must plausibly appear in an academic abstract
+
+4. primary words should be the main subject the user is focusing on
+understand what the user wants to know about, e.g time period, object, method, place etc.. make that the main keyword.
+the primary key will show up with every search so it must be focused and main subject matter/period/methods etc in time or place
+
+5. Secondary_keywords should be one word only
+This additional keyword should complete the query asked by the user
+max of 3 key words
+
+OUTPUT FORMAT (MANDATORY)
+Return ONLY valid JSON. No explanations. No markdown. No prose.
 {
-  "exact_phrases": [3-4 phrases, 2-3 words max],
-  "title_terms": [3-4 terms, 2-3 words max], 
-  "abstract_terms": [3 single keywords, 1 word only, MUST PROVIDE MIN OF 3 KEYWORDS],
-  "general_terms": [3-4 terms, 2-3 words max]
+  "primary_keyword": "string",
+  "secondary_keywords": ["string", "string", "string"],
+  "query_combinations": [
+    "primary AND secondary AND secondary",
+    "primary AND secondary",
+    "primary AND secondary"
+  ]
 }
 
-EXAMPLES OF WHAT WORKS IN ARXIV:
+EXAMPLES (FOLLOW THESE PATTERNS EXACTLY)
 
-EXAMPLE 1 - FINANCIAL MARKETS:
-Topic: "financial markets" 
-Query: "what is market volatility"
-
-✅ PERFECT FOR ARXIV:
+Example 1
+User query: "How did World War 1 affect food supplies globally?"
 {
-  "exact_phrases": ["market volatility", "financial volatility", "price volatility", "volatility models", "market risk"],
-  "title_terms": ["market volatility", "financial markets", "price dynamics", "volatility forecasting", "market behavior"],
-  "abstract_terms": ["volatility", "stock market", "finance"],
-  "general_terms": ["stock market", "market volatility", "financial risk", "price movements"]
+  "primary_keyword": "world war 1",
+  "secondary_keywords": ["food", "global"],
+  "query_combinations": [
+    "world war 1 AND food AND global",
+    "world war 1 AND food",
+    "world war 1 AND global"
+  ]
 }
 
-EXAMPLE 2 - URBAN PLANNING:
-Topic: "urban planning sustainability"
-Query: "green infrastructure benefits"
-
-✅ PERFECT FOR ARXIV:
+Example 2
+User query: "Athlete mental state and wellbeing in competitive sport"
 {
-  "exact_phrases": ["urban planning", "green infrastructure", "sustainable cities", "urban sustainability", "smart cities"],
-  "title_terms": ["urban planning", "green infrastructure", "sustainable development", "city planning", "urban design"],
-  "abstract_terms": ["sustainability", "infrastructure", "urban"],
-  "general_terms": ["urban sustainability", "green cities", "sustainable planning", "eco cities"]
+  "primary_keyword": "sports psychology",
+  "secondary_keywords": ["mental health", "athlete wellbeing", "competitive sport"],
+  "query_combinations": [
+    "sports psychology AND mental health AND competitive sport",
+    "sports psychology AND athlete wellbeing",
+    "sports psychology AND mental health"
+  ]
 }
 
-EXAMPLE 3 - HISTORY (WW1 Focus)
-Topic: "World War 1" Query: "food supplies effect after the war"
-
-✅ PERFECT FOR ARXIV (Anchored):
-
-json
+Example 3
+User query: "How does inflation affect unemployment rates?"
 {
-  "exact_phrases": ["World War 1 food supply", "post-World War One food scarcity", "World War 1 agriculture", "1914-1918 food distribution", "World War 1 rationing"],
-  "title_terms": ["World War 1", "Great War", "1914-1918", "food", "supply"],
-  "abstract_terms": ["World War 1", "World War One", "Great War", "nutrition", "1919"],
-  "general_terms": ["World War 1 economy", "post-World War 1 recovery", "1914-1918 logistics"]
+  "primary_keyword": "inflation",
+  "secondary_keywords": ["unemployment", "labor market", "economic growth"],
+  "query_combinations": [
+    "inflation AND unemployment AND labor market",
+    "inflation AND unemployment",
+    "inflation AND economic growth"
+  ]
 }
 
-EXAMPLE 4 - CLIMATE SCIENCE (Specific Region)
-Topic: "Great Barrier Reef" Query: "coral bleaching impact on biodiversity"
-
-✅ PERFECT FOR ARXIV (Anchored):
-
-json
+Example 4
+User query: "How does social media influence teenage identity?"
 {
-  "exact_phrases": ["Great Barrier Reef bleaching", "Great Barrier Reef coral death", "Great Barrier Reef biodiversity loss", "Great Barrier Reef ecosystems", "Great Barrier Reef heat stress"],
-  "title_terms": ["Great Barrier Reef", "bleaching", "reef", "biodiversity"],
-  "abstract_terms": ["Great Barrier Reef", "Acropora", "Queensland coast"],
-  "general_terms": ["Great Barrier Reef climate change", "Great Barrier Reef ecology"]
-}
-EXAMPLE 5 - LAW / POLITICS (Specific Clause)
-Topic: "Second Amendment" Query: "legal interpretations of the well regulated militia clause"
-
-✅ PERFECT FOR ARXIV (Anchored):
-
-{
-  "exact_phrases": ["Second Amendment militia", "Second Amendment interpretation", "Second Amendment rights", "Constitution Second Amendment", "Second Amendment well regulated"],
-  "title_terms": ["Second Amendment", "Constitution", "militia", "gun rights"],
-  "abstract_terms": ["Second Amendment", "Bill of Rights", "firearms"],
-  "general_terms": ["Second Amendment law", "Second Amendment history", "2nd Amendment"]
+  "primary_keyword": "social media",
+  "secondary_keywords": ["teenage", "adolescent", "development"],
+  "query_combinations": [
+    "social media AND teenage AND adolescent",
+    "social media AND teenage AND development",
+    "social media AND teenage",
+    "social media AND development"
+  ]
 }
 
-EXAMPLE 6 - MEDICINE (Specific Condition)
-Topic: "Type 1 Diabetes" Query: "impact of continuous glucose monitoring on HbA1c"
-✅ PERFECT FOR ARXIV (Anchored):
+Example 5
+User query: "What impact does sleep deprivation have on memory?"
 {
-  "exact_phrases": ["Type 1 Diabetes CGM", "Type 1 Diabetes glucose monitoring", "Type 1 Diabetes HbA1c", "juvenile diabetes monitoring", "T1D continuous monitoring"],
-  "title_terms": ["Type 1 Diabetes", "T1D", "glucose monitoring", "HbA1c"],
-  "abstract_terms": ["Type 1 Diabetes", "insulin", "blood sugar"],
-  "general_terms": ["Type 1 Diabetes management", "Type 1 Diabetes technology"]
+  "primary_keyword": "sleep deprivation",
+  "secondary_keywords": ["memory", "cognitive function", "learning"],
+  "query_combinations": [
+    "sleep deprivation AND memory AND cognitive function",
+    "sleep deprivation AND memory",
+    "sleep deprivation AND learning"
+  ]
 }
 
-KEY SUCCESS FACTORS:
-- Use terms that would appear in actual paper TITLES
-- Focus on the core what the user is looking for, not generic related terms
-- Place key user intent at the front of the search term 
-- Generate enough options (4-5) for good coverage
-- Think like an academic author naming their paper
-- Each search term MUST contain at least one keyword from the original user topics or questions, BUT by understanding the user's intent you can modify those keywords to be more effective for search (e.g. "Sport pychology" could become "athlete mental health" if it better matches the user's intent)
-- If the user is asking for a specific period or historical time frame you Must priorities and include it in all search terms (e.g. "If they ask for World war 1, you should include "world war 1" in all search terms not just the word "war")
-- If the user is asking about a specific time, tool, method, or relationship, prioritize and always incluse those specifics in all search terms.
-- Understand the user's intent and generate spectific search terms not generic ones.
-
-RESPONSE FORMAT (STRICT JSON):
+Example 6
+User query: "How does climate change affect coral reefs?"
 {
-  "exact_phrases": [3-4 phrases, 2-3 words max],
-  "title_terms": [3-4 terms, 2-3 words max], 
-  "abstract_terms": [3 single keywords, 1 word only, MUST PROVIDE MIN OF 3 KEYWORDS],
-  "general_terms": [3-4 terms, 2-3 words max]
+  "primary_keyword": "climate change",
+  "secondary_keywords": ["coral reefs", "marine", "ocean"],
+  "query_combinations": [
+    "climate change AND coral reefs AND marine",
+    "climate change AND coral reefs",
+    "climate change AND ocean"
+  ]
 }
-`;
 
-  const userPrompt = `RESEARCH TOPICS: ${topics.join(', ')}
+Example 7
+User query: "Does class size affect student academic performance?"
+{
+  "primary_keyword": "classroom size",
+  "secondary_keywords": ["academic performance", "performance", "education"],
+  "query_combinations": [
+    "classroom size AND academic performance",
+    "classroom size AND performance",
+    "classroom size AND education"
+  ]
+}
 
-SPECIFIC RESEARCH QUESTIONS:
-${questions.map(q => `- ${q}`).join('\n')}
-
-Based on these research topics and questions provided by the user, generate optimized and highly relevant search terms for finding academic papers on arXiv, you must understand what the user is specifically looking for to genarate relevant topics.
-
-IMPORTANT: 
-- You must first take time to understand the main research subject and the specific questions the user wants to answer.
-- Make sure that those keywords are at the FRONT of the search terms (This is very important for arXiv search relevance)
-- Each search term MUST contain at least one keyword from the original user topics or questions, BUT by understanding the user's intent you can modify those keywords to be more effective for search (e.g. "Sport pychology" could become "athlete mental health" if it better matches the user's intent)
-- These terms will be passed to arXiv API but don't make them generic one-word phrases
-- These terms will be passed to arXiv API to look for matching paper titles and abstracts.
-- Must contain at least 3 keywords for the abstrct_terms 
-Return ONLY valid JSON matching the format specified in the system prompt.`;
+User query:
+"${userQuery}"`;
 
   const fallback = {
-    exact_phrases: questions.slice(0, 3),
-    title_terms: topics.slice(0, 3),
-    abstract_terms: [...topics, ...questions].slice(0, 3),
-    general_terms: [...topics, ...questions].slice(0, 3)
+    primary_keyword: topics[0] || questions[0] || '',
+    secondary_keywords: [...topics.slice(1), ...questions].slice(0, 3),
+    query_combinations: topics.length > 0
+      ? topics.map(t => t)
+      : questions.map(q => q)
   };
 
   try {
@@ -296,69 +309,39 @@ Return ONLY valid JSON matching the format specified in the system prompt.`;
     const model = genAI.getGenerativeModel({
       model: 'gemini-3-flash-preview',
       generationConfig: {
-        responseMimeType: "application/json"
+        responseMimeType: 'application/json',
+        temperature: 0.1
       }
     });
 
     const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      systemInstruction: { parts: [{ text: systemPrompt }] }
+      contents: [{ role: 'user', parts: [{ text: systemPrompt }] }]
     });
 
     const response = await result.response;
-    const parsedTerms = JSON.parse(cleanJson(response.text()));
+    const parsed = JSON.parse(cleanJson(response.text()));
 
-    // ✅ VALIDATION LAYER (from Python v1)
-    // Extract keywords from original topics/questions (words > 3 chars)
-    const allKeywords = new Set();
+    // Flatten query_combinations — LLM may return [["a AND b"], ["a AND c"]] (nested) or ["a AND b"] (flat)
+    let combos = parsed.query_combinations || [];
+    combos = combos.map(c => Array.isArray(c) ? c[0] : c).filter(c => c && typeof c === 'string');
 
-    topics.forEach(topic => {
-      topic.split(/\s+/).forEach(word => {
-        if (word.length > 3) allKeywords.add(word.toLowerCase());
-      });
-    });
-    questions.forEach(query => {
-      query.split(/\s+/).forEach(word => {
-        if (word.length > 3) allKeywords.add(word.toLowerCase());
-      });
-    });
+    const validated = {
+      primary_keyword: (parsed.primary_keyword && typeof parsed.primary_keyword === 'string')
+        ? parsed.primary_keyword.trim()
+        : fallback.primary_keyword,
+      secondary_keywords: Array.isArray(parsed.secondary_keywords)
+        ? parsed.secondary_keywords.filter(s => s && typeof s === 'string').slice(0, 3)
+        : fallback.secondary_keywords,
+      query_combinations: combos.length > 0 ? combos : fallback.query_combinations
+    };
 
-    // Validate and filter terms
-    const validatedTerms = {};
-    ['exact_phrases', 'title_terms', 'abstract_terms', 'general_terms'].forEach(key => {
-      if (!parsedTerms[key] || !Array.isArray(parsedTerms[key])) {
-        parsedTerms[key] = [];
-      }
+    // Safety net: if combinations empty but primary exists, build one
+    if (validated.query_combinations.length === 0 && validated.primary_keyword) {
+      validated.query_combinations = [validated.primary_keyword];
+    }
 
-      validatedTerms[key] = parsedTerms[key].filter(term => {
-        if (!term || typeof term !== 'string' || term.length < 2) return false;
-
-        // For abstract and general terms, we trust the LLM's conceptual relation
-        // so we skip the strict overlap check to prevent falling back to broad questions
-        if (key === 'abstract_terms' || key === 'general_terms') return true;
-
-        const termWords = new Set(term.toLowerCase().split(/\s+/));
-        // Check if term contains at least one keyword from original query
-        const hasOverlap = [...allKeywords].some(kw => [...termWords].some(tw => tw.includes(kw) || kw.includes(tw)));
-        return allKeywords.size === 0 || hasOverlap;
-      });
-
-      // Fallback: if no terms passed validation, use original topics/queries
-      if (validatedTerms[key].length === 0) {
-        if (key === 'exact_phrases') {
-          validatedTerms[key] = questions.filter(q => q.split(/\s+/).length > 1).slice(0, 3);
-        } else if (key === 'title_terms') {
-          validatedTerms[key] = topics.filter(t => t.split(/\s+/).length > 1).slice(0, 3);
-        } else if (key === 'abstract_terms') {
-          validatedTerms[key] = questions.slice(0, 3);
-        } else if (key === 'general_terms') {
-          validatedTerms[key] = [...topics, ...questions].slice(0, 3);
-        }
-      }
-    });
-
-    console.log('✅ Generated and validated ArXiv search terms:', validatedTerms);
-    return validatedTerms;
+    console.log('✅ Generated keyword-focused search terms:', validated);
+    return validated;
 
   } catch (error) {
     logger.warn('❌ Error generating ArXiv search terms:', error);
@@ -1187,17 +1170,6 @@ async function performSearch(query) {
     allQueries
   };
 }
-
-module.exports = {
-  enhanceMetadata,
-  generateSearchVariations,
-  generateArxivSearchTerms,
-  getEmbedding,
-  getBatchEmbeddings,
-  filterRelevantPapers,
-  extractNotesFromPages,
-  performSearch
-};
 
 async function generateInsightQueries(userQuestions, contextQuery) {
   const prompt = `Context: The user has gathered several academic PDF papers regarding "${contextQuery}".

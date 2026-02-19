@@ -9,8 +9,11 @@ const CONCURRENCY_LIMIT = 4;
 // Helper to delay execution (Rate Limits)
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-/** Searching arXiv: 
- * Builds specific arXiv API query strings from the structured object.
+/**
+ * Builds arXiv API query strings from the keyword-focused structure.
+ * Primary strategy: abs: field AND combinations (most precise)
+ * Fallback strategy: ti: + abs: mixed queries (broader coverage)
+ * Emergency: all: queries from original topics
  */
 export const buildArxivQueries = (
   structured: ArxivSearchStructured,
@@ -18,66 +21,58 @@ export const buildArxivQueries = (
   originalQuestions: string[]
 ): string[] => {
   const queries: string[] = [];
-
   const clean = (s: string) => s.replace(/[\\]/g, '').trim();
 
-  // Helper to ensure terms staying inside their field prefix with grouped Boolean logic
-  const formatField = (prefix: string, term: string, useAnd = true) => {
-    const cleaned = clean(term);
-    if (!cleaned) return null;
+  // === PRIMARY STRATEGY: Abstract AND combinations (most precise) ===
+  // Each query_combination is like "world war 1 AND food AND global"
+  // Split on AND, wrap each term for the abs: field
+  structured.query_combinations.forEach(combo => {
+    const terms = combo.split(/\s+AND\s+/).map(t => clean(t)).filter(t => t.length > 0);
+    if (terms.length === 0) return;
 
-    const words = cleaned.split(/\s+/).filter(w => w.length > 0);
-    if (words.length > 1) {
-      // Group with AND logic to keep related words within the same field prefix
-      // e.g., ti:(World AND War AND 1) instead of ti:World War 1
-      const operator = useAnd ? ' AND ' : ' OR ';
-      return `${prefix}:(${words.join(operator)})`;
-    }
-    return `${prefix}:${cleaned}`;
-  };
+    const absQuery = terms.map(t => {
+      const words = t.split(/\s+/).filter(w => w.length > 0);
+      // Multi-word term: keep words AND'd within the abs field
+      return words.length > 1 ? `abs:(${words.join(' AND ')})` : `abs:${t}`;
+    }).join(' AND ');
 
-  // 1. Exact Phrases - Grouped with AND to ensure all specific words are present
-  structured.exact_phrases.forEach(phrase => {
-    const q = formatField('all', phrase);
-    if (q) queries.push(q);
+    if (absQuery) queries.push(absQuery);
   });
 
-  // 2. Title Terms - "ti"
-  structured.title_terms.forEach(term => {
-    const q = formatField('ti', term);
-    if (q) queries.push(q);
-  });
+  // === FALLBACK STRATEGY: Title primary + abstract secondary ===
+  const primaryClean = clean(structured.primary_keyword);
+  if (primaryClean) {
+    const primaryWords = primaryClean.split(/\s+/).filter(w => w.length > 0);
+    const tiPrimary = primaryWords.length > 1
+      ? `ti:(${primaryWords.join(' AND ')})` : `ti:${primaryClean}`;
 
-  // 3. Abstract Terms - "abs"
-  const absRaw = structured.abstract_terms.map(t => clean(t)).filter(t => t.length > 1);
-  if (absRaw.length > 0) {
-    // Join with OR to find ANY of these key concepts in the abstract
-    const combined = absRaw.map(t => `abs:${t}`).join(' OR ');
-    queries.push(`(${combined})`);
+    structured.secondary_keywords.forEach(sec => {
+      const secClean = clean(sec);
+      if (!secClean) return;
+      const secWords = secClean.split(/\s+/).filter(w => w.length > 0);
+      const absSec = secWords.length > 1
+        ? `abs:(${secWords.join(' AND ')})` : `abs:${secClean}`;
+      queries.push(`${tiPrimary} AND ${absSec}`);
+    });
+
+    // Safety net: just the primary keyword on abs:
+    queries.push(primaryWords.length > 1
+      ? `abs:(${primaryWords.join(' AND ')})` : `abs:${primaryClean}`);
   }
 
-  // 4. General Terms - "all"
-  structured.general_terms.forEach(term => {
-    const q = formatField('all', term);
-    if (q) queries.push(q);
-  });
-
-  // 5. Original User Topics (Fallback)
-  originalTopics.forEach(topic => {
-    const q = formatField('all', topic);
-    if (q) queries.push(q);
-  });
-
-  // 6. Original Questions (Grouped to avoid quoting failure)
-  originalQuestions.forEach(q => {
-    // Only use first 40 chars of question to avoid overly complex queries
-    const shortQ = clean(q).substring(0, 40);
-    const qField = formatField('all', shortQ);
-    if (qField) queries.push(qField);
-  });
+  // === EMERGENCY FALLBACK: Original topics as all: queries ===
+  if (queries.length === 0) {
+    originalTopics.forEach(topic => {
+      const cleaned = clean(topic);
+      if (cleaned) {
+        const words = cleaned.split(/\s+/).filter(w => w.length > 0);
+        queries.push(words.length > 1 ? `all:(${words.join(' AND ')})` : `all:${cleaned}`);
+      }
+    });
+  }
 
   const finalQueries = Array.from(new Set(queries));
-  console.log(`[ArXiv Debug] Built ${finalQueries.length} distinct queries.`);
+  console.log(`[ArXiv Debug] Built ${finalQueries.length} distinct queries:`, finalQueries);
   return finalQueries;
 };
 

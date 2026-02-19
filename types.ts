@@ -99,10 +99,9 @@ export interface ArxivPaper {
 }
 
 export interface ArxivSearchStructured {
-  exact_phrases: string[];
-  title_terms: string[];
-  abstract_terms: string[];
-  general_terms: string[];
+  primary_keyword: string;
+  secondary_keywords: string[];
+  query_combinations: string[];
 }
 
 export type SearchMode = 'web' | 'deep' | 'upload';

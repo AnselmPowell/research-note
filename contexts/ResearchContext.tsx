@@ -568,7 +568,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Then do ArXiv search
       if (signal.aborted) return;
       const structuredTerms = await generateArxivSearchTerms(query.topics, query.questions);
-      const displayKeywords = [...structuredTerms.exact_phrases, ...structuredTerms.title_terms, ...structuredTerms.abstract_terms, ...structuredTerms.general_terms];
+      const displayKeywords = [structuredTerms.primary_keyword, ...structuredTerms.secondary_keywords].filter(Boolean);
       setArxivKeywords(displayKeywords);
 
       if (signal.aborted) return;
