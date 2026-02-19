@@ -22,7 +22,6 @@ export interface PdfMetadata {
   title?: string;
   author?: string;
   subject?: string;
-  year?: string;
   harvardReference?: string;
   publisher?: string;
   categories?: string[];
@@ -90,7 +89,6 @@ export interface ArxivPaper {
   pdfUri: string;
   publishedDate: string;
   sourceQuery?: string;
-  sourceApi?: 'arxiv' | 'openalex' | 'google_cse' | 'pdfvector' | 'google_grounding';
   relevanceScore?: number;
   analysisStatus?: 'pending' | 'downloading' | 'processing' | 'completed' | 'failed' | 'stopped';
   notes?: DeepResearchNote[];

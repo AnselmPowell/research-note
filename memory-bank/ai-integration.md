@@ -23,37 +23,83 @@ try {
 
 ## Deep Research Pipeline (5 Phases)
 
-### Phase 1: Intent Modeling
-Generate structured ArXiv search terms from user input.
+### Phase 1: Academic Keyword Generation (UPDATED Feb 19)
+Generate focused primary + secondary keywords with AND combinations.
 
-```typescript
-const generateArxivSearchTerms = async (topics: string[], questions: string[]) => {
-  const prompt = `Generate structured search terms:
-    { "exact_phrases": [], "title_terms": [], "abstract_terms": [], "general_terms": [] }`;
+```javascript
+// backend/services/geminiService.js — generateArxivSearchTerms()
+// Model: gemini-3-flash-preview, temperature: 0.1, responseMimeType: application/json
+// Prompt: Academic keyword engine with 7 worked examples
 
-  return ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: prompt,
-    config: { responseMimeType: "application/json" }
-  });
-};
+// Input: topics + questions joined as userQuery
+// Output:
+{
+  primary_keyword: "world war 1",          // Core academic subject
+  secondary_keywords: ["food", "global"],  // Single-word completions (max 3)
+  query_combinations: [                    // AND combos, most specific → broader
+    "world war 1 AND food AND global",
+    "world war 1 AND food",
+    "world war 1 AND global"
+  ]
+}
+
+// Validation: flatten nested arrays, type-check fields, fallback to raw topics
+// LLM may return [["a AND b"]] (nested) — flattened with: combos.map(c => Array.isArray(c) ? c[0] : c)
 ```
 
-### Phase 2: Distributed Gathering
-High-concurrency ArXiv search with backend proxy for CORS.
+### Phase 2: Multi-Source Distributed Search (OVERHAULED Feb 19)
+5 search APIs in parallel via `searchAggregator.ts`, each with optimised query format.
 
 ```typescript
-// Backend proxy on port 3001 (Node.js/Express)
-app.get('/api/arxiv-proxy', async (req, res) => {
-  const arxivUrl = `https://export.arxiv.org/api/query?${req.query.params}`;
-  const response = await fetch(arxivUrl);
-  res.send(await response.text());
-});
+// services/searchAggregator.ts — searchAllSources()
+// Called from ResearchContext.tsx (replaces old direct searchArxiv call)
 
-// Frontend: asyncPool for controlled concurrency
-await asyncPool(4, queries, async (query) => {
-  return fetch(`http://localhost:3001/api/arxiv-proxy?params=${query}`);
-});
+// Each API gets its optimal query format from same ArxivSearchStructured:
+const arxivQueries = buildArxivQueries(structured, topics, questions);  // abs: AND queries
+const booleanQuery = buildBooleanQuery(structured);   // "world war 1" AND "food" AND "global"
+const groundingQ = buildGroundingQuery(structured);    // natural language + site:.edu operators
+
+// Promise.allSettled: one API failing never blocks others
+const [arxiv, openAlex, cse, pdfVector, grounding] = await Promise.allSettled([
+  searchArxiv(arxivQueries, undefined, topics),           // ArXiv abs: AND queries
+  fetchOpenAlex(booleanQuery),                             // Free academic DB
+  fetchGoogleCSE(booleanQuery),                            // 50 PDF results
+  fetchPDFVector(booleanQuery, allKeywords),               // Client-side re-ranking
+  fetchGoogleGrounding(groundingQ)                         // Gemini googleSearch tool
+]);
+
+// Merge + deduplicate by pdfUri (lowercased)
+// Priority: ArXiv → OpenAlex → PDFVector → CSE → Grounding
+```
+
+**ArXiv Query Builder** (`arxivService.ts:buildArxivQueries`):
+```typescript
+// PRIMARY: "world war 1 AND food AND global" → abs:(world AND war AND 1) AND abs:food AND abs:global
+// FALLBACK: ti:(world AND war AND 1) AND abs:food  (title primary + abstract secondary)
+// SAFETY NET: abs:(world AND war AND 1)  (just primary keyword)
+// EMERGENCY: all:(world AND war AND 1)  (original topics)
+```
+
+**Normalisers** — each API's response → unified `ArxivPaper[]`:
+- `normaliseOpenAlex()` — reconstructs abstract from inverted index, requires PDF URL
+- `normaliseGoogleCSE()` — extracts from metatags, requires PDF link
+- `normalisePDFVector()` — includes relevance scoring (+100 if ALL keywords found)
+- `normaliseGrounding()` — filters for PDF results only, extracts year from summary
+
+**Backend Proxy Routes** (`backend/routes/search.js`):
+```javascript
+POST /api/v1/search/openalex    // Free, mailto polite pool, has_fulltext:true, 50 results
+POST /api/v1/search/google-cse  // 5 pages × 10, fileType:pdf, GOOGLE_SEARCH_KEY+CX
+POST /api/v1/search/pdfvector   // 40 over-fetched, full fields for scoring, 65s timeout
+// All return { success: true, data: [] } on failure — never throw
+```
+
+**Google Grounding** (`backend/services/geminiService.js:searchWithGrounding`):
+```javascript
+// Uses gemini-3-flash-preview with tools: [{ googleSearch: {} }]
+// Prompt asks for top 10-15 academic PDFs with summaries
+// retryWithBackoff: 3 retries on 503, exponential delay starting 1000ms
+// Route: POST /api/v1/gemini/grounding-search
 ```
 
 ### Phase 3: Semantic Distillation

@@ -51,12 +51,20 @@ research-note/
 ### Gemini AI (`/api/v1/gemini/*`)
 ```javascript
 POST /enhance-metadata      // Extract title/author from PDF first 4 pages
-POST /arxiv-search-terms   // Generate structured ArXiv queries
+POST /arxiv-search-terms   // Generate primary + secondary keywords + AND combinations
 POST /embedding            // Get single embedding (768-dim)
 POST /batch-embeddings     // Batch embed up to 50 texts
 POST /filter-papers        // Cosine similarity filtering (threshold: 0.48)
 POST /extract-notes        // Extract quotes + justifications from pages
 POST /search               // Google Custom Search API
+POST /grounding-search     // NEW: Gemini googleSearch tool for PDF discovery
+```
+
+### Search Proxies (`/api/v1/search/*`) — NEW Feb 19
+```javascript
+POST /openalex             // Free academic DB, has_fulltext:true, 50 results
+POST /google-cse           // 5 pages × 10 = 50 PDF results, fileType:pdf
+POST /pdfvector            // 40 over-fetched results, client re-ranked
 ```
 
 ### Database (`/api/v1/database/*`)
@@ -89,8 +97,10 @@ VITE_MS_TENANT_ID=common
 ```bash
 GEMINI_API_KEY=<your-gemini-key>
 DATABASE_URL=postgresql://<neon-connection-string>
-GOOGLE_SEARCH_KEY=<optional>
+GOOGLE_SEARCH_KEY=<google-cse-key>
+GOOGLE_SEARCH_CX=<google-cse-cx>
 OPENAI_API_KEY=<optional-fallback>
+PDFVECTOR_API_KEY=<pdfvector-key>  # Hardcoded default exists as fallback
 ```
 
 ## Technical Constraints
@@ -155,28 +165,58 @@ docker run -p 3000:3000 \
 
 ### Global Types (types.ts)
 ```typescript
+interface ArxivSearchStructured {
+  primary_keyword: string;        // Core academic subject
+  secondary_keywords: string[];   // 1-word completions (max 3)
+  query_combinations: string[];   // AND combinations for abs: search
+}
+
+interface ArxivPaper {
+  id: string;
+  title: string;
+  summary: string;
+  authors: string[];
+  pdfUri: string;
+  publishedDate: string;
+  sourceQuery?: string;
+  sourceApi?: 'arxiv' | 'openalex' | 'google_cse' | 'pdfvector' | 'google_grounding';
+  relevanceScore?: number;
+  analysisStatus?: 'pending' | 'downloading' | 'processing' | 'completed' | 'failed' | 'stopped';
+  notes?: DeepResearchNote[];
+  references?: string[];
+  harvardReference?: string;
+  publisher?: string;
+  categories?: string[];
+}
+
 interface DeepResearchNote {
   quote: string;
   justification: string;
   relatedQuestion: string;
   pageNumber: number;
-  pdfUri: string;              // ⚠️ Critical for linking to PDF
-  relevanceScore: number;      // 0.0-1.0 cosine similarity
-  citations: string[];
+  pdfUri: string;
+  relevanceScore: number;
+  citations: Citation[];
 }
 
-type ResearchPhase =
-  | 'idle'
-  | 'searching'                // Querying ArXiv
-  | 'filtering'                // Relevance scoring
-  | 'extracting'               // Extracting notes
-  | 'completed'
-  | 'failed';
+type ResearchPhase = 'idle' | 'initializing' | 'searching' | 'filtering' | 'extracting' | 'completed' | 'failed';
 ```
 
 ## Recent Technical Changes (Feb 2026)
 
-### Embedding Model Migration
+### Multi-Source Search Aggregation (Feb 19)
+- **Before**: ArXiv only, 12+ loose queries, 200+ low-relevance papers
+- **After**: 5 APIs in parallel, focused AND queries, merged + deduplicated by pdfUri
+- **New Files**: `searchAggregator.ts`, `backend/routes/search.js`
+- **Key Pattern**: `Promise.allSettled` — one API failing never blocks others
+
+### Academic Keyword Engine (Feb 19)
+- **Before**: 4 arrays of scattered terms (exact_phrases, title_terms, abstract_terms, general_terms)
+- **After**: 1 primary keyword + 3 single-word secondaries + AND query combinations
+- **ArXiv Query Format**: `abs:(world AND war AND 1) AND abs:food AND abs:global`
+- **Fallback Chain**: abs: AND combos → ti: primary + abs: secondary → all: original topics
+
+### Embedding Model Migration (Feb 6)
 - **Before**: `text-embedding-004` (Google shut down Jan 14)
 - **After**: `gemini-embedding-001` (768-dim, same API)
 - **Impact**: All paper filtering working again

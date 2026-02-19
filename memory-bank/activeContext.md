@@ -1,103 +1,76 @@
 # Active Context - Research Note
 
-## Current Work Focus (February 6, 2026)
+## Current Work Focus (February 19, 2026)
 
-### Primary Active Focus: Production Stability & Backend Migration
+### Primary Active Focus: Multi-Source Search Aggregation & ArXiv Precision
 
-**Recent Major Accomplishments:**
-1. ✅ **Backend API Proxy Architecture** - Migrated all AI/DB operations to Node.js/Express backend (port 3001)
-2. ✅ **Embedding Model Migration** - Updated from `text-embedding-004` to `gemini-embedding-001` (Google shutdown on Jan 14)
-3. ✅ **Zero Results Bug Fix** - Fixed cache clearing and retry logic when filtering returns 0 papers
-4. ✅ **Comprehensive Logging** - Added structured logging for PDF URI tracking and paper filtering
+**Recent Major Accomplishments (Feb 19, 2026):**
+1. ✅ **ArXiv Search Precision Overhaul** — Replaced scattered keyword generation with focused primary+secondary keyword system using `abs:` AND queries
+2. ✅ **Multi-Source Search Aggregator** — NEW `searchAggregator.ts` runs 5 search APIs in parallel (ArXiv, OpenAlex, Google CSE, PDFVector, Google Grounding)
+3. ✅ **Academic Keyword Engine** — New LLM prompt generates 1 primary keyword + 3 single-word secondaries + AND combinations
+4. ✅ **Backend Search Proxy Routes** — NEW `backend/routes/search.js` with OpenAlex, Google CSE, PDFVector endpoints
+5. ✅ **Google Grounding Search** — NEW `searchWithGrounding()` in geminiService uses Gemini's `googleSearch` tool
 
-### Latest Session Fixes (Feb 6, 2026)
+**Previous Accomplishments (Feb 6, 2026):**
+- ✅ Backend API Proxy Architecture
+- ✅ Embedding Model Migration (`text-embedding-004` → `gemini-embedding-001`)
+- ✅ Zero Results Bug Fix
+- ✅ Comprehensive Logging
 
-**Bug: Search Blocked After Zero Results**
-- **Issue**: When embedding model failed, search found 122 papers but filtered to 0. User couldn't retry search.
-- **Root Cause 1**: `App.tsx` checked `arxivCandidates.length > 0` instead of `filteredCandidates.length`
-- **Root Cause 2**: `ResearchContext` saved broken state to localStorage (papers with 0 visible results)
-- **Fix**: Check `filteredCandidates.length` for visible results, auto-clear cache when all counts = 0
-- **Commit**: `a90481f`
+### Latest Session Changes (Feb 19, 2026)
 
-**Bug: Embedding API 404 Errors**
-- **Issue**: All paper filtering failed silently with `text-embedding-004` returning 404
-- **Root Cause**: Google shut down embedding model on January 14, 2026
-- **Fix**: Updated to `gemini-embedding-001` (768-dim → 768-dim, same API)
-- **Commit**: `0066128`
+**Overhaul: ArXiv Search Keyword Generation**
+- **Problem**: Old system generated 4 arrays of scattered terms (`exact_phrases`, `title_terms`, `abstract_terms`, `general_terms`), producing 12+ loose queries returning 200+ low-relevance papers
+- **Solution**: New academic keyword engine generates focused `primary_keyword` + `secondary_keywords` + `query_combinations` with AND logic on `abs:` field
+- **Type Change**: `ArxivSearchStructured` replaced from 4 arrays → 3 fields:
+  ```typescript
+  // OLD
+  { exact_phrases: string[], title_terms: string[], abstract_terms: string[], general_terms: string[] }
+  // NEW
+  { primary_keyword: string, secondary_keywords: string[], query_combinations: string[] }
+  ```
+- **Result**: ~6 precise queries instead of 12+ loose ones, dramatically higher relevance
+
+**New: Multi-Source Search Aggregator**
+- **File**: `services/searchAggregator.ts`
+- **Purpose**: Single `searchAllSources()` function replaces direct `searchArxiv()` call in ResearchContext
+- **APIs**: ArXiv + OpenAlex + Google CSE + PDFVector + Google Grounding — all in parallel via `Promise.allSettled`
+- **Dedup**: By `pdfUri`, priority: ArXiv → OpenAlex → PDFVector → CSE → Grounding
+
+**New: Backend Search Proxy Routes**
+- **File**: `backend/routes/search.js`
+- **Endpoints**: `POST /search/openalex`, `POST /search/google-cse`, `POST /search/pdfvector`
+- **Contract**: All return `{ success: true, data: [] }` on failure — never block other APIs
 
 ## Current Technical State
 
 ### Backend Architecture (Node.js + Express)
 ```javascript
 // server.js - Port 3001
-app.use('/api/v1/gemini', geminiRoutes);    // AI operations
+app.use('/api/v1/gemini', geminiRoutes);    // AI operations + grounding-search
 app.use('/api/v1/database', databaseRoutes); // CRUD operations
 app.use('/api/v1/agent', agentRoutes);       // Research assistant
 app.use('/api/v1/arxiv', arxivRoutes);       // ArXiv proxy (CORS fix)
+app.use('/api/v1/search', searchRoutes);     // NEW: OpenAlex, Google CSE, PDFVector
 ```
-
-### Production Deployment (Railway + Docker + Nginx)
-- **Multi-stage Docker**: Frontend build → Backend build → Nginx runtime
-- **Nginx Proxy**: Port 3000 → Frontend (static) + `/api/*` → Backend (3001)
-- **Environment Injection**: Runtime env vars via `inject-env.sh`
 
 ### Critical Services Status
-- ✅ **Gemini AI**: `gemini-2.0-flash-exp` for generation, `gemini-embedding-001` for embeddings
+- ✅ **Gemini AI**: `gemini-3-flash-preview` for generation, `gemini-embedding-001` for embeddings
 - ✅ **Database**: Neon Serverless Postgres with user-scoped queries
-- ✅ **ArXiv**: Backend proxy eliminates CORS issues
+- ✅ **ArXiv**: Backend proxy + new `abs:` AND queries for precision
+- ✅ **OpenAlex**: Free academic DB, no API key required
+- ✅ **Google CSE**: 5 pages × 10 = 50 PDF results
+- ✅ **PDFVector**: Academic search with client-side relevance scoring
+- ✅ **Google Grounding**: Gemini `googleSearch` tool for PDF discovery
 - ⚠️ **OpenAI**: Fallback only (not primary)
 
-## Recent Code Patterns
-
-### Error Recovery Pattern
-```typescript
-// ResearchContext.tsx - Auto-clear cache on zero results
-useEffect(() => {
-  if (filteredCandidates.length > 0 || deepResearchResults.length > 0) {
-    localStorageService.saveDeepResearchResults({...});
-  } else if (arxivCandidates.length === 0 && filteredCandidates.length === 0) {
-    console.log('[ResearchContext] Clearing cache - no visible results');
-    localStorageService.clearDeepResearchResults();
-  }
-}, [filteredCandidates, deepResearchResults, arxivCandidates]);
-```
-
-### Structured Logging Pattern
-```javascript
-// backend/routes/gemini.js
-console.log('╔════════════════════════════════════════╗');
-console.log('║ [ROUTE] /extract-notes - REQUEST START║');
-console.log('╚════════════════════════════════════════╝');
-console.log('📄 Paper:', paperTitle);
-console.log('🔍 First page pdfUri:', relevantPages[0]?.pdfUri);
-```
-
-### Batch Processing Pattern
-```javascript
-// geminiService.js - Extract notes with concurrency control
-const BATCH_SIZE = 8;        // Pages per batch
-const CONCURRENCY = 3;       // Parallel batches
-const results = await asyncPool(CONCURRENCY, batches, processBatch);
-```
-
-## Active Challenges
-
-### Performance
-- **Large Result Sets**: 100+ papers can slow UI rendering
-- **Solution In Progress**: Virtual scrolling for note lists
-
-### User Experience
-- **PDF Search Highlighting**: Canvas rendering errors on rapid page navigation
-- **Status**: Known issue, non-blocking, deferred to future sprint
-
-## Next Priorities
-1. Remove excessive debug logging from production
-2. Implement rate limiting on backend API
-3. Add Redis cache for embeddings (replace in-memory cache)
-4. Monitor Gemini API quota usage
-
-## Key Files Recently Modified
-- `App.tsx` - Search retry logic (line 186)
-- `contexts/ResearchContext.tsx` - Cache management (line 224)
-- `backend/services/geminiService.js` - Embedding model update (line 176, 242)
-- `backend/routes/gemini.js` - Structured logging (line 64)
+## Key Files Modified (Feb 19)
+- `types.ts` — `ArxivSearchStructured` interface replaced, `sourceApi` added to `ArxivPaper`
+- `services/arxivService.ts` — `buildArxivQueries()` rewritten for `abs:` AND queries
+- `services/searchAggregator.ts` — **NEW** multi-source orchestrator
+- `services/geminiService.ts` — `year?` added to metadata return type
+- `contexts/ResearchContext.tsx` — `searchAllSources()` replaces `searchArxiv()`, `displayKeywords` updated
+- `backend/services/geminiService.js` — `generateArxivSearchTerms()` rewritten + `searchWithGrounding()` added
+- `backend/routes/search.js` — **NEW** proxy routes for 3 search APIs
+- `backend/routes/gemini.js` — `grounding-search` route added
+- `backend/routes/index.js` — search routes mounted

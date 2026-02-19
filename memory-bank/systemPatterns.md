@@ -24,24 +24,30 @@ src/
 │   ├── AuthContext.tsx                # Multi-tier auth
 │   └── UIContext.tsx                  # Layout and theme
 ├── services/
-│   ├── aiService.ts                   # Gemini + OpenAI
-│   ├── arxivService.ts                # ArXiv search + filtering
+│   ├── apiClient.ts                   # Backend API proxy client
+│   ├── geminiService.ts               # Gemini + OpenAI (frontend)
+│   ├── arxivService.ts                # ArXiv query builder + search
+│   ├── searchAggregator.ts            # NEW: Multi-source search orchestrator
 │   ├── pdfService.ts                  # PDF parsing + text extraction
-│   ├── embeddingService.ts            # Vector embeddings
-│   └── dbService.ts                   # Database operations
+│   └── embeddingService.ts            # Vector embeddings
 └── utils/
-    ├── asyncPool.ts                   # Concurrency control
-    └── vectorMath.ts                  # Cosine similarity
+    ├── localStorageService.ts         # Persistence
+    └── metadataCache.ts               # AI metadata cache
 ```
 
 ⚠️ **Backend (Node.js/Express on port 3001):**
 ```
 backend/
 ├── server.js                          # Express app
+├── config/
+│   └── env.js                         # Environment config
 └── routes/
-    ├── gemini.js                      # Proxy for Gemini API
+    ├── index.js                       # Route mounting
+    ├── gemini.js                      # AI operations + grounding-search
     ├── database.js                    # Database CRUD
-    └── agent.js                       # Agent file upload
+    ├── agent.js                       # Research assistant
+    ├── arxiv.js                       # ArXiv proxy (CORS fix)
+    └── search.js                      # NEW: OpenAlex, Google CSE, PDFVector proxies
 ```
 
 ## Domain-Driven Context Architecture
@@ -287,21 +293,28 @@ const filterRelevantPapers = async (papers: ArxivPaper[], questions: string[]) =
    ↓
 2. ResearchContext.performDeepResearch()
    ↓
-3. AI generates ArXiv search terms
+3. AI keyword engine generates: primary_keyword + secondary_keywords + query_combinations
    ↓
-4. Backend proxy fetches ArXiv XML
+4. searchAllSources() runs 5 APIs in parallel:
+   ├── ArXiv:          abs: AND queries via buildArxivQueries()
+   ├── OpenAlex:       quoted Boolean AND query
+   ├── Google CSE:     quoted Boolean AND + fileType:pdf
+   ├── PDFVector:      Boolean AND + client-side relevance scoring
+   └── Grounding:      natural language + site:.edu operators
    ↓
-5. Frontend filters by vector similarity (threshold: 0.48)
+5. Merge + deduplicate by pdfUri (ArXiv priority)
    ↓
-6. LibraryContext downloads PDFs (asyncPool: 3 concurrent)
+6. Cosine similarity filter (threshold: 0.48) + LLM selection (2-pass, max 40)
    ↓
-7. PDF text extraction (geometric sorting)
+7. PDF download + geometric text extraction (asyncPool: 3 concurrent)
    ↓
-8. AI extracts notes (batch size: 8 pages, concurrency: 3)
+8. Page-level relevance filtering (embedding threshold: 0.20)
    ↓
-9. Streaming updates to UI
+9. AI extracts notes (batch size: 8 pages, concurrency: 3)
    ↓
-10. User saves note → DatabaseContext → Neon PostgreSQL
+10. Streaming updates to UI
+   ↓
+11. User saves note → DatabaseContext → Neon PostgreSQL
 ```
 
 ### Context Communication Flow

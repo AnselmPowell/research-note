@@ -127,7 +127,10 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   } = useResearch();
 
   // State Management
-  const [activeTab, setActiveTab] = useState<TabType>('web');
+  // Initialize from current mode in context to avoid reset when column opens
+  const [activeTab, setActiveTab] = useState<TabType>(
+    (activeSearchMode === 'web' || activeSearchMode === 'deep') ? activeSearchMode : 'deep'
+  );
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>('relevant-papers');
   const [isSortOpen, setIsSortOpen] = useState(false);

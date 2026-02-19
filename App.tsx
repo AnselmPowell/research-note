@@ -115,7 +115,21 @@ const App: React.FC = () => {
   const hasWebSearchResults = searchState.data?.sources && searchState.data.sources.length > 0;
   const showDeepResearch = researchPhase !== 'idle' || loadedPdfs.length > 0 || hasWebSearchResults;
 
-  // Memoize middle content to prevent unnecessary re-renders
+  // Stable callback for opening a paper in the PDF viewer.
+  // Extracted here so middleContent useMemo does NOT depend on openColumn/loadPdfFromUrl/setActivePdf
+  // directly — those can change reference and would cause DeepResearchView to remount, resetting activeTab.
+  const handleViewPdf = useCallback((paper: any) => {
+    setActivePdf(paper.pdfUri);
+    openColumn('right');
+    loadPdfFromUrl(paper.pdfUri, paper.title, paper.authors.join(', ')).then((result: any) => {
+      if (!result.success && result.error) {
+        setActivePdf(null);
+      }
+    });
+  }, [setActivePdf, openColumn, loadPdfFromUrl]);
+
+  // Memoize middle content to prevent unnecessary re-renders.
+  // Uses the stable handleViewPdf reference — openColumn reference changes no longer remount this.
   const middleContent = useMemo(() => {
     if (showDeepResearch) {
       return (
@@ -127,15 +141,7 @@ const App: React.FC = () => {
           webSearchSources={searchState.data?.sources || []}
           webSearchLoading={searchState.isLoading}
           webSearchError={searchState.error}
-          onViewPdf={(paper) => {
-            setActivePdf(paper.pdfUri);
-            openColumn('right');
-            loadPdfFromUrl(paper.pdfUri, paper.title, paper.authors.join(', ')).then(result => {
-              if (!result.success && result.error) {
-                setActivePdf(null);
-              }
-            });
-          }}
+          onViewPdf={handleViewPdf}
         />
       );
     } else {
@@ -156,9 +162,7 @@ const App: React.FC = () => {
     searchState.data?.sources,
     searchState.isLoading,
     searchState.error,
-    loadPdfFromUrl,
-    setActivePdf,
-    openColumn
+    handleViewPdf
   ]);
 
   // Memoize library content

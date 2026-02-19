@@ -9,6 +9,14 @@
 
 ## Feature Completion
 
+### ✅ Multi-Source Academic Search (NEW - Feb 19, 2026)
+- **5 parallel search APIs**: ArXiv, OpenAlex, Google CSE, PDFVector, Google Grounding
+- **Unified aggregator**: `searchAggregator.ts` orchestrates all sources with `Promise.allSettled`
+- **Academic keyword engine**: LLM generates primary + secondary keywords with AND combinations
+- **ArXiv precision**: `abs:` field AND queries instead of scattered loose queries
+- **Deduplication**: By `pdfUri` across all sources, priority ordering
+- **Graceful degradation**: Any API can fail without blocking others
+
 ### ✅ Multi-Modal Search (100%)
 - Web search (Google Custom Search API)
 - Deep research (ArXiv discovery)
@@ -18,7 +26,9 @@
 ### ✅ AI Research Pipeline (98%)
 - 5-stage process: Intent → Gathering → Filtering → Reconstruction → Extraction
 - Multi-provider system (Gemini + OpenAI fallback)
-- ⚠️ **Updated:** `gemini-embedding-001` (text-embedding-004 shutdown Feb 6)
+- ⚠️ **Updated Feb 19:** New keyword generation engine (primary + secondary + AND combos)
+- ⚠️ **Updated Feb 19:** Stage 2 now uses 5 search APIs via `searchAllSources()`
+- ⚠️ **Updated Feb 6:** `gemini-embedding-001` (text-embedding-004 shutdown)
 - Real-time streaming results
 - asyncPool concurrency control
 
@@ -54,6 +64,22 @@
 - Conversation history
 
 ## Recent Critical Fixes
+
+### ✅ Multi-Source Search & ArXiv Precision (Feb 19, 2026)
+**Problem:** ArXiv search returned 200+ low-relevance papers using scattered keywords.
+**Solution:** Complete overhaul of Stage 1 (keyword generation) and Stage 2 (paper discovery).
+
+```typescript
+// NEW type: ArxivSearchStructured
+{ primary_keyword: "world war 1", secondary_keywords: ["food", "global"], 
+  query_combinations: ["world war 1 AND food AND global", "world war 1 AND food"] }
+
+// NEW: buildArxivQueries generates abs: AND queries
+// "world war 1 AND food AND global" → abs:(world AND war AND 1) AND abs:food AND abs:global
+
+// NEW: searchAllSources runs 5 APIs in parallel
+const [arxiv, openAlex, cse, pdfVector, grounding] = await Promise.allSettled([...]);
+```
 
 ### ⚠️ Zero Results Bug (commit a90481f)
 **Problem:** Filtering sometimes returned 0 papers despite valid candidates.

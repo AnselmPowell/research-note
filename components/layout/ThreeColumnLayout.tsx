@@ -17,7 +17,16 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
   libraryContent,
   rightContent
 }) => {
-  const { columnVisibility, toggleColumn, setColumnVisibility, columnLocks, toggleLock, handleAutoHeaderHide, handleScroll } = useUI();
+  const {
+    columnVisibility,
+    toggleColumn,
+    setColumnVisibility,
+    columnLocks,
+    toggleLock,
+    handleAutoHeaderHide,
+    handleScroll,
+    isLibraryOpen
+  } = useUI();
   const { setActiveSearchMode } = useResearch();
 
   const showLeft = columnVisibility.left;
@@ -199,7 +208,9 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
   }, [setColumnVisibility]);
 
   const handleTitleClick = useCallback((colKey: ColumnKey) => {
-    if (colKey === 'left') setActiveSearchMode('web');
+    // Sources (left) title click intentionally does NOT set activeSearchMode —
+    // doing so would force DeepResearchView's activeTab to 'web' every time the
+    // Sources column header is interacted with.
     if (colKey === 'middle') setActiveSearchMode('deep');
     if (colKey === 'right') setActiveSearchMode('upload');
   }, [setActiveSearchMode]);
@@ -292,6 +303,14 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
               onToggleLock={toggleLock}
             />
             <div onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar">{sourcesContent}</div>
+
+            {/* Interaction Barrier: Prevents clicks on Sources when Library is open */}
+            {isLibraryOpen && (
+              <div
+                className="absolute inset-0 z-[65] bg-transparent cursor-default select-none"
+                aria-hidden="true"
+              />
+            )}
           </div>
         )}
 
