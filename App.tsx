@@ -205,7 +205,7 @@ const App: React.FC = () => {
   const showHeaderSearch = useMemo(() => !allColumnsClosed, [allColumnsClosed]);
 
   const headerContainerClass = useMemo(() =>
-    `flex-none transition-all duration-500 ease-in-out relative z-40 ${(isHeaderVisible || allColumnsClosed)
+    `flex-none transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden relative z-40 ${(isHeaderVisible || allColumnsClosed)
       ? 'opacity-100 translate-y-0 max-h-[300px]'
       : 'opacity-0 -translate-y-full max-h-0 pointer-events-none'
     }`
@@ -285,7 +285,7 @@ const App: React.FC = () => {
 
       {allColumnsClosed ? (
         <main
-          className={`flex-grow flex flex-col items-center justify-center px-4 -mt-20 transition-all duration-500 ease-in-out ${isHomeExiting ? 'opacity-0 scale-95' : 'animate-slide-up'
+          className={`flex-grow flex flex-col items-center justify-center px-4 -mt-20 transition-all duration-300 ease-out ${isHomeExiting ? 'opacity-0 scale-95' : 'animate-slide-up'
             } ${activeSearchMode === 'deep' && isDeepSearchBarExpanded ? '-mt-72' : ''
             }`}
         >

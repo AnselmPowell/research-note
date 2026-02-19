@@ -278,7 +278,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         {showLeft && (
           <div
             style={{ width: getColumnWidth('left') }}
-            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 transition-[width] duration-75 ease-out shadow-sm min-w-[320px] relative`}
+            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-sm min-w-[320px] relative`}
           >
             <ColumnHeader
               title="Sources"
@@ -301,7 +301,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         {showMiddle && (
           <div
             style={{ width: getColumnWidth('middle') }}
-            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-75 ease-out shadow-sm min-w-[320px]`}
+            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-sm min-w-[320px]`}
           >
             <ColumnHeader
               title="Research"
@@ -324,7 +324,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         {showLibrary && (
           <div
             style={{ width: getColumnWidth('library'), minWidth: '45%' }}
-            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-75 ease-out shadow-sm`}
+            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-sm`}
           >
             <ColumnHeader
               title="Research Library"
@@ -347,7 +347,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         {showRight && (
           <div
             style={{ width: getColumnWidth('right'), minWidth: '45%' }}
-            className={`flex flex-col h-full bg-cream dark:bg-dark-card border rounded-xl dark:border-gray-700 overflow-hidden shadow-sm transition-[width] duration-75 ease-out`}
+            className={`flex flex-col h-full bg-cream dark:bg-dark-card border rounded-xl dark:border-gray-700 overflow-hidden shadow-sm transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]`}
           >
             <ColumnHeader
               title="Paper View"
