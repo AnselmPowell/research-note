@@ -889,12 +889,37 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
     }
   });
 
+  // ═══════════════════════════════════════════════════════════════
+  // STAGE 4: RESCUE FALLBACK
+  // If LLM was overly strict and selected < 30 papers, 
+  // take the next top 10 highest-scored papers that were not selected.
+  // ═══════════════════════════════════════════════════════════════
+  if (finalSelection.length < 30) {
+    console.log(`\n🆘 STAGE 4: Rescue Fallback (Current count: ${finalSelection.length})`);
+    
+    // top100 is already sorted by cosine score from Stage 1
+    const rescuePapers = top100
+      .filter(p => !seenFinalIds.has(p.id)) // Only those NOT picked by LLM in Stages 2/3
+      .slice(0, 10); // Take the top 10 next-best matches
+
+    rescuePapers.forEach(p => {
+      seenFinalIds.add(p.id);
+      finalSelection.push(p);
+    });
+
+    console.log(`   ✅ Rescued ${rescuePapers.length} additional papers based on cosine score`);
+  }
+
   console.log('\n╔════════════════════════════════════════════════════════════════╗');
   console.log('║ FINAL SELECTION COMPLETE                                       ║');
   console.log('╚════════════════════════════════════════════════════════════════╝');
   console.log('📊 Total papers selected:', finalSelection.length);
   console.log('   From Stage 2 (top 100):', stage2Selected.length);
   console.log('   From Stage 3 (leftover):', stage3Selected.length);
+  const rescuedCount = finalSelection.length - (stage2Selected.length + stage3Selected.length);
+  if (rescuedCount > 0) {
+    console.log('   From Stage 4 (rescue):  ', rescuedCount);
+  }
   if (finalSelection.length > 0) {
     console.log('   Average relevance score:', (
       finalSelection.reduce((sum, p) => sum + (p.relevanceScore || 0), 0) / finalSelection.length

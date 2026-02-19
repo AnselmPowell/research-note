@@ -641,21 +641,30 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
           {/* Filter Panel */}
           {showFilters && activeTab === 'deep' && !isBlurred && (
-            <div className="bg-white/60 dark:bg-dark-card/60 backdrop-blur-md border border-white dark:border-gray-700 rounded-2xl p-4 sm:p-6 mb-6 shadow-scholar animate-fade-in">
-              <div className="flex flex-col gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-5 sm:gap-6">
+            <div className="relative bg-white/80 dark:bg-gray-950/90 backdrop-blur-xl border border-gray-100 dark:border-gray-800 rounded-2xl p-5 pt-2 sm:p-7 pb-1 sm:pb-2  mb-6 shadow-xl animate-fade-in ring-1 ring-black/5 dark:ring-white/5">
+              {/* Close Button */}
+              <button
+                onClick={() => setShowFilters(false)}
+                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all z-10"
+                title="Close filters"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex flex-col gap-5 sm:grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 sm:gap-6 pt-2">
 
                 {/* Search Input */}
-                <div className="sm:col-span-2 space-y-1.5">
+                <div className="sm:col-span-2 space-y-2">
                   <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">
                     Keywords
                   </label>
                   <div className="relative group">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-scholar-600 dark:group-focus-within:text-scholar-400 transition-colors" />
                     <input
-                      className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl pl-11 pr-10 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-scholar-400 outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all"
+                      className="w-full bg-white/80 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-xl pl-11 pr-10 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search papers, notes, insights..."
+                      placeholder="Search title, notes, insights..."
                     />
                     {searchQuery && (
                       <button
@@ -669,14 +678,14 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                 </div>
 
                 {/* Paper Filter */}
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">
                     Source Paper
                   </label>
                   <select
                     value={localFilters.paper}
                     onChange={(e) => setLocalFilters(prev => ({ ...prev, paper: e.target.value }))}
-                    className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all appearance-none cursor-pointer"
+                    className="w-full bg-white/80 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all appearance-none cursor-pointer"
                   >
                     <option value="all">All Papers ({uniquePapers.length})</option>
                     {uniquePapers.map(p => (
@@ -686,14 +695,14 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                 </div>
 
                 {/* Query Filter */}
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">
                     Research Query
                   </label>
                   <select
                     value={localFilters.query}
                     onChange={(e) => setLocalFilters(prev => ({ ...prev, query: e.target.value }))}
-                    className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all appearance-none cursor-pointer"
+                    className="w-full bg-white/80 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all appearance-none cursor-pointer"
                   >
                     <option value="all">All Queries ({uniqueQueries.length})</option>
                     {uniqueQueries.map(q => (
@@ -702,34 +711,37 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                   </select>
                 </div>
 
-                {/* Has Notes Toggle + Reset */}
-                <div className="space-y-1.5">
+                {/* Has Notes Toggle */}
+                <div className="space-y-2">
                   <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">
-
+                    Refine
                   </label>
                   <div className="flex gap-2">
                     {/* Hide "With Notes" filter in note view - all items are notes by definition */}
                     {sortBy !== 'most-relevant-notes' && (
                       <button
                         onClick={() => setLocalFilters(prev => ({ ...prev, hasNotes: !prev.hasNotes }))}
-                        className={`flex-1 px-2 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${localFilters.hasNotes
+                        className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${localFilters.hasNotes
                           ? 'bg-scholar-600 text-white shadow-md'
-                          : 'bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800'
+                          : 'bg-white/80 dark:bg-gray-900/50 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800'
                           }`}
                       >
                         With Notes
                       </button>
                     )}
-                    <button
-                      onClick={handleResetFilters}
-                      className={`px-2 py-2.5 bg-white/80 dark:bg-gray-900/80 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800 rounded-xl text-sm font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition-all ${sortBy === 'most-relevant-notes' ? 'flex-1' : ''}`}
-                      title="Reset all filters"
-                    >
-                      <X size={16} />
-                    </button>
                   </div>
                 </div>
 
+              </div>
+
+              {/* Filter Panel Footer - Minimal Reset */}
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={handleResetFilters}
+                  className="text-[10px] font-bold text-red-700 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:underline transition-all"
+                >
+                  Reset Filters
+                </button>
               </div>
             </div>
           )}
@@ -846,32 +858,36 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
           </div>
         )}
 
-        {activeTab === 'deep' && (sortBy === 'most-relevant-notes' ? (
-          (paginatedContent as any[]).filter((note: any) => (note?.quote || '').trim().length > 0).map((note) => (
-            <ResearchCardNote
-              key={note.uniqueId}
-              id={note.uniqueId}
-              note={note}
-              isSelected={selectedNoteIds.includes(note.uniqueId)}
-              onSelect={() => handleSelectNote(note.uniqueId)}
-              sourceTitle={note.sourcePaper.title}
-              sourcePaper={note.sourcePaper}  // ADD: Pass full paper data for rich metadata
-              showScore={true}
-            />
-          ))
-        ) : (
-          (paginatedContent as ArxivPaper[]).map((paper) => (
-            <PaperCard
-              key={paper.id}
-              paper={paper}
-              selectedNoteIds={selectedNoteIds}
-              onSelectNote={handleSelectNote}
-              forceExpanded={allNotesExpanded}
-              onView={() => onViewPdf && onViewPdf(paper)}
-              isLocal={false}
-            />
-          ))
-        ))}
+        {activeTab === 'deep' && (
+          <div className={sortBy === 'most-relevant-notes' ? "space-y-4" : "space-y-8"}>
+            {sortBy === 'most-relevant-notes' ? (
+              (paginatedContent as any[]).filter((note: any) => (note?.quote || '').trim().length > 0).map((note) => (
+                <ResearchCardNote
+                  key={note.uniqueId}
+                  id={note.uniqueId}
+                  note={note}
+                  isSelected={selectedNoteIds.includes(note.uniqueId)}
+                  onSelect={() => handleSelectNote(note.uniqueId)}
+                  sourceTitle={note.sourcePaper.title}
+                  sourcePaper={note.sourcePaper}
+                  showScore={true}
+                />
+              ))
+            ) : (
+              (paginatedContent as ArxivPaper[]).map((paper) => (
+                <PaperCard
+                  key={paper.id}
+                  paper={paper}
+                  selectedNoteIds={selectedNoteIds}
+                  onSelectNote={handleSelectNote}
+                  forceExpanded={allNotesExpanded}
+                  onView={() => onViewPdf && onViewPdf(paper)}
+                  isLocal={false}
+                />
+              ))
+            )}
+          </div>
+        )}
 
         {/* Deep Research Tab - Loading state (searching/initializing) */}
         {activeTab === 'deep' && isSearching && (
@@ -1098,7 +1114,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
   };
 
   return (
-    <div className="group/paper animate-fade-in mb-6 relative transition-colors">
+    <div className="group/paper animate-fade-in relative transition-colors">
       <div className={isExpanded ? 'p-1' : ''}>
         <div className="flex items-start">
           <div className="pt-1 mr-2 sm:mr-4">
