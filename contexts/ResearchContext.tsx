@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useCallback, useRef, useEff
 import { SearchState, SearchMode, DeepResearchQuery, ArxivPaper, DeepResearchNote, LoadedPdf, SearchBarState, ResearchPhase } from '../types';
 import { performSearch, generateArxivSearchTerms, filterRelevantPapers, findRelevantPages, extractNotesFromPages, generateInsightQueries } from '../services/geminiService';
 import { extractPdfData, fetchPdfBuffer } from '../services/pdfService';
-import { searchArxiv, buildArxivQueries } from '../services/arxivService';
+import { searchAllSources } from '../services/searchAggregator';
 import { localStorageService } from '../utils/localStorageService';
 
 // Debounce utility function
@@ -574,8 +574,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (signal.aborted) return;
       setResearchPhase('searching');
       setGatheringStatus("Searching academic repositories...");
-      const apiQueries = buildArxivQueries(structuredTerms, query.topics, query.questions);
-      const candidates = await searchArxiv(apiQueries, (msg) => setGatheringStatus(msg), query.topics);
+      const candidates = await searchAllSources(structuredTerms, query.topics, query.questions, (msg) => setGatheringStatus(msg));
 
       if (signal.aborted) return;
       setArxivCandidates(candidates);

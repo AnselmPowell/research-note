@@ -109,4 +109,15 @@ router.post('/insight-queries', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Gemini Grounding Search — uses Google Search tool via Gemini SDK
+// Query is pre-built by aggregator with filetype:pdf / site operators.
+// Returns raw results array; normaliseGrounding() in aggregator maps to ArxivPaper[].
+router.post('/grounding-search', async (req, res, next) => {
+  try {
+    const { query } = req.body.data;
+    const result = await geminiService.searchWithGrounding(query);
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

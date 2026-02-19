@@ -1171,6 +1171,114 @@ async function performSearch(query) {
   };
 }
 
+/**
+ * Exponential backoff retry — mirrors original retryOperation.
+ * Specifically handles 503/UNAVAILABLE responses from Gemini Grounding.
+ * Uses the existing `delay` util from top of this file.
+ */
+async function retryWithBackoff(operation, retries = 3, delayMs = 1000) {
+  try {
+    return await operation();
+  } catch (error) {
+    const is503 =
+      error?.status === 503 ||
+      error?.code === 503 ||
+      (typeof error?.message === 'string' && error.message.includes('503')) ||
+      error?.status === 'UNAVAILABLE' ||
+      error?.error?.code === 503 ||
+      error?.error?.status === 'UNAVAILABLE';
+
+    if (retries > 0 && is503) {
+      logger.warn(`[Grounding] 503 Unavailable. Retrying in ${delayMs}ms... (${retries} attempts left)`);
+      await delay(delayMs); // `delay` already defined at top of this file
+      return retryWithBackoff(operation, retries - 1, delayMs * 2);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Google Grounding search via Gemini — mirrors original searchGoogleGrounding.
+ * Uses @google/generative-ai SDK (backend) instead of @google/genai (frontend).
+ * Key differences from original:
+ *   - genAI.getGenerativeModel().generateContent() instead of ai.models.generateContent()
+ *   - response.text() call (method) instead of response.text (property)
+ *   - cleanJson() sanitizer already exists in this file — reused directly
+ * Query comes pre-built from aggregator (includes filetype:pdf OR site:.edu operators).
+ * Returns raw results array — normalisation happens in searchAggregator.ts.
+ */
+async function searchWithGrounding(query) {
+  if (!genAI) {
+    logger.warn('[searchWithGrounding] Gemini not initialized — skipping');
+    return [];
+  }
+
+  // Exact prompt from original searchGoogleGrounding
+  const prompt = `You are a specialized Academic Search Engine.
+User Query: "${query}"
+
+GOAL: Perform a deep search and return a list of academic papers/PDFs with summaries in JSON format.
+
+INSTRUCTIONS:
+1. Use the Google Search tool to find relevant academic papers, PDFs, and articles.
+2. Select the top 10-15 most relevant results.
+3. For EACH result, write a concise academic summary (3-4 sentences) describing the paper's focus or findings.
+4. Return a valid JSON object matching this schema exactly. Do not use markdown code blocks.
+{
+  "results": [
+    {
+      "title": "Title of the paper",
+      "uri": "The exact URL found",
+      "summary": "The generated abstract/summary...",
+      "isPdf": true
+    }
+  ]
+}`;
+
+  try {
+    // Old SDK: getGenerativeModel with googleSearch tool
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-3-flash-preview',
+      tools: [{ googleSearch: {} }]
+    });
+
+    // retryWithBackoff: 3 retries, 1000ms start, doubles each attempt (from original)
+    const result = await retryWithBackoff(
+      () => withTimeout(model.generateContent(prompt), 35000, 'Grounding search'),
+      3,
+      1000
+    );
+
+    // Old SDK: response.text() is a method call, not a property
+    let jsonText = result.response.text();
+    if (!jsonText) return [];
+
+    // cleanJson strips markdown code blocks (already in this file)
+    jsonText = cleanJson(jsonText);
+
+    let parsed = {};
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch (e) {
+      logger.warn('[searchWithGrounding] Failed to parse JSON response:', e.message);
+      return [];
+    }
+
+    // Handle both raw array and {results:[]} response shapes (from original)
+    let resultsArray = [];
+    if (Array.isArray(parsed)) {
+      resultsArray = parsed;
+    } else if (parsed && Array.isArray(parsed.results)) {
+      resultsArray = parsed.results;
+    }
+
+    return resultsArray; // Raw array — normaliseGrounding() maps this in aggregator
+  } catch (error) {
+    logger.warn('[searchWithGrounding] Failed:', error.message);
+    return [];
+  }
+}
+
 async function generateInsightQueries(userQuestions, contextQuery) {
   const prompt = `Context: The user has gathered several academic PDF papers regarding "${contextQuery}".
   User Goal: They want to answer the following specific questions from these papers: "${userQuestions}".
@@ -1205,5 +1313,6 @@ module.exports = {
   filterRelevantPapers,
   extractNotesFromPages,
   performSearch,
-  generateInsightQueries
+  generateInsightQueries,
+  searchWithGrounding
 };
