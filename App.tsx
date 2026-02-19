@@ -209,7 +209,7 @@ const App: React.FC = () => {
   const showHeaderSearch = useMemo(() => !allColumnsClosed, [allColumnsClosed]);
 
   const headerContainerClass = useMemo(() =>
-    `flex-none transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden relative z-40 ${(isHeaderVisible || allColumnsClosed)
+    `flex-none transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] relative z-50 ${(isHeaderVisible || allColumnsClosed)
       ? 'opacity-100 translate-y-0 max-h-[300px]'
       : 'opacity-0 -translate-y-full max-h-0 pointer-events-none'
     }`
