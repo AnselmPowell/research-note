@@ -21,45 +21,59 @@ export const buildArxivQueries = (
 
   const clean = (s: string) => s.replace(/[\\]/g, '').trim();
 
-  // 1. Exact Phrases - Wrap in quotes to ensure ArXiv treats as a single phrase
-  structured.exact_phrases.forEach(phrase => {
-    const cleaned = clean(phrase);
-    if (cleaned) {
-      const quoted = (cleaned.startsWith('"') && cleaned.endsWith('"')) ? cleaned : `"${cleaned}"`;
-      queries.push(`all:${quoted}`);
+  // Helper to ensure terms staying inside their field prefix with grouped Boolean logic
+  const formatField = (prefix: string, term: string, useAnd = true) => {
+    const cleaned = clean(term);
+    if (!cleaned) return null;
+
+    const words = cleaned.split(/\s+/).filter(w => w.length > 0);
+    if (words.length > 1) {
+      // Group with AND logic to keep related words within the same field prefix
+      // e.g., ti:(World AND War AND 1) instead of ti:World War 1
+      const operator = useAnd ? ' AND ' : ' OR ';
+      return `${prefix}:(${words.join(operator)})`;
     }
+    return `${prefix}:${cleaned}`;
+  };
+
+  // 1. Exact Phrases - Grouped with AND to ensure all specific words are present
+  structured.exact_phrases.forEach(phrase => {
+    const q = formatField('all', phrase);
+    if (q) queries.push(q);
   });
 
   // 2. Title Terms - "ti"
   structured.title_terms.forEach(term => {
-    const cleaned = clean(term);
-    if (cleaned) queries.push(`ti:${cleaned}`);
+    const q = formatField('ti', term);
+    if (q) queries.push(q);
   });
 
   // 3. Abstract Terms - "abs"
-  const absTerms = structured.abstract_terms.filter(t => clean(t)).map(t => clean(t));
-  if (absTerms.length > 0) {
-    const combined = absTerms.map(t => `abs:${t}`).join(' AND ');
-    queries.push(combined);
+  const absRaw = structured.abstract_terms.map(t => clean(t)).filter(t => t.length > 1);
+  if (absRaw.length > 0) {
+    // Join with OR to find ANY of these key concepts in the abstract
+    const combined = absRaw.map(t => `abs:${t}`).join(' OR ');
+    queries.push(`(${combined})`);
   }
 
   // 4. General Terms - "all"
   structured.general_terms.forEach(term => {
-    const cleaned = clean(term);
-    if (cleaned) queries.push(`all:${cleaned}`);
+    const q = formatField('all', term);
+    if (q) queries.push(q);
   });
 
   // 5. Original User Topics (Fallback)
   originalTopics.forEach(topic => {
-    if (clean(topic)) queries.push(`all:${clean(topic)}`);
+    const q = formatField('all', topic);
+    if (q) queries.push(q);
   });
 
-  // 6. Original Questions
+  // 6. Original Questions (Grouped to avoid quoting failure)
   originalQuestions.forEach(q => {
-    const cleaned = clean(q);
-    if (cleaned.length < 50 && cleaned.length > 3) {
-      queries.push(`all:${cleaned}`);
-    }
+    // Only use first 40 chars of question to avoid overly complex queries
+    const shortQ = clean(q).substring(0, 40);
+    const qField = formatField('all', shortQ);
+    if (qField) queries.push(qField);
   });
 
   const finalQueries = Array.from(new Set(queries));

@@ -8,7 +8,7 @@ async function asyncPool(concurrency, items, worker) {
     if (index >= items.length) return;
 
     try {
-      results[index] = await worker(items[index]);
+      results[index] = await worker(items[index], index);
     } catch (err) {
       console.warn(`Pool worker failed at index ${index}:`, err.message);
       results[index] = null;

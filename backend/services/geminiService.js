@@ -331,7 +331,11 @@ Return ONLY valid JSON matching the format specified in the system prompt.`;
       }
 
       validatedTerms[key] = parsedTerms[key].filter(term => {
-        if (!term || typeof term !== 'string') return false;
+        if (!term || typeof term !== 'string' || term.length < 2) return false;
+
+        // For abstract and general terms, we trust the LLM's conceptual relation
+        // so we skip the strict overlap check to prevent falling back to broad questions
+        if (key === 'abstract_terms' || key === 'general_terms') return true;
 
         const termWords = new Set(term.toLowerCase().split(/\s+/));
         // Check if term contains at least one keyword from original query
