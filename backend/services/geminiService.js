@@ -73,15 +73,17 @@ async function enhanceMetadata(firstFourPagesText, currentMetadata) {
   Extract accurate metadata and format it according to these requirements:
   1. title: The exact full academic title of the paper.
   2. author: The full name of the primary/lead author.
-  3. subject: A 2-3 sentence summary of the paper's core objective or findings (abstract-like).
-  4. harvardReference: A COMPLETE and PROPERLY FORMATTED Harvard style reference for this paper.
-  5. publisher: The Journal name, Conference name, or University/Repository (e.g., ArXiv, IEEE, Springer).
-  6. categories: Exactly THREE relevant academic categories/subjects for this paper.
+  3. year: The 4-digit publication year.
+  4. subject: A 2-3 sentence summary of the paper's core objective or findings (abstract-like).
+  5. harvardReference: A COMPLETE and PROPERLY FORMATTED Harvard style reference for this paper.
+  6. publisher: The Journal name, Conference name, or University/Repository (e.g., ArXiv, IEEE, Springer).
+  7. categories: Exactly THREE relevant academic categories/subjects for this paper.
 
   Return EXACTLY this JSON structure:
   {
     "title": "...",
     "author": "...",
+    "year": "...",
     "subject": "...",
     "harvardReference": "...",
     "publisher": "...",
@@ -102,6 +104,7 @@ async function enhanceMetadata(firstFourPagesText, currentMetadata) {
     return {
       title: enhanced.title || currentMetadata.title,
       author: enhanced.author || currentMetadata.author,
+      year: enhanced.year,
       subject: enhanced.subject || currentMetadata.subject,
       harvardReference: enhanced.harvardReference,
       publisher: enhanced.publisher,
@@ -113,7 +116,11 @@ async function enhanceMetadata(firstFourPagesText, currentMetadata) {
     return {
       title: result.title || currentMetadata.title,
       author: result.author || currentMetadata.author,
-      subject: result.subject || currentMetadata.subject
+      year: result.year,
+      subject: result.subject || currentMetadata.subject,
+      harvardReference: result.harvardReference,
+      publisher: result.publisher,
+      categories: result.categories
     };
   }
 }
@@ -192,6 +199,8 @@ the primary key will show up with every search so it must be focused and main su
 5. Secondary_keywords should be one word only
 This additional keyword should complete the query asked by the user
 max of 3 key words
+As much as possible, these should be a single word, keep it to one word.
+
 
 OUTPUT FORMAT (MANDATORY)
 Return ONLY valid JSON. No explanations. No markdown. No prose.
@@ -284,9 +293,9 @@ Example 7
 User query: "Does class size affect student academic performance?"
 {
   "primary_keyword": "classroom size",
-  "secondary_keywords": ["academic performance", "performance", "education"],
+  "secondary_keywords": ["academic", "performance", "education"],
   "query_combinations": [
-    "classroom size AND academic performance",
+    "classroom size AND academic",
     "classroom size AND performance",
     "classroom size AND education"
   ]
@@ -1038,14 +1047,15 @@ ${userQuestions}
 TASK: 
 Extract passages that DIRECTLY answer the user's specific queries above. 
 Be STRICT - if content only seems remotely related, DO NOT include it.
-If nothing directly answers the queries, return {"notes": []}.
+If nothing directly answers the queries, return {"notes": []}.\n
 
 IMPORTANT FOR CITATIONS:
 - When you find inline citations like [1], [2], or [Smith et al., 2020] in the extracted text, match them to the REFERENCE LIST above
 - In the "citations" array, provide BOTH the inline citation AND the full reference from the list
-- Example: If text contains "[1]", find reference #1 from the list above and include it as the full reference
+- Example: If text contains "[1]", find reference #1 from the list above and include it as the full reference\n
 
-Remember: You must justify WHY each extraction directly answers the user's query. If you cannot provide a strong justification, do not include it.`;
+Remember: You must justify WHY each extraction directly answers the user's query. If you cannot provide a strong justification, do not include it.\n
+Most importantly, must extract the EXACT text from the paper dont shorten or paraphrase or add or remove content.`;
 
     try {
       if (!genAI) throw new Error('Gemini not available');

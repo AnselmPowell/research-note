@@ -370,7 +370,28 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const buffer = await fetchPdfBuffer(paper.pdfUri);
         if (signal?.aborted) throw new Error("Aborted");
         const extracted = await extractPdfData(buffer, signal);
-        setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: 'processing' } : p));
+
+        const aiYear = extracted.metadata.year?.match(/\b(19|20)\d{2}\b/)?.[0];
+        const currentYear = paper.publishedDate?.match(/\b(19|20)\d{2}\b/)?.[0];
+
+        setFilteredCandidates(prev => prev.map(p => {
+          if (p.id !== paper.id) return p;
+          const hasNoAuthors = !p.authors || p.authors.length === 0;
+          return {
+            ...p,
+            analysisStatus: 'processing',
+            title: extracted.metadata.title || p.title,
+            // Only replace authors with AI-extracted lead author if the paper has no authors at all
+            authors: (hasNoAuthors && extracted.metadata.author && extracted.metadata.author !== 'Unknown Author')
+              ? [extracted.metadata.author]
+              : p.authors,
+            // Update date only if AI found a year and the paper has no extractable year
+            publishedDate: aiYear && !currentYear ? aiYear : p.publishedDate,
+            harvardReference: extracted.metadata.harvardReference,
+            publisher: extracted.metadata.publisher,
+            categories: extracted.metadata.categories
+          };
+        }));
         if (signal?.aborted) throw new Error("Aborted");
         const relevantPages = await findRelevantPages([{ uri: paper.pdfUri, pages: extracted.pages }], userQuestions.join("\n"), keywords);
         if (relevantPages.length > 0) {

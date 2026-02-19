@@ -59,6 +59,19 @@ const ITEMS_PER_PAGE = 15;
 
 const getNoteId = (paperId: string, page: number, index: number) => `${paperId}-p${page}-i${index}`;
 
+const getSafeTimestamp = (dateStr: string) => {
+  if (!dateStr || dateStr.trim() === '') return 0;
+
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) return d.getTime();
+
+  // Regex fallback: Search for any 4-digit year (1900-2099)
+  const yearMatch = dateStr.match(/\b(19|20)\d{2}\b/);
+  if (yearMatch) return new Date(parseInt(yearMatch[0], 10), 0, 1).getTime();
+
+  return 0;
+};
+
 const StatusTicker: React.FC<{ keywords: string[] }> = React.memo(({ keywords }) => {
   const [index, setIndex] = useState(0);
 
@@ -223,6 +236,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   // STEP 2: Sort the filtered results
   const content = useMemo(() => {
     if (sortBy === 'most-relevant-notes') {
+      // Flat note list sorted by relevance score — no live reordering
       const allNotes = filteredPapers.flatMap(paper =>
         (paper.notes || []).map((note, idx) => ({
           ...note,
@@ -231,33 +245,36 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
         }))
       );
       return allNotes.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+
     } else if (sortBy === 'newest-papers') {
-      return [...filteredPapers].sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
+      // Pure date sort — no live reordering while processing
+      return [...filteredPapers].sort((a, b) =>
+        getSafeTimestamp(b.publishedDate) - getSafeTimestamp(a.publishedDate)
+      );
+
     } else {
+      // 'relevant-papers' (default): papers with notes bubble up live as processing runs
       return [...filteredPapers].sort((a, b) => {
-        // First priority: Papers currently being processed move to top
+        const aNotes = a.notes?.length || 0;
+        const bNotes = b.notes?.length || 0;
         const aIsProcessing = ['downloading', 'processing', 'extracting'].includes(a.analysisStatus || '');
         const bIsProcessing = ['downloading', 'processing', 'extracting'].includes(b.analysisStatus || '');
+
+        // TIER 1: Papers WITH notes float to the top immediately (live re-order as notes arrive)
+        const aHasNotes = aNotes > 0;
+        const bHasNotes = bNotes > 0;
+        if (aHasNotes !== bHasNotes) return bHasNotes ? 1 : -1;
+
+        // TIER 2: Among papers with notes, most notes first
+        if (aNotes !== bNotes) return bNotes - aNotes;
+
+        // TIER 3: Among papers with no notes yet, actively-processing papers come next
         if (aIsProcessing !== bIsProcessing) return bIsProcessing ? 1 : -1;
 
-        // Second priority: Selected papers during research (with any analysis status) come first
-        const aIsSelected = selectedArxivIds.has(a.id);
-        const bIsSelected = selectedArxivIds.has(b.id);
-        if (aIsSelected !== bIsSelected) return bIsSelected ? 1 : -1;
-
-        // Third priority: Papers with active analysis status
-        const activeStatuses = ['downloading', 'processing', 'extracting', 'completed', 'failed', 'stopped'];
-        const aActive = a.analysisStatus && activeStatuses.includes(a.analysisStatus) ? 1 : 0;
-        const bActive = b.analysisStatus && activeStatuses.includes(b.analysisStatus) ? 1 : 0;
-        if (aActive !== bActive) return bActive - aActive;
-
-        // Fourth priority: Papers with notes
-        const aHasNotes = (a.notes && a.notes.length > 0) ? 1 : 0;
-        const bHasNotes = (b.notes && b.notes.length > 0) ? 1 : 0;
-        if (aHasNotes !== bHasNotes) return bHasNotes - aHasNotes;
-
-        // Fifth priority: Relevance score
-        return (b.relevanceScore || 0) - (a.relevanceScore || 0);
+        // TIER 4: Tiebreak by relevance score
+        const aScore = a.relevanceScore || 0;
+        const bScore = b.relevanceScore || 0;
+        return bScore - aScore;
       });
     }
   }, [filteredPapers, sortBy, selectedArxivIds]);
@@ -575,11 +592,11 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                           <span className="text-sm font-medium text-gray-700 dark:text-white">Most Relevant Notes</span>
                         </button>
                         <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1"></div>
-                        <button onClick={() => { setSortBy('relevant-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                        <button onClick={() => { setSortBy('relevant-papers'); setAllNotesExpanded(false); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                           <Layers size={16} className={sortBy === 'relevant-papers' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
                           <span className="text-sm font-medium text-gray-700 dark:text-white">Relevant Papers</span>
                         </button>
-                        <button onClick={() => { setSortBy('newest-papers'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                        <button onClick={() => { setSortBy('newest-papers'); setAllNotesExpanded(false); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                           <Calendar size={16} className={sortBy === 'newest-papers' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
                           <span className="text-sm font-medium text-gray-700 dark:text-white">Newest Papers</span>
                         </button>
@@ -1127,10 +1144,12 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
           <div className="flex-grow min-w-0">
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                <span className="font-semibold text-scholar-600 dark:text-scholar-400 uppercase tracking-wider">{isLocal ? 'LOCAL' : new Date(paper.publishedDate).getFullYear()}</span>
+                <span className="font-semibold text-scholar-600 dark:text-scholar-400 uppercase tracking-wider">
+                  {isLocal ? 'LOCAL' : (paper.publishedDate?.match(/\b(19|20)\d{2}\b/)?.[0] || <span className="lowercase text-[10px] opacity-70">unknown</span>)}
+                </span>
                 <span>•</span>
-                <span className="truncate max-w-[400px] font-serif italic opacity-80" title={paper.harvardReference || 'No Harvard reference generated'}>
-                  {paper.harvardReference || (paper.authors.slice(0, 2).join(', ') + (paper.authors.length > 2 ? ' et al.' : ''))}
+                <span className="truncate max-w-[400px] font-serif italic opacity-80">
+                  {paper.authors.slice(0, 2).join(', ') + (paper.authors.length > 2 ? ' et al.' : '')}
                 </span>
 
                 <div className="flex items-center gap-2 ml-4 opacity-100 sm:opacity-0 sm:group-hover/paper:opacity-100 transition-opacity">
@@ -1177,6 +1196,12 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
               {paper.title}
             </h3>
 
+            {paper.harvardReference && (
+              <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 font-serif italic mb-2 leading-tight">
+                {paper.harvardReference}
+              </p>
+            )}
+
             <p
               role="button"
               aria-expanded={isAbstractExpanded}
@@ -1199,7 +1224,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                     <span className="animate-pulse">{getStatusText()}</span>
                   </div>
                 ) : visibleNotes.length > 0 ? (
-                  <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-1.5 text-md font-medium text-bold text-scholar-600 dark:text-scholar-400 hover:text-scholar-800 dark:hover:text-scholar-300 transition-colors">
+                  <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-1.5 text-base font-semibold text-scholar-600 dark:text-scholar-400 hover:text-scholar-800 dark:hover:text-scholar-300 transition-colors">
                     {visibleNotes.length} Note{visibleNotes.length !== 1 ? 's' : ''} {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                   </button>
                 ) : isCompleted ? (
@@ -1207,13 +1232,10 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                 ) : isStopped ? (
                   <span className="text-xs text-gray-400 italic flex items-center gap-1"><Square size={12} /> stopped</span>
                 ) : isFailed ? (
-                  // New Friendly Error Display
-                  <div className="bg-red-50/50 dark:bg-red-900/10 rounded-lg p-2.5 border border-red-100 dark:border-red-900/20 text-xs w-full max-w-sm">
-                    <span className="font-bold text-red-700 dark:text-red-400 block mb-0.5">
-                      {failedUrlErrors?.[paper.pdfUri]?.reason || "Load Failed"}
-                    </span>
-                    <span className="text-red-600/80 dark:text-red-400/80 leading-snug block">
-                      {failedUrlErrors?.[paper.pdfUri]?.actionableMsg || "Could not access file."}
+                  <div className="flex items-center gap-1.5 text-[11px] font-medium text-red-700 dark:text-red-400">
+                    <X size={14} className="text-red-800 dark:text-red-500 flex-shrink-0" />
+                    <span className="truncate">
+                      {failedUrlErrors?.[paper.pdfUri]?.reason || "Load Failed"}: {failedUrlErrors?.[paper.pdfUri]?.actionableMsg || "Could not access file."}
                     </span>
                   </div>
                 ) : (

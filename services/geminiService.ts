@@ -8,6 +8,7 @@ export const enhanceMetadataWithAI = async (
 ): Promise<{
   title: string;
   author: string;
+  year?: string;
   subject: string;
   harvardReference?: string;
   publisher?: string;

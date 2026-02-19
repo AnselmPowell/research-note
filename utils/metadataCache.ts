@@ -2,6 +2,7 @@ interface CachedMetadata {
   title: string;
   author: string;
   subject: string;
+  year?: string;
   harvardReference?: string;
   publisher?: string;
   categories?: string[];
@@ -60,6 +61,7 @@ export const setCachedMetadata = async (
     title: string;
     author: string;
     subject: string;
+    year?: string;
     harvardReference?: string;
     publisher?: string;
     categories?: string[];

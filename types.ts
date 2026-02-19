@@ -22,6 +22,7 @@ export interface PdfMetadata {
   title?: string;
   author?: string;
   subject?: string;
+  year?: string;
   harvardReference?: string;
   publisher?: string;
   categories?: string[];

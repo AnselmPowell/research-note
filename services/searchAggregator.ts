@@ -194,13 +194,17 @@ function normaliseGrounding(results: any[]): ArxivPaper[] {
         .map(item => {
             const pdfUri = item.uri || null;
             if (!pdfUri || !pdfUri.startsWith('http')) return null;
+
+            // Attempt to extract a year from the summary
+            const yearMatch = (item.summary || '').match(/\b(19|20)\d{2}\b/);
+
             return {
                 id: item.uri,
                 title: item.title || 'Untitled',
                 summary: item.summary || '',
                 authors: [],
                 pdfUri,
-                publishedDate: '',
+                publishedDate: yearMatch ? yearMatch[0] : '',
                 sourceApi: 'google_grounding' as const
             };
         })

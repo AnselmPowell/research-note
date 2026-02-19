@@ -11,6 +11,7 @@ interface ExtractedData {
     title?: string;
     author?: string;
     subject?: string;
+    year?: string;
     harvardReference?: string;
     publisher?: string;
     categories?: string[];
@@ -363,10 +364,8 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSig
     // 5. Extract References
     const references = extractReferences(pages);
 
-    // 6. Enhance metadata with AI if needed
+    // 6. Enhance metadata with AI — AI title/author always preferred over PDF metadata header
     let finalMetadata: ExtractedData['metadata'] = metadata;
-    const needsTitle = metadata.title === "Untitled Document";
-    const needsAuthor = metadata.author === "Unknown Author";
     const needsSubject = metadata.subject === "";
 
     try {
@@ -380,9 +379,10 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSig
         const cached = await getCachedMetadata(firstFourPages);
         if (cached) {
           finalMetadata = {
-            title: needsTitle ? (cached.title || metadata.title) : metadata.title,
-            author: needsAuthor ? (cached.author || metadata.author) : metadata.author,
+            title: cached.title || metadata.title,
+            author: cached.author || metadata.author,
             subject: needsSubject ? (cached.subject || metadata.subject) : metadata.subject,
+            year: cached.year,
             harvardReference: cached.harvardReference,
             publisher: cached.publisher,
             categories: cached.categories
@@ -394,9 +394,10 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSig
 
           if (enhanced) {
             finalMetadata = {
-              title: needsTitle ? (enhanced.title || metadata.title) : metadata.title,
-              author: needsAuthor ? (enhanced.author || metadata.author) : metadata.author,
+              title: enhanced.title || metadata.title,
+              author: enhanced.author || metadata.author,
               subject: needsSubject ? (enhanced.subject || metadata.subject) : metadata.subject,
+              year: enhanced.year,
               harvardReference: enhanced.harvardReference,
               publisher: enhanced.publisher,
               categories: enhanced.categories
@@ -406,6 +407,7 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSig
               title: finalMetadata.title || metadata.title || "Untitled Document",
               author: finalMetadata.author || metadata.author || "Unknown Author",
               subject: finalMetadata.subject || metadata.subject || "",
+              year: finalMetadata.year,
               harvardReference: finalMetadata.harvardReference,
               publisher: finalMetadata.publisher,
               categories: finalMetadata.categories

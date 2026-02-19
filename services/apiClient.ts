@@ -32,7 +32,7 @@ async function apiCall<T>(endpoint: string, method: string = 'GET', body?: any, 
 
 export const api = {
   gemini: {
-    enhanceMetadata: (data: any) => apiCall<{ title: string; author: string; subject: string; harvardReference?: string; publisher?: string; categories?: string[] }>('/gemini/enhance-metadata', 'POST', data),
+    enhanceMetadata: (data: any) => apiCall<{ title: string; author: string; year?: string; subject: string; harvardReference?: string; publisher?: string; categories?: string[] }>('/gemini/enhance-metadata', 'POST', data),
     searchVariations: (query: string) => apiCall<string[]>('/gemini/search-variations', 'POST', { query }),
     arxivSearchTerms: (topics: string[], questions: string[]) =>
       apiCall<any>('/gemini/arxiv-search-terms', 'POST', { topics, questions }),
