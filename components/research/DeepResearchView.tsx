@@ -236,13 +236,21 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   // STEP 2: Sort the filtered results
   const content = useMemo(() => {
     if (sortBy === 'most-relevant-notes') {
-      // Flat note list sorted by relevance score — no live reordering
+      // Flat note list sorted by relevance score — filtered by active query if set
       const allNotes = filteredPapers.flatMap(paper =>
-        (paper.notes || []).map((note, idx) => ({
-          ...note,
-          sourcePaper: paper,
-          uniqueId: getNoteId(paper.id, note.pageNumber, idx)
-        }))
+        (paper.notes || [])
+          .filter(note => {
+            if ((note?.quote || '').toString().trim().length === 0) return false;
+            if (localFilters.query && localFilters.query !== 'all') {
+              return note.relatedQuestion === localFilters.query;
+            }
+            return true;
+          })
+          .map((note, idx) => ({
+            ...note,
+            sourcePaper: paper,
+            uniqueId: getNoteId(paper.id, note.pageNumber, idx)
+          }))
       );
       return allNotes.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
 
@@ -900,6 +908,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                   forceExpanded={allNotesExpanded}
                   onView={() => onViewPdf && onViewPdf(paper)}
                   isLocal={false}
+                  activeQuery={localFilters.query}
                 />
               ))
             )}
@@ -1051,9 +1060,10 @@ interface PaperCardProps {
   onView?: () => void;
   isLocal?: boolean;
   forceExpanded?: boolean;
+  activeQuery?: string; // 'all' or specific query string — filters which notes render
 }
 
-const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true }) => {
+const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true, activeQuery = 'all' }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isAbstractExpanded, setIsAbstractExpanded] = useState(false);
   const { toggleArxivSelection, selectedArxivIds } = useResearch();
@@ -1079,7 +1089,11 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
   };
 
   const notes = paper.notes || [];
-  const visibleNotes = (notes || []).filter(n => (n?.quote || '').toString().trim().length > 0);
+  const visibleNotes = (notes || []).filter(n => {
+    if ((n?.quote || '').toString().trim().length === 0) return false;
+    if (activeQuery && activeQuery !== 'all') return n.relatedQuestion === activeQuery;
+    return true;
+  });
 
   useEffect(() => {
     if (visibleNotes.length > 0) {
@@ -1268,6 +1282,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     prevProps.paper.notes?.length === nextProps.paper.notes?.length &&
     prevProps.selectedNoteIds === nextProps.selectedNoteIds &&
     prevProps.forceExpanded === nextProps.forceExpanded &&
+    prevProps.activeQuery === nextProps.activeQuery &&
     prevProps.isLocal === nextProps.isLocal
   );
 });
@@ -1389,6 +1404,12 @@ const ResearchCardNote: React.FC<{
     openUIColumn('right');
   };
 
+  // Resolve the full paper object — priority: sourcePaper prop → note.sourcePaper (attached during flatmap)
+  const resolvedPaper: ArxivPaper | null =
+    sourcePaper || (('sourcePaper' in note) ? (note as any).sourcePaper as ArxivPaper : null);
+  const paperYear = resolvedPaper?.publishedDate?.match(/\b(19|20)\d{2}\b/)?.[0] ?? null;
+  const harvardRef = resolvedPaper?.harvardReference ?? null;
+
   return (
     <div
       className={`relative group/note transition-all duration-300 ease-in-out border rounded-xl overflow-hidden cursor-pointer
@@ -1410,10 +1431,21 @@ const ResearchCardNote: React.FC<{
           </div>
 
           <div className="flex-grow min-w-0">
-            {/* Updated Note Header with faded paper title for "Most Relevant Notes" view */}
+            {/* Paper title header — shown in "Most Relevant Notes" view */}
             {sourceTitle && showScore && (
-              <div className="mb-1 text-[10px] text-gray-400 dark:text-gray-500 font-bold uppercase tracking-tight truncate">
-                {sourceTitle}
+              <div className="mb-2 flex items-baseline gap-2 flex-wrap">
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleViewPdf(e); }}
+                  className="text-sm font-bold text-gray-800 dark:text-gray-100 hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors text-left leading-snug"
+                  title="Open in PDF viewer"
+                >
+                  {sourceTitle}
+                </button>
+                {paperYear && (
+                  <span className="text-xs font-semibold text-scholar-600 dark:text-scholar-400 flex-shrink-0">
+                    {paperYear}
+                  </span>
+                )}
               </div>
             )}
             <p className={`text-sm sm:text-base text-gray-800 dark:text-gray-200 leading-relaxed font-serif ${!isExpanded ? 'line-clamp-3' : ''}`}>
@@ -1473,6 +1505,17 @@ const ResearchCardNote: React.FC<{
             {showScore && note.relevanceScore && (
               <div className="absolute top-6 right-4 text-right">
                 <div className="text-lg font-bold text-scholar-600 dark:text-scholar-400">{Math.round(note.relevanceScore * 100)}%</div>
+              </div>
+            )}
+            {/* Harvard reference — shown above justification in Most Relevant Notes view */}
+            {showScore && harvardRef && (
+              <div className="bg-gray-50 dark:bg-gray-900/40 rounded-xl p-3 border border-gray-100 dark:border-gray-800 mb-4">
+                <h4 className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                  <Library size={11} /> Harvard Reference
+                </h4>
+                <p className="text-gray-600 dark:text-gray-300 text-xs leading-relaxed italic">
+                  {harvardRef}
+                </p>
               </div>
             )}
             {note.justification && (
