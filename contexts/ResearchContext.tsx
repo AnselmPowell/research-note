@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { SearchState, SearchMode, DeepResearchQuery, ArxivPaper, DeepResearchNote, LoadedPdf, SearchBarState, ResearchPhase, ResearchTimings } from '../types';
+import { SearchState, SearchMode, DeepResearchQuery, ArxivPaper, DeepResearchNote, LoadedPdf, SearchBarState, ResearchPhase, ResearchTimings, SearchMetrics } from '../types';
 import { performSearch, generateArxivSearchTerms, filterRelevantPapers, findRelevantPages, extractNotesFromPages, generateInsightQueries } from '../services/geminiService';
 import { extractPdfData, fetchPdfBuffer } from '../services/pdfService';
 import { searchAllSources } from '../services/searchAggregator';
@@ -93,6 +93,8 @@ interface ResearchContextType {
   researchTimings: ResearchTimings | null;
   timeToFirstNotes: number | null;
   timeToFirstPaper: number | null;
+  // NEW: search metrics tracking
+  searchMetrics: SearchMetrics | null;
 }
 
 const ResearchContext = createContext<ResearchContextType | undefined>(undefined);
@@ -155,20 +157,36 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (savedDeepResearch) {
         setArxivKeywords(savedDeepResearch.arxivKeywords || []);
         setArxivCandidates(savedDeepResearch.arxivCandidates || []);
-        setFilteredCandidates(savedDeepResearch.filteredCandidates || []);
+        
+        // NEW: Clean up in-progress status indicators on page reload
+        // If research was interrupted (user refreshed), papers might have stale statuses
+        // like 'downloading', 'processing', 'extracting' - convert these to 'completed'
+        const cleanedCandidates = (savedDeepResearch.filteredCandidates || []).map(paper => {
+          if (['downloading', 'processing', 'extracting'].includes(paper.analysisStatus)) {
+            console.log(`[ResearchContext] Cleaning stale status '${paper.analysisStatus}' for paper: ${paper.title?.substring(0, 50)}`);
+            return { ...paper, analysisStatus: 'completed' as const };
+          }
+          return paper;
+        });
+        
+        setFilteredCandidates(cleanedCandidates);
         setDeepResearchResults(savedDeepResearch.deepResearchResults || []);
+        
         if (savedDeepResearch.searchBarState) {
           setSearchBarState(savedDeepResearch.searchBarState);
         }
+        
         // Set research phase to 'completed' so UI knows to display results
-        if (savedDeepResearch.filteredCandidates?.length > 0 || savedDeepResearch.deepResearchResults?.length > 0) {
+        if (cleanedCandidates.length > 0 || savedDeepResearch.deepResearchResults?.length > 0) {
           setResearchPhase('completed');
         }
+        
         console.log('[ResearchContext] Loaded persisted deep research results:', {
           arxivKeywords: savedDeepResearch.arxivKeywords?.length || 0,
           arxivCandidates: savedDeepResearch.arxivCandidates?.length || 0,
-          filteredCandidates: savedDeepResearch.filteredCandidates?.length || 0,
-          deepResearchResults: savedDeepResearch.deepResearchResults?.length || 0
+          filteredCandidates: cleanedCandidates.length || 0,
+          deepResearchResults: savedDeepResearch.deepResearchResults?.length || 0,
+          statusesCleaned: cleanedCandidates.filter((p, idx) => p.analysisStatus !== savedDeepResearch.filteredCandidates[idx]?.analysisStatus).length
         });
       }
     } catch (e) {
@@ -226,6 +244,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [researchTimings, setResearchTimings] = useState<ResearchTimings | null>(null);
   const [timeToFirstNotes, setTimeToFirstNotes] = useState<number | null>(null);
   const [timeToFirstPaper, setTimeToFirstPaper] = useState<number | null>(null);
+  // NEW: Search metrics tracking
+  const [searchMetrics, setSearchMetrics] = useState<SearchMetrics | null>(null);
 
   // Auto-save deep research results whenever they change (debounced to prevent excessive writes)
   useEffect(() => {
@@ -708,7 +728,11 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setResearchPhase('searching');
       startPhaseTimer('searching');
       setGatheringStatus("Searching academic repositories...");
-      const candidates = await searchAllSources(structuredTerms, query.topics, query.questions, (msg) => setGatheringStatus(msg));
+      const searchResult = await searchAllSources(structuredTerms, query.topics, query.questions, (msg) => setGatheringStatus(msg));
+      
+      // NEW: Store search metrics
+      setSearchMetrics(searchResult.metrics);
+      const candidates = searchResult.papers;
 
       if (signal.aborted) return;
       endPhaseTimer('searching');
@@ -850,7 +874,9 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // NEW: Timing tracking
     researchTimings,
     timeToFirstNotes,
-    timeToFirstPaper
+    timeToFirstPaper,
+    // NEW: Search metrics tracking
+    searchMetrics
   }), [
     activeSearchMode, searchState, searchBarState, updateSearchBar, clearSearchBar,
     searchHistory, addToHistory, removeFromHistory, clearHistory,
@@ -861,7 +887,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     analyzeLoadedPdfs, analyzeArxivPapers, resetAllResearchData, processedPdfs,
     showUploadedTab, shouldOpenPdfViewer, uploadedPaperStatuses, updateUploadedPaperStatus,
     navigationHandled, pendingDeepResearchQuery, isDeepSearchBarExpanded,
-    researchTimings, timeToFirstNotes, timeToFirstPaper
+    researchTimings, timeToFirstNotes, timeToFirstPaper, searchMetrics
   ]);
 
   return (

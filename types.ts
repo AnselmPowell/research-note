@@ -108,6 +108,17 @@ export interface ArxivSearchStructured {
 export type SearchMode = 'web' | 'deep' | 'upload';
 export type ResearchPhase = 'idle' | 'initializing' | 'searching' | 'filtering' | 'extracting' | 'completed' | 'failed';
 
+// NEW: Search API metrics tracking
+export interface SearchMetrics {
+  arxiv: number;
+  openalex: number;
+  google_cse: number;
+  pdfvector: number;
+  google_grounding: number;
+  totalPapers: number;
+  timestamp: number;
+}
+
 // Timing tracking for deep research pipeline
 export interface ResearchTimings {
   startedAt: number;
@@ -120,6 +131,7 @@ export interface ResearchTimings {
   };
   firstNoteReceivedAt?: number;
   firstPaperWithNotesAt?: number;
+  searchMetrics?: SearchMetrics;
 }
 
 export interface TagData {

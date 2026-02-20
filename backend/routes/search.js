@@ -121,7 +121,18 @@ router.post('/google-cse', async (req, res, next) => {
 router.post('/pdfvector', async (req, res, next) => {
     try {
         const { query } = req.body.data;
-        if (!query) return res.json({ success: true, data: [] });
+        
+        // NEW: Log incoming request
+        console.log('[Search/PDFVector] 📥 Incoming request:', {
+            query,
+            queryLength: query?.length,
+            queryType: typeof query
+        });
+        
+        if (!query) {
+            console.log('[Search/PDFVector] ⚠️  No query provided, returning empty results');
+            return res.json({ success: true, data: [] });
+        }
 
         const API_KEY = process.env.PDFVECTOR_API_KEY || 'pdfvector_ANF9ZhDTqv2UjqrE75uZzBjWTm2PdNHk';
 
@@ -147,6 +158,13 @@ router.post('/pdfvector', async (req, res, next) => {
             ]
         };
 
+        // NEW: Log the payload being sent to PDFVector
+        console.log('[Search/PDFVector] 📤 Sending to PDFVector API:', {
+            query: payload.query,
+            limit: payload.limit,
+            fieldsCount: payload.fields.length
+        });
+
         const response = await fetch('https://www.pdfvector.com/v1/api/academic-search', {
             method: 'POST',
             headers: {
@@ -157,20 +175,43 @@ router.post('/pdfvector', async (req, res, next) => {
             signal: AbortSignal.timeout(65000)   // Original: 60s — we add 5s buffer
         });
 
+        // NEW: Log response status
+        console.log('[Search/PDFVector] 📨 PDFVector response status:', response.status);
+
         if (!response.ok) {
             if (response.status === 504) {
                 // Original handles 504 separately — server-side timeout from PDFVector
-                console.warn('[Search/PDFVector] 504 Gateway Timeout — PDFVector server timed out');
+                console.warn('[Search/PDFVector] ❌ 504 Gateway Timeout — PDFVector server timed out');
             } else {
-                console.warn(`[Search/PDFVector] API returned ${response.status}`);
+                console.warn(`[Search/PDFVector] ❌ API returned ${response.status}`);
             }
             return res.json({ success: true, data: [] });
         }
 
-        const data = await response.json().catch(() => ({ results: [] }));
-        res.json({ success: true, data: data.results || [] });
+        const data = await response.json().catch(() => {
+            console.warn('[Search/PDFVector] ⚠️  Failed to parse JSON response');
+            return { results: [] };
+        });
+        
+        // NEW: Log what we received from PDFVector
+        console.log('[Search/PDFVector] 📦 Response data:', {
+            hasResults: !!data.results,
+            resultsCount: data.results?.length || 0,
+            dataKeys: data.results ? Object.keys(data.results[0] || {}) : [],
+            firstResult: data.results?.[0],
+            fullData: data
+        });
+        
+        const returnData = data.results || [];
+        console.log('[Search/PDFVector] ✅ Returning', returnData.length, 'results');
+        
+        res.json({ success: true, data: returnData });
     } catch (err) {
-        console.warn('[Search/PDFVector] Failed:', err.message);
+        console.warn('[Search/PDFVector] ❌ Failed:', {
+            message: err.message,
+            stack: err.stack,
+            name: err.name
+        });
         res.json({ success: true, data: [] });
     }
 });

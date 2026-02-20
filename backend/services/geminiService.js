@@ -94,7 +94,7 @@ async function enhanceMetadata(firstFourPagesText, currentMetadata) {
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
     const result = await withTimeout(
       model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -164,7 +164,7 @@ Return JSON array of strings.`;
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
     const result = await withTimeout(
       model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -464,7 +464,7 @@ User query:
     if (!genAI) throw new Error('Gemini not initialized');
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2-flash',
+      model: 'gemini-3-flash-preview',
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0.1
@@ -805,7 +805,7 @@ REMEMBER YOU ARE A STUDENT RESEARCH ASSISSTANT, YOUR GOAL IS TO HELP THE USER SE
     console.log(`   ⏱️  [LLM-SELECT] Calling generateContent at ${new Date().toISOString()}...`);
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0.1 // Lower temperature for consistent selection
@@ -941,6 +941,22 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
     console.log('📊 Total papers received:', papers.length);
     console.log('❓ User questions:', userQuestions);
     console.log('🔑 Keywords:', keywords);
+
+    // NEW: Log paper counts by source API
+    const apiCounts = papers.reduce((acc, paper) => {
+      const api = paper.sourceApi || 'unknown';
+      acc[api] = (acc[api] || 0) + 1;
+      return acc;
+    }, {});
+    
+    console.log('[FILTER-PAPERS] 📊 Paper Sources:', {
+      arxiv: apiCounts.arxiv || 0,
+      openalex: apiCounts.openalex || 0,
+      google_cse: apiCounts.google_cse || 0,
+      pdfvector: apiCounts.pdfvector || 0,
+      google_grounding: apiCounts.google_grounding || 0,
+      total: papers.length
+    });
 
     if (papers.length === 0) {
       console.log('⚠️  No papers to filter');
@@ -1480,7 +1496,7 @@ INSTRUCTIONS:
     if (!genAI) throw new Error('Gemini not initialized');
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2-flash',
+      model: 'gemini-3-flash-preview',
       tools: [{ googleSearch: {} }]
     });
 
@@ -1557,7 +1573,7 @@ async function generateInsightQueries(userQuestions, contextQuery) {
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
     const result = await withTimeout(
       model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],

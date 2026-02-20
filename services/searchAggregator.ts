@@ -1,5 +1,6 @@
 import { ArxivPaper, ArxivSearchStructured } from '../types';
 import { buildArxivQueries, searchArxiv } from './arxivService';
+import { SearchMetrics } from '../types';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001/api/v1' : '/api/v1';
 
@@ -165,27 +166,58 @@ function normaliseGoogleCSE(items: any[]): ArxivPaper[] {
 }
 
 function normalisePDFVector(results: any[], allKeywords: string[]): ArxivPaper[] {
-    return results
-        .map(pub => {
-            const pdfUri = pub.pdfURL || pub.url || null;
-            if (!pdfUri) return null;
+    console.log('[searchAggregator] 🔧 normalisePDFVector - Starting normalisation:', {
+        inputCount: results.length,
+        keywords: allKeywords,
+        firstItem: results[0]
+    });
+    
+    const mapped = results.map((pub, idx) => {
+        const pdfUri = pub.pdfURL || pub.url || null;
+        
+        if (!pdfUri) {
+            console.log(`[searchAggregator] 🔧 normalisePDFVector - Item ${idx} filtered out: no pdfUri`, {
+                hasPdfURL: !!pub.pdfURL,
+                hasUrl: !!pub.url,
+                title: pub.title
+            });
+            return null;
+        }
 
-            return {
-                id: pub.doi || pub.pdfURL || pub.url || pub.title,
-                title: pub.title || 'Untitled',
-                summary: pub.abstract || '',
-                authors: (pub.authors || [])
-                    .map((a: any) => (typeof a === 'string' ? a : a.name || ''))
-                    .filter(Boolean),
-                pdfUri,
-                publishedDate: String(pub.year || ''),
-                sourceApi: 'pdfvector' as const,
-                // Pre-score for PDFVector; Stage 3 cosine will re-rank across all sources
-                // Pass pub.year for tie-breaker (+0.5 per year after 2000, from original)
-                relevanceScore: scoreRelevance(pub.title || '', pub.abstract || '', allKeywords, pub.year)
-            };
-        })
-        .filter(Boolean) as ArxivPaper[];
+        const score = scoreRelevance(pub.title || '', pub.abstract || '', allKeywords, pub.year);
+        
+        console.log(`[searchAggregator] 🔧 normalisePDFVector - Item ${idx} mapped:`, {
+            title: pub.title?.substring(0, 50),
+            pdfUri: pdfUri?.substring(0, 50),
+            score,
+            year: pub.year,
+            abstract: pub.abstract?.substring(0, 50)
+        });
+
+        return {
+            id: pub.doi || pub.pdfURL || pub.url || pub.title,
+            title: pub.title || 'Untitled',
+            summary: pub.abstract || '',
+            authors: (pub.authors || [])
+                .map((a: any) => (typeof a === 'string' ? a : a.name || ''))
+                .filter(Boolean),
+            pdfUri,
+            publishedDate: String(pub.year || ''),
+            sourceApi: 'pdfvector' as const,
+            // Pre-score for PDFVector; Stage 3 cosine will re-rank across all sources
+            // Pass pub.year for tie-breaker (+0.5 per year after 2000, from original)
+            relevanceScore: score
+        };
+    });
+
+    const filtered = mapped.filter(Boolean) as ArxivPaper[];
+    
+    console.log('[searchAggregator] 🔧 normalisePDFVector - After filtering:', {
+        outputCount: filtered.length,
+        filtered: mapped.length - filtered.length
+    });
+    
+    return filtered;
 }
 
 function normaliseGrounding(results: any[]): ArxivPaper[] {
@@ -247,20 +279,52 @@ async function fetchGoogleCSE(booleanQuery: string): Promise<ArxivPaper[]> {
 
 async function fetchPDFVector(booleanQuery: string, allKeywords: string[]): Promise<ArxivPaper[]> {
     try {
+        console.log('[searchAggregator] 🔍 PDFVector - Starting search');
+        console.log('[searchAggregator] 🔍 PDFVector - Query being sent:', booleanQuery);
+        console.log('[searchAggregator] 🔍 PDFVector - Keywords:', allKeywords);
+        
         const r = await fetch(`${API_BASE}/search/pdfvector`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ data: { query: booleanQuery } }),
             signal: AbortSignal.timeout(38000)
         });
+        
+        console.log('[searchAggregator] 🔍 PDFVector - Response status:', r.status);
+        
         const result = await r.json();
+        console.log('[searchAggregator] 🔍 PDFVector - Raw response data:', {
+            hasData: !!result.data,
+            dataLength: result.data?.length || 0,
+            dataType: typeof result.data,
+            firstItem: result.data?.[0],
+            fullResponse: result
+        });
+        
         const normalised = normalisePDFVector(result.data || [], allKeywords);
+        
+        console.log('[searchAggregator] 🔍 PDFVector - After normalisation:', {
+            normalisedCount: normalised.length,
+            firstNormalised: normalised[0]
+        });
+        
         // Apply ScholarAI re-ranking: sort by relevance score, cap at 50
-        return normalised
+        const ranked = normalised
             .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
             .slice(0, 50);
+            
+        console.log('[searchAggregator] 🔍 PDFVector - After ranking/slicing:', {
+            finalCount: ranked.length,
+            scores: ranked.slice(0, 3).map(p => ({title: p.title.substring(0, 50), score: p.relevanceScore}))
+        });
+        
+        return ranked;
     } catch (e: any) {
-        console.warn('[searchAggregator] PDFVector failed:', e.message);
+        console.warn('[searchAggregator] ❌ PDFVector failed:', {
+            message: e.message,
+            stack: e.stack,
+            name: e.name
+        });
         return [];
     }
 }
@@ -290,7 +354,7 @@ export const searchAllSources = async (
     originalTopics: string[],
     originalQuestions: string[],
     onStatusUpdate?: (msg: string) => void
-): Promise<ArxivPaper[]> => {
+): Promise<{ papers: ArxivPaper[]; metrics: SearchMetrics }> => {
     const startTime = performance.now();
 
     // Build each API's specific query format
@@ -320,13 +384,27 @@ export const searchAllSources = async (
     const pdfVectorPapers = pdfVectorResult.status === 'fulfilled' ? pdfVectorResult.value : [];
     const groundingPapers = groundingResult.status === 'fulfilled' ? groundingResult.value : [];
 
+    // NEW: Create metrics object with per-API counts
+    const searchMetrics: SearchMetrics = {
+        arxiv: arxivPapers.length,
+        openalex: openAlexPapers.length,
+        google_cse: csePapers.length,
+        pdfvector: pdfVectorPapers.length,
+        google_grounding: groundingPapers.length,
+        totalPapers: 0, // Will update after deduplication
+        timestamp: Date.now()
+    };
+
+    const totalBeforeDedup = arxivPapers.length + openAlexPapers.length + csePapers.length + pdfVectorPapers.length + groundingPapers.length;
+
     console.log(
-        `[searchAggregator] Results — ` +
-        `ArXiv:${arxivPapers.length} | ` +
-        `OpenAlex:${openAlexPapers.length} | ` +
-        `GoogleCSE:${csePapers.length} | ` +
-        `PDFVector:${pdfVectorPapers.length} | ` +
-        `Grounding:${groundingPapers.length}`
+        `[searchAggregator] ✅ Search Results — ` +
+        `ArXiv:${searchMetrics.arxiv} | ` +
+        `OpenAlex:${searchMetrics.openalex} | ` +
+        `GoogleCSE:${searchMetrics.google_cse} | ` +
+        `PDFVector:${searchMetrics.pdfvector} | ` +
+        `Grounding:${searchMetrics.google_grounding} | ` +
+        `Total before dedup: ${totalBeforeDedup}`
     );
 
     // Merge and deduplicate by pdfUri (the pipeline's universal key)
@@ -350,8 +428,14 @@ export const searchAllSources = async (
 
     console.log(
         `[searchAggregator] 🏁 Done in ${Math.round(performance.now() - startTime)}ms — ` +
-        `${merged.length} unique papers`
+        `${merged.length} unique papers after deduplication`
     );
 
-    return merged;
+    // Update metrics with final count
+    searchMetrics.totalPapers = merged.length;
+
+    return {
+        papers: merged,
+        metrics: searchMetrics
+    };
 };

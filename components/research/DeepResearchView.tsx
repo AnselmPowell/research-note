@@ -280,6 +280,8 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
         const bNotes = b.notes?.length || 0;
         const aIsProcessing = ['downloading', 'processing', 'extracting'].includes(a.analysisStatus || '');
         const bIsProcessing = ['downloading', 'processing', 'extracting'].includes(b.analysisStatus || '');
+        const aIsFailed = a.analysisStatus === 'failed';
+        const bIsFailed = b.analysisStatus === 'failed';
 
         // TIER 1: Papers WITH notes float to the top immediately (live re-order as notes arrive)
         const aHasNotes = aNotes > 0;
@@ -292,7 +294,15 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
         // TIER 3: Among papers with no notes yet, actively-processing papers come next
         if (aIsProcessing !== bIsProcessing) return bIsProcessing ? 1 : -1;
 
-        // TIER 4: Tiebreak by relevance score
+        // TIER 4: Papers waiting to be processed (not processing, no notes, not failed)
+        const aIsWaiting = !aIsProcessing && !aHasNotes && !aIsFailed;
+        const bIsWaiting = !bIsProcessing && !bHasNotes && !bIsFailed;
+        if (aIsWaiting !== bIsWaiting) return aIsWaiting ? -1 : 1;
+
+        // TIER 5: Failed papers sink to the bottom
+        if (aIsFailed !== bIsFailed) return aIsFailed ? 1 : -1;
+
+        // TIER 6: Tiebreak by relevance score
         const aScore = a.relevanceScore || 0;
         const bScore = b.relevanceScore || 0;
         return bScore - aScore;
