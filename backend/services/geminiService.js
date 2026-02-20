@@ -237,7 +237,7 @@ async function generateArxivSearchTerms(topics, questions) {
 
   const userQuery = [...safeTopics, ...safeQuestions].join('. ');
 
-  const systemPrompt = `You are an academic keyword generation engine.
+    const systemPrompt = `You are an academic keyword generation engine.
 
 Your sole task is to convert a user's natural-language research question into high-quality academic search keywords suitable for abstract-only searches in academic paper databases.
 

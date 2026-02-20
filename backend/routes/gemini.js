@@ -20,10 +20,27 @@ router.post('/search-variations', async (req, res, next) => {
 
 router.post('/arxiv-search-terms', async (req, res, next) => {
   try {
-    const { topics, questions } = req.body.data;
+    // DEFENSIVE: Handle missing data wrapper
+    const data = req.body.data || req.body || {};
+    const { topics, questions } = data;
+    
+    console.log('[arxiv-search-terms] Received request:', {
+      hasData: !!req.body.data,
+      dataType: typeof data,
+      topicsType: typeof topics,
+      questionsType: typeof questions
+    });
+    
     const result = await geminiService.generateArxivSearchTerms(topics, questions);
     res.json({ success: true, data: result });
-  } catch (err) { next(err); }
+  } catch (err) { 
+    console.error('[arxiv-search-terms] Error:', {
+      message: err.message,
+      stack: err.stack,
+      type: err.constructor.name
+    });
+    next(err); 
+  }
 });
 
 router.post('/embedding', async (req, res, next) => {
