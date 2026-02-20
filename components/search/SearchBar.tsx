@@ -89,13 +89,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   // Determine if deep research is currently active/loading
   const isDeepLoading = ['initializing', 'searching', 'filtering', 'extracting'].includes(researchPhase);
 
-  // Close search bar when deep research begins
-  useEffect(() => {
-    if (isDeepLoading && mode === 'deep' && isExpanded) {
-      setIsExpanded(false);
-    }
-  }, [isDeepLoading, mode, isExpanded, setIsExpanded]);
-
   // Handle PDF loading and navigation when PDFs are processed
   useEffect(() => {
     const handleProcessedPdfs = async () => {

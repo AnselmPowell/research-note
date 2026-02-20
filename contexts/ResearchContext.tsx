@@ -367,7 +367,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: 'downloading' } : p));
       try {
         if (signal?.aborted) throw new Error("Aborted");
-        const buffer = await fetchPdfBuffer(paper.pdfUri);
+        // FIXED: Pass AbortSignal to fetchPdfBuffer for cancellation support
+        const buffer = await fetchPdfBuffer(paper.pdfUri, signal);
         if (signal?.aborted) throw new Error("Aborted");
         const extracted = await extractPdfData(buffer, signal);
 
@@ -506,7 +507,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (signal?.aborted) return null;
 
       try {
-        const arrayBuffer = await fetchPdfBuffer(url);
+        // FIXED: Pass AbortSignal to fetchPdfBuffer for cancellation support
+        const arrayBuffer = await fetchPdfBuffer(url, signal);
         if (signal?.aborted) return null;
 
         const extractedData = await extractPdfData(arrayBuffer, signal);
@@ -521,7 +523,10 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         return pdf;
       } catch (error) {
-        console.error(`Failed to process URL: ${url}`, error);
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.warn(`[ResearchContext] Failed to process user URL: ${url} - ${errorMsg}`);
+        // Silent return is acceptable here (batch processing)
+        // Error is logged to console for debugging
         return null;
       }
     };

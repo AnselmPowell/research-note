@@ -416,15 +416,25 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     if (selectedArxivIds.size === candidates.length) {
       clearArxivSelection();
     } else {
-      selectAllArxivPapers(candidates.map(p => p.id));
+      // FIXED: Only select papers that haven't failed
+      const selectablePapers = candidates.filter(p => p.analysisStatus !== 'failed');
+      selectAllArxivPapers(selectablePapers.map(p => p.id));
     }
   }, [selectedArxivIds.size, candidates, clearArxivSelection, selectAllArxivPapers]);
 
   // Select all papers on current page
   const handleSelectPage = useCallback(() => {
+    // FIXED: Filter out failed papers from both views
     const pagePaperIds = sortBy === 'most-relevant-notes'
-      ? Array.from(new Set(paginatedContent.map(n => (n as any).sourcePaper.id)))
-      : (paginatedContent as ArxivPaper[]).map(p => p.id);
+      ? Array.from(new Set(
+          paginatedContent
+            .map(n => (n as any).sourcePaper)
+            .filter(p => p.analysisStatus !== 'failed')
+            .map(p => p.id)
+        ))
+      : (paginatedContent as ArxivPaper[])
+        .filter(p => p.analysisStatus !== 'failed')
+        .map(p => p.id);
 
     // Check if everything on page is already selected
     const allPageSelected = pagePaperIds.every(id => selectedArxivIds.has(id));
@@ -452,9 +462,17 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
   // Select all papers in current filtered/sorted results
   const handleSelectAllTotal = useCallback(() => {
-    const allIds = sortBy === 'most-relevant-notes'
-      ? Array.from(new Set(content.map(n => (n as any).sourcePaper.id)))
-      : (content as ArxivPaper[]).map(p => p.id);
+    // FIXED: Only select papers that haven't failed
+    const selectableContent = sortBy === 'most-relevant-notes'
+      ? content
+        .filter(n => (n as any).sourcePaper.analysisStatus !== 'failed')
+        .map(n => (n as any).sourcePaper.id)
+      : (content as ArxivPaper[])
+        .filter(p => p.analysisStatus !== 'failed')
+        .map(p => p.id);
+    
+    // Deduplicate in case of notes view
+    const allIds = Array.from(new Set(selectableContent));
     selectAllArxivPapers(allIds);
     setIsSelectMenuOpen(false);
   }, [content, sortBy, selectAllArxivPapers]);
@@ -469,6 +487,36 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
       setIsClearingResults(false);
     }
   }, [clearDeepResearchResults]);
+
+  // FIXED: Calculate selectable papers (excluding failed ones)
+  const selectablePapersCount = useMemo(() => {
+    if (sortBy === 'most-relevant-notes') {
+      const uniquePapers = new Set(
+        paginatedContent
+          .map(n => (n as any).sourcePaper)
+          .filter(p => p.analysisStatus !== 'failed')
+          .map(p => p.id)
+      );
+      return uniquePapers.size;
+    }
+    return (paginatedContent as ArxivPaper[])
+      .filter(p => p.analysisStatus !== 'failed').length;
+  }, [paginatedContent, sortBy]);
+
+  // FIXED: Calculate total selectable papers (excluding failed ones)
+  const selectableTotalCount = useMemo(() => {
+    if (sortBy === 'most-relevant-notes') {
+      const uniquePapers = new Set(
+        content
+          .map(n => (n as any).sourcePaper)
+          .filter(p => p.analysisStatus !== 'failed')
+          .map(p => p.id)
+      );
+      return uniquePapers.size;
+    }
+    return (content as ArxivPaper[])
+      .filter(p => p.analysisStatus !== 'failed').length;
+  }, [content, sortBy]);
 
   return (
     <div className="p-3 sm:p-6 font-sans max-w-4xl mx-auto min-h-[500px] relative" style={{ containerType: 'inline-size' }}>
@@ -532,14 +580,14 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                           className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                         >
                           <LayoutList size={16} className="text-gray-400" />
-                          <span className="text-sm font-medium text-gray-700 dark:text-white">Select Current Page ({paginatedContent.length})</span>
+                          <span className="text-sm font-medium text-gray-700 dark:text-white">Select Current Page ({selectablePapersCount})</span>
                         </button>
                         <button
                           onClick={handleSelectAllTotal}
                           className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                         >
                           <Layers size={16} className="text-gray-400" />
-                          <span className="text-sm font-medium text-gray-700 dark:text-white">Select All Total ({content.length})</span>
+                          <span className="text-sm font-medium text-gray-700 dark:text-white">Select All Total ({selectableTotalCount})</span>
                         </button>
                         <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1" />
                         <button
@@ -1117,6 +1165,13 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
 
   const handleOpenPdf = (e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    // FIXED: If paper failed to download, open external link instead
+    if (isFailed && paper.pdfUri) {
+      window.open(paper.pdfUri, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    
     if (isLocal) {
       setActivePdf(paper.id);
       openUIColumn('right');
@@ -1187,6 +1242,8 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                     <BookText size={12} /> View
                   </button>
 
+                 
+
 
                   <button
                     onClick={handleAddToSources}
@@ -1212,6 +1269,8 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
             <h3 className="text-base sm:text-2xl font-bold text-gray-900 dark:text-gray-100 leading-snug mb-1 cursor-pointer hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors" onClick={handleOpenPdf}>
               {paper.title}
             </h3>
+
+            
 
             {paper.harvardReference && (
               <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 font-serif italic mb-2 leading-tight">
