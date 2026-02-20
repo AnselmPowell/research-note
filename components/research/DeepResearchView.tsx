@@ -123,7 +123,11 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
     performDeepResearch,
     activeSearchMode,
     setActiveSearchMode,
-    stopDeepResearch
+    stopDeepResearch,
+    // NEW: Timing tracking
+    researchTimings,
+    timeToFirstNotes,
+    timeToFirstPaper
   } = useResearch();
 
   // State Management
@@ -684,10 +688,8 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                 )}
               </div>
 
-              {/* RIGHT SIDE - Expand/Collapse and Filter */}
               <div className="flex items-center gap-2">
-
-
+              <div className="flex items-center gap-2">
                 {/* Filter Button */}
                 <button
                   onClick={() => setShowFilters(!showFilters)}
@@ -700,6 +702,18 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                   <Filter size={20} />
                   <span className="deep-sort-text">Filters</span>
                 </button>
+ 
+                {searchQuery || localFilters.paper !== 'all' || localFilters.query !== 'all' || localFilters.hasNotes
+                    ? (
+                <button
+                  onClick={handleResetFilters}
+                  className="text-[8px] font-bold text-red-700 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:underline transition-all"
+                >
+                  Reset Filters
+                </button>
+                    ): null}
+
+                </div>
 
                 {/* Collapse/Expand All Notes */}
                 {sortBy !== 'most-relevant-notes' && currentTabCandidates.some(p => p.notes && p.notes.length > 0) && (
@@ -711,9 +725,10 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                     {allNotesExpanded ? <ChevronsUp size={24} /> : <ChevronsDown size={24} />}
                   </button>
                 )}
+                </div>
               </div>
-            </div>
           )}
+
 
           {/* Filter Panel */}
           {showFilters && activeTab === 'deep' && !isBlurred && (
@@ -901,6 +916,16 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
             <div className="text-sm text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
               <BookOpenText size={14} className="opacity-60" />
               About {currentTabCandidates.length} paper{currentTabCandidates.length !== 1 ? 's' : ''} with {totalNotes} note{totalNotes !== 1 ? 's' : ''} found
+            
+                {/* NEW: Add timing display */}
+                  {timeToFirstNotes !== null && (
+                    <>
+                      <span className="text-xs text-gray-400 mx-0.5">•</span>
+                      <span className="text-sm text-gray-500 dark:text-scholar-400 font-medium">
+                         {(timeToFirstNotes / 1000).toFixed(2)}s
+                      </span>
+                    </>
+                  )}
             </div>
 
             {/* Abort Button - Visible during active research phases */}

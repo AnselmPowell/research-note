@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { SearchState, SearchMode, DeepResearchQuery, ArxivPaper, DeepResearchNote, LoadedPdf, SearchBarState, ResearchPhase } from '../types';
+import { SearchState, SearchMode, DeepResearchQuery, ArxivPaper, DeepResearchNote, LoadedPdf, SearchBarState, ResearchPhase, ResearchTimings } from '../types';
 import { performSearch, generateArxivSearchTerms, filterRelevantPapers, findRelevantPages, extractNotesFromPages, generateInsightQueries } from '../services/geminiService';
 import { extractPdfData, fetchPdfBuffer } from '../services/pdfService';
 import { searchAllSources } from '../services/searchAggregator';
@@ -89,6 +89,10 @@ interface ResearchContextType {
   // New: track deep search bar expansion state for UI layout
   isDeepSearchBarExpanded: boolean;
   setIsDeepSearchBarExpanded: (expanded: boolean) => void;
+  // New: timing tracking for pipeline phases
+  researchTimings: ResearchTimings | null;
+  timeToFirstNotes: number | null;
+  timeToFirstPaper: number | null;
 }
 
 const ResearchContext = createContext<ResearchContextType | undefined>(undefined);
@@ -218,6 +222,11 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [pendingDeepResearchQuery, setPendingDeepResearchQuery] = useState<DeepResearchQuery | null>(null);
   const [isDeepSearchBarExpanded, setIsDeepSearchBarExpanded] = useState(false);
 
+  // NEW: Timing tracking for deep research pipeline
+  const [researchTimings, setResearchTimings] = useState<ResearchTimings | null>(null);
+  const [timeToFirstNotes, setTimeToFirstNotes] = useState<number | null>(null);
+  const [timeToFirstPaper, setTimeToFirstPaper] = useState<number | null>(null);
+
   // Auto-save deep research results whenever they change (debounced to prevent excessive writes)
   useEffect(() => {
     // Only save if we have VISIBLE results (filtered candidates or deep research notes)
@@ -247,6 +256,61 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       localStorageService.clearDeepResearchResults();
     }
   }, [arxivKeywords, arxivCandidates, filteredCandidates, deepResearchResults, searchBarState]);
+
+  // NEW: Track when first note is received (check filteredCandidates where notes actually live)
+  useEffect(() => {
+    if (timeToFirstNotes === null && researchTimings) {
+      const hasNotes = filteredCandidates.some(p => (p.notes?.length || 0) > 0);
+      if (hasNotes) {
+        const elapsed = performance.now() - researchTimings.startedAt;
+        setTimeToFirstNotes(elapsed);
+        console.log(`[📊 Timing] 📝 First note received: ${(elapsed / 1000).toFixed(2)}s`);
+      }
+    }
+  }, [filteredCandidates, timeToFirstNotes, researchTimings]);
+
+  // NEW: Track when first paper with notes appears
+  useEffect(() => {
+    if (timeToFirstPaper === null && researchTimings && filteredCandidates.some(p => (p.notes?.length || 0) > 0)) {
+      const elapsed = performance.now() - researchTimings.startedAt;
+      setTimeToFirstPaper(elapsed);
+      console.log(`[📊 Timing] 📄 First paper with notes: ${(elapsed / 1000).toFixed(2)}s`);
+    }
+  }, [filteredCandidates, timeToFirstPaper, researchTimings]);
+
+  // NEW: Log timing report when research completes
+  useEffect(() => {
+    if (researchPhase === 'completed' && researchTimings) {
+      const totalDuration = performance.now() - researchTimings.startedAt;
+      const lines = [
+        '\n╔════════════════════════════════════════════════╗',
+        '║      DEEP RESEARCH PIPELINE TIMING REPORT      ║',
+        '╚════════════════════════════════════════════════╝\n'
+      ];
+
+      // Phase breakdown
+      lines.push('📊 PHASE BREAKDOWN:');
+      Object.entries(researchTimings.phases).forEach(([phase, data]) => {
+        if (data?.duration !== undefined) {
+          const percentage = ((data.duration / totalDuration) * 100).toFixed(1);
+          lines.push(`  ${phase.padEnd(15)} ${data.duration.toFixed(2)}ms (${percentage}%)`);
+        }
+      });
+
+      // Milestone timings
+      lines.push('\n⏱️  MILESTONES:');
+      if (timeToFirstNotes !== null) {
+        lines.push(`  First note received: ${(timeToFirstNotes / 1000).toFixed(2)}s`);
+      }
+      if (timeToFirstPaper !== null) {
+        lines.push(`  First paper w/ notes: ${(timeToFirstPaper / 1000).toFixed(2)}s`);
+      }
+
+      // Total
+      lines.push(`\n✅ TOTAL DURATION: ${(totalDuration / 1000).toFixed(2)}s\n`);
+      console.log(lines.join('\n'));
+    }
+  }, [researchPhase, researchTimings, timeToFirstNotes, timeToFirstPaper]);
 
   const getNoteId = useCallback(
     (note: DeepResearchNote) => `${note.pdfUri}-${note.pageNumber}-${note.quote.slice(0, 20)}`,
@@ -280,6 +344,40 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const selectAllArxivPapers = useCallback((ids: string[]) => setSelectedArxivIds(new Set(ids)), []);
   const clearArxivSelection = useCallback(() => setSelectedArxivIds(new Set()), []);
+
+  // NEW: Helper functions for timing tracking
+  const startPhaseTimer = useCallback((phase: ResearchPhase) => {
+    setResearchTimings(prev => {
+      if (!prev) return null;
+      const now = performance.now();
+      const updatedPhases = { ...prev.phases };
+      updatedPhases[phase] = { start: now };
+      console.log(`[📊 Timing] Phase "${phase}" started`);
+      return { ...prev, phases: updatedPhases };
+    });
+  }, []);
+
+  const endPhaseTimer = useCallback((phase: ResearchPhase) => {
+    setResearchTimings(prev => {
+      if (!prev?.phases[phase]) return prev;
+      const now = performance.now();
+      const phaseData = { ...prev.phases[phase] };
+      const duration = now - phaseData.start;
+      phaseData.end = now;
+      phaseData.duration = duration;
+      
+      const totalElapsed = now - prev.startedAt;
+      console.log(
+        `[📊 Timing] Phase "${phase}" completed\n` +
+        `  Duration: ${duration.toFixed(2)}ms\n` +
+        `  Total elapsed: ${totalElapsed.toFixed(2)}ms`
+      );
+      
+      const allPhases = { ...prev.phases };
+      allPhases[phase] = phaseData;
+      return { ...prev, phases: allPhases };
+    });
+  }, []);
 
   const resetSearch = useCallback(() => {
     if (abortControllerRef.current) { abortControllerRef.current.abort(); abortControllerRef.current = null; }
@@ -543,7 +641,15 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
 
+    // NEW: Initialize timing tracker
+    const now = performance.now();
+    setResearchTimings({ startedAt: now, phases: {} });
+    setTimeToFirstNotes(null);
+    setTimeToFirstPaper(null);
+    console.log('[📊 Timing] 🔍 Deep research pipeline started');
+
     setResearchPhase('initializing');
+    startPhaseTimer('initializing');
     setArxivCandidates([]);
     setFilteredCandidates([]);
     setSearchState(prev => ({ ...prev, query: query.topics.join(', ') }));
@@ -593,20 +699,24 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       // Then do ArXiv search
       if (signal.aborted) return;
+      endPhaseTimer('initializing');
       const structuredTerms = await generateArxivSearchTerms(query.topics, query.questions);
       const displayKeywords = [structuredTerms.primary_keyword, ...structuredTerms.secondary_keywords].filter(Boolean);
       setArxivKeywords(displayKeywords);
 
       if (signal.aborted) return;
       setResearchPhase('searching');
+      startPhaseTimer('searching');
       setGatheringStatus("Searching academic repositories...");
       const candidates = await searchAllSources(structuredTerms, query.topics, query.questions, (msg) => setGatheringStatus(msg));
 
       if (signal.aborted) return;
+      endPhaseTimer('searching');
       setArxivCandidates(candidates);
 
       if (candidates.length > 0) {
         setResearchPhase('filtering');
+        startPhaseTimer('filtering');
         setGatheringStatus("Verifying relevance...");
 
         console.log('[ResearchContext] 🔍 Starting paper filtering:', {
@@ -628,7 +738,9 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
 
         if (signal.aborted) return;
+        endPhaseTimer('filtering');
         setResearchPhase('extracting');
+        startPhaseTimer('extracting');
         setFilteredCandidates(filtered);
 
         const totalSources = userPdfs.length + filtered.length;
@@ -638,15 +750,20 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         await performHybridResearch(userPdfs, filtered, query.questions, displayKeywords);
 
         if (signal.aborted) return;
+        endPhaseTimer('extracting');
         setResearchPhase('completed');
       } else if (userPdfs.length > 0) {
         // Only user PDFs, no ArXiv matches
+        endPhaseTimer('filtering');
         setResearchPhase('extracting');
+        startPhaseTimer('extracting');
         setGatheringStatus("Analyzing your provided PDFs...");
         await performHybridResearch(userPdfs, [], query.questions, displayKeywords);
         if (signal.aborted) return;
+        endPhaseTimer('extracting');
         setResearchPhase('completed');
       } else {
+        endPhaseTimer('filtering');
         setGatheringStatus("No matches found.");
         setResearchPhase('completed');
       }
@@ -729,7 +846,11 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     pendingDeepResearchQuery,
     setPendingDeepResearchQuery,
     isDeepSearchBarExpanded,
-    setIsDeepSearchBarExpanded
+    setIsDeepSearchBarExpanded,
+    // NEW: Timing tracking
+    researchTimings,
+    timeToFirstNotes,
+    timeToFirstPaper
   }), [
     activeSearchMode, searchState, searchBarState, updateSearchBar, clearSearchBar,
     searchHistory, addToHistory, removeFromHistory, clearHistory,
@@ -739,7 +860,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     performWebSearch, performDeepResearch, performHybridResearch, stopDeepResearch, resetSearch,
     analyzeLoadedPdfs, analyzeArxivPapers, resetAllResearchData, processedPdfs,
     showUploadedTab, shouldOpenPdfViewer, uploadedPaperStatuses, updateUploadedPaperStatus,
-    navigationHandled, pendingDeepResearchQuery, isDeepSearchBarExpanded
+    navigationHandled, pendingDeepResearchQuery, isDeepSearchBarExpanded,
+    researchTimings, timeToFirstNotes, timeToFirstPaper
   ]);
 
   return (

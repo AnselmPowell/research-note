@@ -108,6 +108,20 @@ export interface ArxivSearchStructured {
 export type SearchMode = 'web' | 'deep' | 'upload';
 export type ResearchPhase = 'idle' | 'initializing' | 'searching' | 'filtering' | 'extracting' | 'completed' | 'failed';
 
+// Timing tracking for deep research pipeline
+export interface ResearchTimings {
+  startedAt: number;
+  phases: {
+    [key in ResearchPhase]?: {
+      start: number;
+      end?: number;
+      duration?: number;
+    };
+  };
+  firstNoteReceivedAt?: number;
+  firstPaperWithNotesAt?: number;
+}
+
 export interface TagData {
   value: string;
   status?: 'valid' | 'invalid' | 'loading';
