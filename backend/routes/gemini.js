@@ -68,14 +68,29 @@ router.post('/filter-papers', async (req, res, next) => {
       keywordsCount: keywords?.length,
       firstPaperTitle: papers?.[0]?.title
     });
-    const result = await geminiService.filterRelevantPapers(papers, userQuestions, keywords);
+    
+    // Add timeout of 120 seconds for filtering (embedding generation can be slow)
+    const filterPromise = geminiService.filterRelevantPapers(papers, userQuestions, keywords);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Filter papers operation timed out after 120s')), 120000)
+    );
+    
+    const result = await Promise.race([filterPromise, timeoutPromise]);
+    
     console.log('[FILTER-PAPERS] Returning:', {
       resultCount: result?.length,
       firstResultTitle: result?.[0]?.title,
       firstResultScore: result?.[0]?.relevanceScore
     });
     res.json({ success: true, data: result });
-  } catch (err) { next(err); }
+  } catch (err) { 
+    console.error('[FILTER-PAPERS] Error:', {
+      message: err.message,
+      type: err.constructor.name,
+      papersCount: req.body?.data?.papers?.length
+    });
+    next(err); 
+  }
 });
 
 router.post('/extract-notes', async (req, res, next) => {
@@ -94,7 +109,13 @@ router.post('/extract-notes', async (req, res, next) => {
     console.log('   - pageIndex:', relevantPages?.[0]?.pageIndex);
     console.log('   - Available keys:', relevantPages?.[0] ? Object.keys(relevantPages[0]) : []);
 
-    const result = await geminiService.extractNotesFromPages(relevantPages, userQuestions, paperTitle, paperAbstract, referenceList);
+    // Add timeout of 150 seconds for note extraction (can be slow with many pages)
+    const extractPromise = geminiService.extractNotesFromPages(relevantPages, userQuestions, paperTitle, paperAbstract, referenceList);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Extract notes operation timed out after 150s')), 150000)
+    );
+    
+    const result = await Promise.race([extractPromise, timeoutPromise]);
 
     console.log('\n✅ Notes extraction complete:');
     console.log('   - Notes count:', result?.length);
