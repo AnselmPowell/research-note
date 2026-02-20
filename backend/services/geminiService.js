@@ -155,12 +155,6 @@ async function enhanceMetadata(firstFourPagesText, currentMetadata) {
     }
   }
 }
-      harvardReference: result.harvardReference,
-      publisher: result.publisher,
-      categories: result.categories
-    };
-  }
-}
 
 async function generateSearchVariations(originalQuery) {
   const prompt = `Generate 5 additional, distinct search queries for: "${originalQuery}".
