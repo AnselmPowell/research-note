@@ -383,6 +383,46 @@ BAD EXAMPLE 1: What NOT TO DO:  This below is wrong Nigeria needs to be the prim
   ]
 }
 
+BAD EXAMPLE 2: What NOT TO DO: This below is wrong because the primary keyword should be "renewable energy" not "solar panels" because the user is asking about renewable energy solutions for rural areas and solar panels are just one type of renewable energy solution. The primary keyword should capture the main subject matter of the user's question which is renewable energy in general, not just solar panels.
+
+primary_keyword: 'solar panels',
+secondary_keywords: [ 'renewable energy', 'rural areas', 'off-grid' ],
+query_combinations: [
+  'solar panels AND renewable energy',
+  'solar panels AND rural areas',
+
+  'solar panels AND off-grid'
+]
+
+GOOD EXAMPLE TO FOLLOW:
+primary_keyword: 'renewable energy',
+secondary_keywords: [ 'solar panels', 'rural areas', 'clean energy' ],
+query_combinations: [
+  'renewable energy AND solar panels',
+  'renewable energy AND rural areas',
+  'renewable energy AND clean energy'
+]
+
+BAD EXAMPLE 3: What NOT TO DO: This below is wrong because the primary keyword should be "1950s economic" not "economic theories" because the user is asking about economic theories in the 1950s so the primary keyword should be "1950s economic" focusing on the time period as that is the main focus of the user's question. The secondary keywords can be "economic theories", "1950s", and "post-war economy".
+primary_keyword: 'economic theories',
+secondary_keywords: [ '1950s', 'post-war economy', 'money' ],
+query_combinations: [
+  'economic theories AND 1950s',
+  'economic theories AND post-war economy',
+  'economic theories AND money'
+
+]
+GOOD EXAMPLE TO FOLLOW:
+primary_keyword: '1950s economic',
+secondary_keywords: [ 'economic theories', '1950s', 'post-war economy' ],
+query_combinations: [
+  '1950s economic AND economic theories',
+  '1950s economic AND 1950s',
+  '1950s economic AND post-war economy'
+]
+#######
+
+\n\n
 User query:
 "${userQuery}"`;
 
