@@ -222,7 +222,20 @@ Return ONLY a JSON array of strings. Example: ["query1", "query2", "query3", "qu
 async function generateArxivSearchTerms(topics, questions) {
   console.log('📊 Generating ArXiv search terms (keyword-focused)...');
 
-  const userQuery = [...topics, ...questions].join('. ');
+  // VALIDATE INPUTS: Ensure topics and questions are arrays
+  const safeTopics = Array.isArray(topics) ? topics : (topics ? [topics] : []);
+  const safeQuestions = Array.isArray(questions) ? questions : (questions ? [questions] : []);
+
+  console.log('[ArxivSearchTerms] Input validation:', {
+    topicsType: typeof topics,
+    topicsIsArray: Array.isArray(topics),
+    questionsType: typeof questions,
+    questionsIsArray: Array.isArray(questions),
+    safeTopicsLength: safeTopics.length,
+    safeQuestionsLength: safeQuestions.length
+  });
+
+  const userQuery = [...safeTopics, ...safeQuestions].join('. ');
 
   const systemPrompt = `You are an academic keyword generation engine.
 
@@ -371,11 +384,11 @@ User query:
 
   // TIER 3: Basic fallback - just use topics/questions as-is
   const basicFallback = {
-    primary_keyword: topics[0] || questions[0] || '',
-    secondary_keywords: [...topics.slice(1), ...questions].slice(0, 3),
-    query_combinations: topics.length > 0
-      ? topics.map(t => t)
-      : questions.map(q => q)
+    primary_keyword: safeTopics[0] || safeQuestions[0] || '',
+    secondary_keywords: [...safeTopics.slice(1), ...safeQuestions].slice(0, 3),
+    query_combinations: safeTopics.length > 0
+      ? safeTopics.map(t => t)
+      : safeQuestions.map(q => q)
   };
 
   // Helper to validate and return structured keywords
