@@ -90,17 +90,23 @@ async function enhanceMetadata(firstFourPagesText, currentMetadata) {
     "categories": ["cat1", "cat2", "cat3"]
   }`;
 
+  // TIER 1: Try Gemini with timeout
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json' }
-    });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2-flash' });
+    const result = await withTimeout(
+      model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: 'application/json' }
+      }),
+      80000, // 80 seconds
+      'Gemini Enhance Metadata'
+    );
 
     const response = await result.response;
     const enhanced = JSON.parse(cleanJson(response.text()));
+    console.log('[enhanceMetadata] ✅ Tier 1 (Gemini) success');
     return {
       title: enhanced.title || currentMetadata.title,
       author: enhanced.author || currentMetadata.author,
@@ -110,14 +116,45 @@ async function enhanceMetadata(firstFourPagesText, currentMetadata) {
       publisher: enhanced.publisher,
       categories: enhanced.categories
     };
-  } catch (error) {
-    logger.warn('Gemini failed, trying OpenAI');
-    const result = await callOpenAI(prompt);
-    return {
-      title: result.title || currentMetadata.title,
-      author: result.author || currentMetadata.author,
-      year: result.year,
-      subject: result.subject || currentMetadata.subject,
+
+  } catch (geminiError) {
+    console.warn('[enhanceMetadata] Tier 1 (Gemini) failed:', geminiError.message);
+
+    // TIER 2: Try GPT with timeout
+    try {
+      const result = await withTimeout(
+        callOpenAI(prompt),
+        80000, // 80 seconds
+        'GPT Enhance Metadata'
+      );
+      console.log('[enhanceMetadata] ✅ Tier 2 (GPT) success');
+      return {
+        title: result.title || currentMetadata.title,
+        author: result.author || currentMetadata.author,
+        year: result.year,
+        subject: result.subject || currentMetadata.subject,
+        harvardReference: result.harvardReference,
+        publisher: result.publisher,
+        categories: result.categories
+      };
+
+    } catch (gptError) {
+      console.warn('[enhanceMetadata] Tier 2 (GPT) failed:', gptError.message);
+
+      // TIER 3: Basic fallback
+      console.log('[enhanceMetadata] Using Tier 3 (basic fallback)');
+      return {
+        title: currentMetadata.title,
+        author: currentMetadata.author,
+        year: '',
+        subject: currentMetadata.subject,
+        harvardReference: '',
+        publisher: '',
+        categories: []
+      };
+    }
+  }
+}
       harvardReference: result.harvardReference,
       publisher: result.publisher,
       categories: result.categories
@@ -129,27 +166,55 @@ async function generateSearchVariations(originalQuery) {
   const prompt = `Generate 5 additional, distinct search queries for: "${originalQuery}".
 Return JSON array of strings.`;
 
+  // TIER 1: Try Gemini with timeout
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json' }
-    });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2-flash' });
+    const result = await withTimeout(
+      model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: 'application/json' }
+      }),
+      80000, // 80 seconds
+      'Gemini Search Variations'
+    );
 
     const response = await result.response;
     const queries = JSON.parse(cleanJson(response.text()));
     return Array.isArray(queries) ? queries : [];
-  } catch (error) {
-    logger.warn('Gemini failed, using fallback');
-    return [
-      `${originalQuery} research`,
-      `${originalQuery} study`,
-      `${originalQuery} analysis`,
-      `${originalQuery} paper`,
-      `${originalQuery} academic`
-    ];
+
+  } catch (geminiError) {
+    console.warn('[generateSearchVariations] Tier 1 (Gemini) failed:', geminiError.message);
+
+    // TIER 2: Try GPT with timeout
+    try {
+      const gptPrompt = `Generate 5 additional, distinct search queries for: "${originalQuery}".
+Return ONLY a JSON array of strings. Example: ["query1", "query2", "query3", "query4", "query5"]`;
+
+      const parsed = await withTimeout(
+        callOpenAI(gptPrompt),
+        80000, // 80 seconds
+        'GPT Search Variations'
+      );
+
+      const queries = Array.isArray(parsed) ? parsed : [];
+      console.log('[generateSearchVariations] ✅ Tier 2 (GPT) success');
+      return queries;
+
+    } catch (gptError) {
+      console.warn('[generateSearchVariations] Tier 2 (GPT) failed:', gptError.message);
+
+      // TIER 3: Basic fallback
+      console.log('[generateSearchVariations] Using Tier 3 (basic fallback)');
+      return [
+        `${originalQuery} research`,
+        `${originalQuery} study`,
+        `${originalQuery} analysis`,
+        `${originalQuery} paper`,
+        `${originalQuery} academic`
+      ];
+    }
   }
 }
 
@@ -349,12 +414,12 @@ User query:
       }
     });
 
-    // Wrap with 15s timeout
+    // Wrap with 30s timeout for Tier 1
     const result = await withTimeout(
       model.generateContent({
         contents: [{ role: 'user', parts: [{ text: systemPrompt }] }]
       }),
-      15000,
+      30000,
       'Gemini Flash ArxivSearchTerms'
     );
 
@@ -392,7 +457,7 @@ User query: "${userQuery}"`;
 
       const gptResult = await withTimeout(
         callOpenAI(gptPrompt),
-        15000,
+        30000,
         'GPT-4o Mini ArxivSearchTerms'
       );
 
@@ -683,7 +748,7 @@ REMEMBER YOU ARE A STUDENT RESEARCH ASSISSTANT, YOUR GOAL IS TO HELP THE USER SE
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         systemInstruction: { parts: [{ text: systemPrompt }] }
       }),
-      45000, // 45 seconds
+      80000, // 80 seconds
       'Gemini Paper Selection'
     );
 
@@ -1127,7 +1192,7 @@ Most importantly, must extract the EXACT text from the paper dont shorten or par
           contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
           systemInstruction: { parts: [{ text: systemPrompt }] }
         }),
-        45000, // 45 seconds
+        80000, // 80 seconds
         'Gemini Note Extraction'
       );
 
@@ -1298,22 +1363,16 @@ async function retryWithBackoff(operation, retries = 3, delayMs = 1000) {
  * Returns raw results array — normalisation happens in searchAggregator.ts.
  */
 async function searchWithGrounding(query) {
-  if (!genAI) {
-    logger.warn('[searchWithGrounding] Gemini not initialized — skipping');
-    return [];
-  }
-
-  // Exact prompt from original searchGoogleGrounding
   const prompt = `You are a specialized Academic Search Engine.
 User Query: "${query}"
 
 GOAL: Perform a deep search and return a list of academic papers/PDFs with summaries in JSON format.
 
 INSTRUCTIONS:
-1. Use the Google Search tool to find relevant academic papers, PDFs, and articles.
+1. Find relevant academic papers, PDFs, and articles.
 2. Select the top 10-15 most relevant results.
 3. For EACH result, write a concise academic summary (3-4 sentences) describing the paper's focus or findings.
-4. Return a valid JSON object matching this schema exactly. Do not use markdown code blocks.
+4. Return a valid JSON object matching this schema exactly:
 {
   "results": [
     {
@@ -1325,36 +1384,27 @@ INSTRUCTIONS:
   ]
 }`;
 
+  // TIER 1: Try Gemini with googleSearch tool
   try {
-    // Old SDK: getGenerativeModel with googleSearch tool
+    if (!genAI) throw new Error('Gemini not initialized');
+
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2-flash',
       tools: [{ googleSearch: {} }]
     });
 
-    // retryWithBackoff: 3 retries, 1000ms start, doubles each attempt (from original)
     const result = await retryWithBackoff(
-      () => withTimeout(model.generateContent(prompt), 35000, 'Grounding search'),
+      () => withTimeout(model.generateContent(prompt), 80000, 'Gemini Grounding Search'),
       3,
       1000
     );
 
-    // Old SDK: response.text() is a method call, not a property
     let jsonText = result.response.text();
-    if (!jsonText) return [];
+    if (!jsonText) throw new Error('Empty response');
 
-    // cleanJson strips markdown code blocks (already in this file)
     jsonText = cleanJson(jsonText);
+    let parsed = JSON.parse(jsonText);
 
-    let parsed = {};
-    try {
-      parsed = JSON.parse(jsonText);
-    } catch (e) {
-      logger.warn('[searchWithGrounding] Failed to parse JSON response:', e.message);
-      return [];
-    }
-
-    // Handle both raw array and {results:[]} response shapes (from original)
     let resultsArray = [];
     if (Array.isArray(parsed)) {
       resultsArray = parsed;
@@ -1362,10 +1412,47 @@ INSTRUCTIONS:
       resultsArray = parsed.results;
     }
 
-    return resultsArray; // Raw array — normaliseGrounding() maps this in aggregator
-  } catch (error) {
-    logger.warn('[searchWithGrounding] Failed:', error.message);
-    return [];
+    console.log('[searchWithGrounding] ✅ Tier 1 (Gemini) success:', resultsArray.length, 'results');
+    return resultsArray;
+
+  } catch (geminiError) {
+    console.warn('[searchWithGrounding] Tier 1 (Gemini) failed:', geminiError.message);
+
+    // TIER 2: Try GPT fallback
+    try {
+      const gptPrompt = `You are a specialized Academic Search Engine.
+User Query: "${query}"
+
+Find the top 10 academic papers/PDFs and return as JSON:
+{
+  "results": [
+    {"title": "...", "uri": "...", "summary": "...", "isPdf": true}
+  ]
+}`;
+
+      const parsed = await withTimeout(
+        callOpenAI(gptPrompt),
+        80000, // 80 seconds
+        'GPT Grounding Search'
+      );
+
+      let resultsArray = [];
+      if (Array.isArray(parsed)) {
+        resultsArray = parsed;
+      } else if (parsed && Array.isArray(parsed.results)) {
+        resultsArray = parsed.results;
+      }
+
+      console.log('[searchWithGrounding] ✅ Tier 2 (GPT) success:', resultsArray.length, 'results');
+      return resultsArray;
+
+    } catch (gptError) {
+      console.warn('[searchWithGrounding] Tier 2 (GPT) failed:', gptError.message);
+
+      // TIER 3: Basic fallback
+      console.log('[searchWithGrounding] Using Tier 3 (basic fallback)');
+      return [];
+    }
   }
 }
 
@@ -1373,24 +1460,52 @@ async function generateInsightQueries(userQuestions, contextQuery) {
   const prompt = `Context: The user has gathered several academic PDF papers regarding "${contextQuery}".
   User Goal: They want to answer the following specific questions from these papers: "${userQuestions}".
   Task: Generate 5 semantic search phrases or short questions.
-  Return ONLY the 5 phrases as a JSON array of strings.`;
+  Return ONLY the 5 phrases as a JSON array of strings. Example: ["phrase1", "phrase2", "phrase3", "phrase4", "phrase5"]`;
 
+  // TIER 1: Try Gemini with timeout
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: 'application/json' }
-    });
-
+    const model = genAI.getGenerativeModel({ model: 'gemini-2-flash' });
+    const result = await withTimeout(
+      model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: 'application/json' }
+      }),
+      80000, // 80 seconds
+      'Gemini Insight Queries'
+    );
 
     const response = await result.response;
     const queries = JSON.parse(cleanJson(response.text()));
-    return Array.isArray(queries) ? queries : [];
-  } catch (error) {
-    logger.warn('Gemini failed for insight queries, using fallback');
-    return [userQuestions];
+    return Array.isArray(queries) ? queries : [userQuestions];
+
+  } catch (geminiError) {
+    console.warn('[generateInsightQueries] Tier 1 (Gemini) failed:', geminiError.message);
+
+    // TIER 2: Try GPT with timeout
+    try {
+      const gptPrompt = `Context: The user has papers regarding "${contextQuery}".
+Goal: Answer these questions: "${userQuestions}".
+Generate 5 semantic search phrases as a JSON array.`;
+
+      const parsed = await withTimeout(
+        callOpenAI(gptPrompt),
+        80000, // 80 seconds
+        'GPT Insight Queries'
+      );
+
+      const queries = Array.isArray(parsed) ? parsed : [userQuestions];
+      console.log('[generateInsightQueries] ✅ Tier 2 (GPT) success');
+      return queries;
+
+    } catch (gptError) {
+      console.warn('[generateInsightQueries] Tier 2 (GPT) failed:', gptError.message);
+
+      // TIER 3: Basic fallback
+      console.log('[generateInsightQueries] Using Tier 3 (basic fallback)');
+      return [userQuestions];
+    }
   }
 }
 
