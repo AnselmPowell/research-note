@@ -30,31 +30,54 @@ function withTimeout(promise, ms, operationName = 'Operation') {
 }
 
 async function callOpenAI(prompt) {
-  if (!config.openaiApiKey) throw new Error('OpenAI API key not configured');
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.openaiApiKey}`
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: 'You are a precise research analyst. Output valid JSON only.' },
-        { role: 'user', content: prompt }
-      ],
-      response_format: { type: 'json_object' }
-    })
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`OpenAI Error: ${response.status} - ${err}`);
+  if (!config.openaiApiKey) {
+    const errorMsg = 'OpenAI API key not configured';
+    console.error('[callOpenAI] ❌ ' + errorMsg);
+    console.error('[callOpenAI] Config check:', {
+      hasOpenaiKey: !!config.openaiApiKey,
+      openaiKeyLength: config.openaiApiKey ? config.openaiApiKey.length : 0,
+      openaiKeyValue: config.openaiApiKey ? `***${config.openaiApiKey.slice(-10)}` : 'NOT SET'
+    });
+    throw new Error(errorMsg);
   }
 
-  const data = await response.json();
-  return JSON.parse(data.choices[0]?.message?.content || '{}');
+  try {
+    console.log('[callOpenAI] 🔄 Attempting OpenAI API call...');
+    console.log('[callOpenAI] Config check:', {
+      hasOpenaiKey: !!config.openaiApiKey,
+      openaiKeyLength: config.openaiApiKey.length,
+      openaiKeyPrefix: config.openaiApiKey ? `${config.openaiApiKey.slice(0, 10)}...` : 'N/A'
+    });
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.openaiApiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are a precise research analyst. Output valid JSON only.' },
+          { role: 'user', content: prompt }
+        ],
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      console.error('[callOpenAI] ❌ OpenAI API error:', { status: response.status, error: err });
+      throw new Error(`OpenAI Error: ${response.status} - ${err}`);
+    }
+
+    const data = await response.json();
+    console.log('[callOpenAI] ✅ OpenAI API call successful');
+    return JSON.parse(data.choices[0]?.message?.content || '{}');
+  } catch (error) {
+    console.error('[callOpenAI] ❌ Error in OpenAI call:', error.message);
+    throw error;
+  }
 }
 
 
@@ -877,14 +900,23 @@ REMEMBER YOU ARE A STUDENT RESEARCH ASSISSTANT, YOUR GOAL IS TO HELP THE USER SE
     return selectedPapers;
 
   } catch (error) {
-    logger.error('Gemini paper selection failed, trying OpenAI fallback:', error);
+    console.error('[selectTopPapersWithLLM] ❌ Gemini call failed:', {
+      errorMessage: error.message,
+      errorName: error.name,
+      isTimeout: error.message.includes('timeout'),
+      geminiAvailable: !!genAI
+    });
+    
+    console.log('[selectTopPapersWithLLM] 🔄 Attempting OpenAI fallback...');
 
     try {
       const openaiPrompt = `${systemPrompt}\n\n${userPrompt}`;
+      
+      console.log('[selectTopPapersWithLLM] Calling OpenAI API...');
       const parsed = await callOpenAI(openaiPrompt);
       const selections = parsed.selections || [];
 
-      console.log(`   🤖 OpenAI selected ${selections.length} papers`);
+      console.log(`   🤖 [FALLBACK] OpenAI selected ${selections.length} papers`);
 
       const selectedPapers = selections
         .map(selection => {
@@ -904,7 +936,7 @@ REMEMBER YOU ARE A STUDENT RESEARCH ASSISSTANT, YOUR GOAL IS TO HELP THE USER SE
         })
         .filter(p => !!p);
 
-      console.log(`   ✅ OpenAI successfully mapped ${selectedPapers.length} papers`);
+      console.log(`   ✅ [FALLBACK] OpenAI successfully mapped ${selectedPapers.length} papers`);
 
       // RESCUE FALLBACK
       if (selectedPapers.length === 0 && selections.length > 0) {
@@ -914,9 +946,14 @@ REMEMBER YOU ARE A STUDENT RESEARCH ASSISSTANT, YOUR GOAL IS TO HELP THE USER SE
 
       return selectedPapers;
     } catch (openaiError) {
+      console.error('[selectTopPapersWithLLM] ❌ OpenAI fallback also failed:', {
+        errorMessage: openaiError.message,
+        errorName: openaiError.name,
+        isKeyError: openaiError.message.includes('not configured')
+      });
+      console.log(`   ⚠️  [FALLBACK] ALL LLMs failed (Gemini + OpenAI), using top ${topN} by cosine score`);
       logger.error('Both Gemini and OpenAI failed for paper selection:', openaiError);
       // FALLBACK: Return top N by cosine score (already sorted)
-      console.log(`   ⚠️  ALL LLMs failed, using top ${topN} by cosine score`);
       return papers.slice(0, topN);
     }
   }

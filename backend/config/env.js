@@ -23,6 +23,9 @@ function initializeEnvironment() {
   if (!config.geminiApiKey) {
     console.warn('⚠️  GEMINI_API_KEY not set');
   }
+  if (!config.openaiApiKey) {
+    console.warn('⚠️  OPENAI_API_KEY not set');
+  }
   if (!config.databaseUrl) {
     console.warn('⚠️  DATABASE_URL not set');
   }
@@ -30,7 +33,10 @@ function initializeEnvironment() {
   console.log('[Backend Config] Environment loaded:', {
     nodeEnv: config.nodeEnv,
     hasGeminiKey: !!config.geminiApiKey,
-    hasDatabase: !!config.databaseUrl
+    hasOpenaiKey: !!config.openaiApiKey,
+    hasDatabase: !!config.databaseUrl,
+    geminiKeyLength: config.geminiApiKey ? config.geminiApiKey.length : 0,
+    openaiKeyLength: config.openaiApiKey ? config.openaiApiKey.length : 0
   });
 
   return config;
