@@ -140,6 +140,10 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [allNotesExpanded, setAllNotesExpanded] = useState(true);
 
+  // NEW: Note selection menu for bulk operations (only in "most-relevant-notes" view)
+  const [isNoteSelectMenuOpen, setIsNoteSelectMenuOpen] = useState(false);
+  const [justCopiedNotes, setJustCopiedNotes] = useState(false);
+
   // Filter State
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -192,6 +196,8 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
   }, []);
+
+  
 
   const isBlurred = researchPhase === 'filtering';
   const isSearching = researchPhase === 'searching' || researchPhase === 'initializing';
@@ -522,6 +528,88 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
       .filter(p => p.analysisStatus !== 'failed').length;
   }, [content, sortBy]);
 
+
+  // NEW: Bulk select notes on current page
+  const handleSelectNotesPage = useCallback(() => {
+    if (sortBy !== 'most-relevant-notes') return;
+    
+    const pageNoteIds = (paginatedContent as any[])
+      .filter((note: any) => (note?.quote || '').trim().length > 0)
+      .map((note: any) => note.uniqueId);
+
+    // Check if all page notes already selected
+    const allPageSelected = pageNoteIds.every(id => selectedNoteIds.includes(id));
+
+    if (allPageSelected) {
+      // Deselect all page notes
+      setSelectedNoteIds(prev => prev.filter(id => !pageNoteIds.includes(id)));
+    } else {
+      // Select all page notes
+      setSelectedNoteIds(prev => Array.from(new Set([...prev, ...pageNoteIds])));
+    }
+    setIsNoteSelectMenuOpen(false);
+  }, [paginatedContent, selectedNoteIds, sortBy]);
+
+  // NEW: Bulk select all notes in complete results
+  const handleSelectAllNotes = useCallback(() => {
+    if (sortBy !== 'most-relevant-notes') return;
+    
+    const allNoteIds = (content as any[])
+      .filter((note: any) => (note?.quote || '').trim().length > 0)
+      .map((note: any) => note.uniqueId);
+
+    // Check if all notes already selected
+    const allSelected = allNoteIds.every(id => selectedNoteIds.includes(id));
+
+    if (allSelected) {
+      // Deselect all notes
+      setSelectedNoteIds([]);
+    } else {
+      // Select all notes
+      setSelectedNoteIds(allNoteIds);
+    }
+    setIsNoteSelectMenuOpen(false);
+  }, [content, selectedNoteIds, sortBy]);
+
+  // NEW: Bulk copy selected notes
+  const handleBulkCopyNotes = useCallback(() => {
+    if (selectedNoteIds.length === 0) return;
+
+    const notesToCopy = selectedNoteIds
+      .map(noteId => {
+        // Find the note in content
+        const note = (content as any[]).find((n: any) => n.uniqueId === noteId);
+        if (!note) return null;
+
+        return `Quote: "${note.quote}"\nSource: ${note.sourcePaper?.title || 'Unknown'}\nPage: ${note.pageNumber}\nReference : ${note.sourcePaper?.harvardReference || 'N/A'}\n`;
+      })
+      .filter(Boolean)
+      .join('\n---\n\n');
+
+    if (notesToCopy) {
+      navigator.clipboard.writeText(notesToCopy);
+      // Show feedback by changing icon to checkmark
+      setJustCopiedNotes(true);
+      console.log(`[DeepResearchView] Copied ${selectedNoteIds.length} notes to clipboard`);
+      // Reset icon after 2 seconds
+      setTimeout(() => setJustCopiedNotes(false), 2000);
+    }
+  }, [selectedNoteIds, content]);
+
+  // NEW: Calculate selectable notes count on page
+  const selectableNotesPageCount = useMemo(() => {
+    if (sortBy !== 'most-relevant-notes') return 0;
+    return (paginatedContent as any[])
+      .filter((note: any) => (note?.quote || '').trim().length > 0).length;
+  }, [paginatedContent, sortBy]);
+
+  // NEW: Calculate total selectable notes
+  const selectableNotesTotalCount = useMemo(() => {
+    if (sortBy !== 'most-relevant-notes') return 0;
+    return (content as any[])
+      .filter((note: any) => (note?.quote || '').trim().length > 0).length;
+  }, [content, sortBy]);
+
   return (
     <div className="p-3 sm:p-6 font-sans max-w-4xl mx-auto min-h-[500px] relative" style={{ containerType: 'inline-size' }}>
       <style>{`
@@ -607,6 +695,59 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                 </div>
               )}
 
+              {/* NEW: Bulk Note Selection Menu (only in "most-relevant-notes" view) */}
+              {activeTab === 'deep' && !isBlurred && sortBy === 'most-relevant-notes' && selectableNotesTotalCount > 0 && (
+                <div className="relative">
+                  <button
+                    onClick={() => setIsNoteSelectMenuOpen(!isNoteSelectMenuOpen)}
+                    className="flex items-center gap-1 p-2 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                    title="Select notes options"
+                  >
+                    <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${selectedNoteIds.length === selectableNotesTotalCount ? 'bg-scholar-600 border-scholar-600' :
+                      selectedNoteIds.length > 0 ? 'bg-scholar-100 dark:bg-scholar-900/30 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
+                      }`}>
+                      {selectedNoteIds.length === selectableNotesTotalCount ? <Check size={16} color="white" strokeWidth={3} /> :
+                        selectedNoteIds.length > 0 ? <Minus size={16} className="text-scholar-600 dark:text-scholar-400" strokeWidth={3} /> : null}
+                    </div>
+                    <ChevronDown size={14} className="opacity-60" />
+                  </button>
+
+                  {isNoteSelectMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsNoteSelectMenuOpen(false)} />
+                      <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 py-1.5 animate-fade-in">
+                        <button
+                          onClick={handleSelectNotesPage}
+                          className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <LayoutList size={16} className="text-gray-400" />
+                          <span className="text-sm font-medium text-gray-700 dark:text-white">Select Page ({selectableNotesPageCount})</span>
+                        </button>
+                        <button
+                          onClick={handleSelectAllNotes}
+                          className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <Layers size={16} className="text-gray-400" />
+                          <span className="text-sm font-medium text-gray-700 dark:text-white">Select All Total ({selectableNotesTotalCount})</span>
+                        </button>
+                        <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1" />
+                        <button
+                          onClick={() => { setSelectedNoteIds([]); setIsNoteSelectMenuOpen(false); }}
+                          className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                        >
+                          <X size={16} className="text-red-500" />
+                          <span className="text-sm font-medium text-red-600 dark:text-red-400">Clear Selection</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+
+
+
+
               <button
                 onClick={() => { setActiveTab('web'); setActiveSearchMode('web'); }}
                 className={`deep-tab-button px-4 py-1  text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'web' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
@@ -629,6 +770,7 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
 
             {/* RIGHT SIDE - ACTIONS */}
             <div className="flex items-center gap-2 deep-actions-right">
+
 
               {/* Sort Dropdown */}
               {activeTab === 'deep' && !isBlurred && (currentTabCandidates.length > 0 || totalNotes > 0) && (
@@ -675,7 +817,28 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
           {activeTab === 'deep' && !isBlurred && (currentTabCandidates.length > 0 || totalNotes > 0) && (
             <div className="flex items-center justify-between mb-4 px-1 animate-fade-in">
               {/* LEFT SIDE - Clear All */}
-              <div>
+              <div className="flex items-center gap-2">
+                {/* NEW: Bulk Copy Notes Button (only in "most-relevant-notes" view with selections) */}
+                {sortBy === 'most-relevant-notes' && selectedNoteIds.length > 0 && (
+                  <button
+                    onClick={handleBulkCopyNotes}
+                    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg shadow-sm transition-all ${
+                      justCopiedNotes
+                        ? 'bg-scholar-500 dark:bg-scholar-400 text-white hover:bg-scholar-500 dark:hover:bg-scholar-400'
+                        : 'text-white bg-scholar-600 dark:bg-scholar-700 hover:bg-scholar-700 dark:hover:bg-scholar-600'
+                    }`}
+                    title={justCopiedNotes ? `Copied! ${selectedNoteIds.length} Notes` : `Copy ${selectedNoteIds.length} selected notes`}
+                  >
+                    {justCopiedNotes ? (
+                      <Check size={16} className="stroke-[3]" />
+                    ) : (
+                      <Copy size={16} />
+                    )}
+                    <span className="hidden sm:inline">
+                      {justCopiedNotes ? `Copied! ${selectedNoteIds.length} Notes` : `Copy ${selectedNoteIds.length} Notes`}
+                    </span>
+                  </button>
+                )}
                 {researchPhase !== 'searching' && (
                   <button
                     onClick={() => setShowClearModal(true)}
@@ -712,6 +875,8 @@ export const DeepResearchView: React.FC<DeepResearchViewProps> = ({
                   Reset Filters
                 </button>
                     ): null}
+
+            
 
                 </div>
 

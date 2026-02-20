@@ -304,7 +304,8 @@ User query: "Does class size affect student academic performance?"
 User query:
 "${userQuery}"`;
 
-  const fallback = {
+  // TIER 3: Basic fallback - just use topics/questions as-is
+  const basicFallback = {
     primary_keyword: topics[0] || questions[0] || '',
     secondary_keywords: [...topics.slice(1), ...questions].slice(0, 3),
     query_combinations: topics.length > 0
@@ -312,25 +313,8 @@ User query:
       : questions.map(q => q)
   };
 
-  try {
-    if (!genAI) throw new Error('Gemini not initialized');
-
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-3-flash-preview',
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.1
-      }
-    });
-
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: systemPrompt }] }]
-    });
-
-    const response = await result.response;
-    const parsed = JSON.parse(cleanJson(response.text()));
-
-    // Flatten query_combinations — LLM may return [["a AND b"], ["a AND c"]] (nested) or ["a AND b"] (flat)
+  // Helper to validate and return structured keywords
+  const processResult = (parsed, fallback) => {
     let combos = parsed.query_combinations || [];
     combos = combos.map(c => Array.isArray(c) ? c[0] : c).filter(c => c && typeof c === 'string');
 
@@ -349,12 +333,83 @@ User query:
       validated.query_combinations = [validated.primary_keyword];
     }
 
-    console.log('✅ Generated keyword-focused search terms:', validated);
+    return validated;
+  };
+
+  // TIER 1: Try Gemini Flash (fast, optimized model) with timeout
+  try {
+    console.log('[ArxivSearchTerms] Tier 1: Attempting Gemini Flash...');
+    if (!genAI) throw new Error('Gemini not initialized');
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2-flash',
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.1
+      }
+    });
+
+    // Wrap with 15s timeout
+    const result = await withTimeout(
+      model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: systemPrompt }] }]
+      }),
+      15000,
+      'Gemini Flash ArxivSearchTerms'
+    );
+
+    const response = await result.response;
+    const parsed = JSON.parse(cleanJson(response.text()));
+    const validated = processResult(parsed, basicFallback);
+    
+    console.log('[ArxivSearchTerms] ✅ Tier 1 Success (Gemini Flash):', validated);
     return validated;
 
-  } catch (error) {
-    logger.warn('❌ Error generating ArXiv search terms:', error);
-    return fallback;
+  } catch (geminiError) {
+    console.warn('[ArxivSearchTerms] Tier 1 Failed:', {
+      error: geminiError.message,
+      type: geminiError.constructor.name
+    });
+
+    // TIER 2: Fallback to GPT-4o Mini (ultra-fast, reliable) with timeout
+    try {
+      console.log('[ArxivSearchTerms] Tier 2: Attempting GPT-4o Mini fallback...');
+      
+      const gptPrompt = `You are an academic keyword generation engine.
+
+Your sole task is to convert a user's natural-language research question into high-quality academic search keywords.
+
+OBJECTIVE: Generate one primary keyword, three secondary keywords, and query combinations.
+
+CRITICAL: Return ONLY valid JSON in this exact format:
+{
+  "primary_keyword": "string",
+  "secondary_keywords": ["string", "string", "string"],
+  "query_combinations": ["primary AND secondary", "primary AND secondary"]
+}
+
+User query: "${userQuery}"`;
+
+      const gptResult = await withTimeout(
+        callOpenAI(gptPrompt),
+        15000,
+        'GPT-4o Mini ArxivSearchTerms'
+      );
+
+      const validated = processResult(gptResult, basicFallback);
+      console.log('[ArxivSearchTerms] ✅ Tier 2 Success (GPT-4o Mini):', validated);
+      return validated;
+
+    } catch (gptError) {
+      console.warn('[ArxivSearchTerms] Tier 2 Failed:', {
+        error: gptError.message,
+        type: gptError.constructor.name
+      });
+
+      // TIER 3: Use basic fallback
+      console.log('[ArxivSearchTerms] ⚠️  Tier 3: Using basic fallback (no AI)');
+      return basicFallback;
+    }
   }
 }
 
