@@ -593,6 +593,18 @@ async function getBatchEmbeddings(texts, taskType) {
         }
 
         const data = await response.json();
+        
+        // SAFETY: Validate response structure before processing
+        if (!data.embeddings || !Array.isArray(data.embeddings)) {
+          console.error('[getBatchEmbeddings] Invalid response structure:', {
+            hasEmbeddings: !!data.embeddings,
+            isArray: Array.isArray(data.embeddings),
+            responseKeys: data ? Object.keys(data) : 'null',
+            attempt: attempt + 1
+          });
+          throw new Error('Invalid embeddings response: missing or invalid embeddings field');
+        }
+        
         const embeddings = data.embeddings.map(e => e.values || []);
 
         embeddings.forEach((emb, i) => {
