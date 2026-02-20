@@ -373,6 +373,16 @@ User query: "Does class size affect student academic performance?"
   ]
 }
 
+BAD EXAMPLE 1: What NOT TO DO:  This below is wrong Nigeria needs to be the primary keyword because the location is the main focus for the user question.
+  primary_keyword: 'urban planning',
+  secondary_keywords: [ 'Nigeria', 'economic benefits', 'green infrastructure' ],
+  query_combinations: [
+    'urban planning AND Nigeria',
+    'urban planning AND economic benefits',
+    'urban planning AND green infrastructure'
+  ]
+}
+
 User query:
 "${userQuery}"`;
 
@@ -883,156 +893,166 @@ REMEMBER YOU ARE A STUDENT RESEARCH ASSISSTANT, YOUR GOAL IS TO HELP THE USER SE
  * Returns: Maximum 40 papers for PDF processing
  */
 async function filterRelevantPapers(papers, userQuestions, keywords) {
-  console.log('\n╔════════════════════════════════════════════════════════════════╗');
-  console.log('║ HYBRID COSINE + LLM PAPER SELECTION                            ║');
-  console.log('╚════════════════════════════════════════════════════════════════╝');
-  console.log('📊 Total papers received:', papers.length);
-  console.log('❓ User questions:', userQuestions);
-  console.log('🔑 Keywords:', keywords);
+  const startTime = Date.now();
+  try {
+    console.log('\n╔════════════════════════════════════════════════════════════════╗');
+    console.log('║ HYBRID COSINE + LLM PAPER SELECTION                            ║');
+    console.log('╚════════════════════════════════════════════════════════════════╝');
+    console.log('📊 Total papers received:', papers.length);
+    console.log('❓ User questions:', userQuestions);
+    console.log('🔑 Keywords:', keywords);
 
-  if (papers.length === 0) {
-    console.log('⚠️  No papers to filter');
-    return [];
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // STAGE 1: COSINE SIMILARITY PRE-FILTER
-  // ═══════════════════════════════════════════════════════════════
-  console.log('\n📐 STAGE 1: Cosine Similarity Pre-Filter');
-  console.log('   Creating embeddings for all', papers.length, 'papers...');
-
-  const userIntentText = 'Questions: ' + userQuestions.join('\n') + '\nKeywords: ' + keywords.join(', ');
-  const targetVector = await getEmbedding(userIntentText, 'RETRIEVAL_QUERY');
-
-  if (targetVector.length === 0) {
-    console.log('   ❌ Failed to create target vector');
-    return [];
-  }
-
-  const paperTexts = papers.map(p => 'Title: ' + p.title + '\nAbstract: ' + p.summary);
-  const paperEmbeddings = await getBatchEmbeddings(paperTexts, 'RETRIEVAL_DOCUMENT');
-
-  // Calculate cosine similarity scores
-  const scoredPapers = papers.map((paper, index) => {
-    const paperVector = paperEmbeddings[index];
-    let score = 0;
-    if (paperVector && paperVector.length > 0) {
-      score = cosineSimilarity(targetVector, paperVector);
+    if (papers.length === 0) {
+      console.log('⚠️  No papers to filter');
+      return [];
     }
-    return Object.assign({}, paper, { relevanceScore: score });
-  });
 
-  console.log('   📊 Sample scores:', scoredPapers.slice(0, 3).map(p => ({
-    title: p.title.substring(0, 40) + '...',
-    score: p.relevanceScore.toFixed(3)
-  })));
+    // ═══════════════════════════════════════════════════════════════
+    // STAGE 1: COSINE SIMILARITY PRE-FILTER
+    // ═══════════════════════════════════════════════════════════════
+    console.log('\n📐 STAGE 1: Cosine Similarity Pre-Filter');
+    console.log('   Creating embeddings for all', papers.length, 'papers...');
 
-  // Filter by threshold and sort by score
-  const filtered = scoredPapers
-    .filter(p => (p.relevanceScore || 0) >= 0.48)
-    .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+    const userIntentText = 'Questions: ' + userQuestions.join('\n') + '\nKeywords: ' + keywords.join(', ');
+    const targetVector = await getEmbedding(userIntentText, 'RETRIEVAL_QUERY');
 
-  console.log('   ✅ Cosine filtering complete');
-  console.log('      Papers with score ≥ 0.48:', filtered.length);
-  if (filtered.length > 0) {
-    console.log('      Top score:', filtered[0].relevanceScore.toFixed(3));
-    console.log('      Lowest score:', filtered[filtered.length - 1].relevanceScore.toFixed(3));
+    if (targetVector.length === 0) {
+      console.log('   ❌ Failed to create target vector');
+      return [];
+    }
 
-    console.log('\n      📋 Top 20 PDF titles after Stage 1 (Cosine Sorting):');
-    filtered.slice(0, 20).forEach((p, i) => {
-      console.log(`      ${i + 1}. [${p.relevanceScore.toFixed(3)}] ${p.title.substring(0, 80)}${p.title.length > 80 ? '...' : ''}`);
-    });
-  }
+    console.log('   ✅ Target vector created, length:', targetVector.length);
+    
+    const paperTexts = papers.map(p => 'Title: ' + p.title + '\nAbstract: ' + p.summary);
+    console.log('   📋 Paper texts prepared, count:', paperTexts.length);
+    
+    const paperEmbeddings = await getBatchEmbeddings(paperTexts, 'RETRIEVAL_DOCUMENT');
+    console.log('   ✅ Batch embeddings complete, got', paperEmbeddings.length, 'embeddings');
+    
+    const nullEmbeddingCount = paperEmbeddings.filter(e => !e || e.length === 0).length;
+    console.log('   ⚠️  Papers with missing embeddings:', nullEmbeddingCount, '/', paperEmbeddings.length);
 
-  if (filtered.length === 0) {
-    console.log('   ⚠️  No papers passed cosine threshold');
-    return [];
-  }
-
-  // Take top 100 for first LLM selection
-  const top100 = filtered.slice(0, 100);
-  console.log('      Taking top', top100.length, 'papers for LLM selection');
-
-  // ═══════════════════════════════════════════════════════════════
-  // STAGE 2: LLM SELECTION FROM TOP 100
-  // ═══════════════════════════════════════════════════════════════
-  console.log('\n🤖 STAGE 2: LLM Selection from Top 100 Papers');
-  console.log('   Processing', top100.length, 'papers');
-  if (top100.length > 0) {
-    console.log('   Cosine score range:',
-      top100[0].relevanceScore.toFixed(3),
-      'to',
-      top100[top100.length - 1].relevanceScore.toFixed(3)
-    );
-  }
-
-  const stage2Selected = await selectTopPapersWithLLM(
-    top100,
-    userQuestions,
-    keywords,
-    20
-  );
-
-  console.log('   ✅ Stage 2 complete:', stage2Selected.length, 'papers selected');
-  if (stage2Selected.length > 0) {
-    console.log('      Sample titles:');
-    stage2Selected.slice(0, 3).forEach((p, i) => {
-      if (p && p.title) {
-        console.log(`      ${i + 1}. ${p.title.substring(0, 60)}...`);
+    // Calculate cosine similarity scores
+    const scoredPapers = papers.map((paper, index) => {
+      const paperVector = paperEmbeddings[index];
+      let score = 0;
+      if (paperVector && paperVector.length > 0) {
+        score = cosineSimilarity(targetVector, paperVector);
       }
+      return Object.assign({}, paper, { relevanceScore: score });
     });
-  }
 
-  // Get the IDs of selected papers to find leftovers
-  const stage2SelectedIds = new Set(stage2Selected.map(p => p.id));
+    console.log('   📊 Sample scores:', scoredPapers.slice(0, 3).map(p => ({
+      title: p.title.substring(0, 40) + '...',
+      score: p.relevanceScore.toFixed(3)
+    })));
 
-  // ═══════════════════════════════════════════════════════════════
-  // STAGE 3: LLM SELECTION FROM 80 LEFTOVER PAPERS
-  // ═══════════════════════════════════════════════════════════════
-  let stage3Selected = [];
+    // Filter by threshold and sort by score
+    const filtered = scoredPapers
+      .filter(p => (p.relevanceScore || 0) >= 0.48)
+      .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
 
-  // Get the papers that were NOT selected in Stage 2
-  const leftoverPapers = top100.filter(p => !stage2SelectedIds.has(p.id));
+    console.log('   ✅ Cosine filtering complete');
+    console.log('      Papers with score ≥ 0.48:', filtered.length);
+    if (filtered.length > 0) {
+      console.log('      Top score:', filtered[0].relevanceScore.toFixed(3));
+      console.log('      Lowest score:', filtered[filtered.length - 1].relevanceScore.toFixed(3));
 
-  if (leftoverPapers.length > 0) {
-    console.log('\n🤖 STAGE 3: LLM Selection from Leftover Papers');
-    console.log('   Processing', leftoverPapers.length, 'leftover papers');
-    console.log('   Cosine score range:',
-      leftoverPapers[0].relevanceScore.toFixed(3),
-      'to',
-      leftoverPapers[leftoverPapers.length - 1].relevanceScore.toFixed(3)
-    );
+      console.log('\n      📋 Top 20 PDF titles after Stage 1 (Cosine Sorting):');
+      filtered.slice(0, 20).forEach((p, i) => {
+        console.log(`      ${i + 1}. [${p.relevanceScore.toFixed(3)}] ${p.title.substring(0, 80)}${p.title.length > 80 ? '...' : ''}`);
+      });
+    }
 
-    stage3Selected = await selectTopPapersWithLLM(
-      leftoverPapers,
+    if (filtered.length === 0) {
+      console.log('   ⚠️  No papers passed cosine threshold');
+      return [];
+    }
+
+    // Take top 100 for first LLM selection
+    const top100 = filtered.slice(0, 100);
+    console.log('      Taking top', top100.length, 'papers for LLM selection');
+
+    // ═══════════════════════════════════════════════════════════════
+    // STAGE 2: LLM SELECTION FROM TOP 100
+    // ═══════════════════════════════════════════════════════════════
+    console.log('\n🤖 STAGE 2: LLM Selection from Top 100 Papers');
+    console.log('   Processing', top100.length, 'papers');
+    if (top100.length > 0) {
+      console.log('   Cosine score range:',
+        top100[0].relevanceScore.toFixed(3),
+        'to',
+        top100[top100.length - 1].relevanceScore.toFixed(3)
+      );
+    }
+
+    const stage2Selected = await selectTopPapersWithLLM(
+      top100,
       userQuestions,
       keywords,
       20
     );
 
-    console.log('   ✅ Stage 3 complete:', stage3Selected.length, 'papers selected');
-    if (stage3Selected.length > 0) {
+    console.log('   ✅ Stage 2 complete:', stage2Selected.length, 'papers selected');
+    if (stage2Selected.length > 0) {
       console.log('      Sample titles:');
-      stage3Selected.slice(0, 3).forEach((p, i) => {
+      stage2Selected.slice(0, 3).forEach((p, i) => {
         if (p && p.title) {
           console.log(`      ${i + 1}. ${p.title.substring(0, 60)}...`);
         }
       });
     }
-  } else {
-    console.log('\n⏭️  STAGE 3: Skipped (no leftover papers)');
-  }
 
-  // ═══════════════════════════════════════════════════════════════
-  // COMBINE RESULTS & DEDUPLICATE
-  // ═══════════════════════════════════════════════════════════════
-  const combined = [...stage2Selected, ...stage3Selected];
-  const finalSelection = [];
-  const seenFinalIds = new Set();
+    // Get the IDs of selected papers to find leftovers
+    const stage2SelectedIds = new Set(stage2Selected.map(p => p.id));
 
-  combined.forEach(p => {
-    if (p && p.id && !seenFinalIds.has(p.id)) {
-      seenFinalIds.add(p.id);
+    // ═══════════════════════════════════════════════════════════════
+    // STAGE 3: LLM SELECTION FROM 80 LEFTOVER PAPERS
+    // ═══════════════════════════════════════════════════════════════
+    let stage3Selected = [];
+
+    // Get the papers that were NOT selected in Stage 2
+    const leftoverPapers = top100.filter(p => !stage2SelectedIds.has(p.id));
+
+    if (leftoverPapers.length > 0) {
+      console.log('\n🤖 STAGE 3: LLM Selection from Leftover Papers');
+      console.log('   Processing', leftoverPapers.length, 'leftover papers');
+      console.log('   Cosine score range:',
+        leftoverPapers[0].relevanceScore.toFixed(3),
+        'to',
+        leftoverPapers[leftoverPapers.length - 1].relevanceScore.toFixed(3)
+      );
+
+      stage3Selected = await selectTopPapersWithLLM(
+        leftoverPapers,
+        userQuestions,
+        keywords,
+        20
+      );
+
+      console.log('   ✅ Stage 3 complete:', stage3Selected.length, 'papers selected');
+      if (stage3Selected.length > 0) {
+        console.log('      Sample titles:');
+        stage3Selected.slice(0, 3).forEach((p, i) => {
+          if (p && p.title) {
+            console.log(`      ${i + 1}. ${p.title.substring(0, 60)}...`);
+          }
+        });
+      }
+    } else {
+      console.log('\n⏭️  STAGE 3: Skipped (no leftover papers)');
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // COMBINE RESULTS & DEDUPLICATE
+    // ═══════════════════════════════════════════════════════════════
+    const combined = [...stage2Selected, ...stage3Selected];
+    const finalSelection = [];
+    const seenFinalIds = new Set();
+
+    combined.forEach(p => {
+      if (p && p.id && !seenFinalIds.has(p.id)) {
+        seenFinalIds.add(p.id);
       finalSelection.push(p);
     }
   });
@@ -1076,6 +1096,18 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
   console.log('\n');
 
   return finalSelection;
+  } catch (err) {
+    const elapsed = Date.now() - startTime;
+    console.error('\n❌ [filterRelevantPapers] CRITICAL ERROR:', {
+      message: err.message,
+      type: err.constructor.name,
+      stack: err.stack,
+      elapsedMs: elapsed,
+      elapsedSeconds: (elapsed / 1000).toFixed(2),
+      papersCount: papers.length
+    });
+    throw err; // Re-throw so route handler catches it
+  }
 }
 
 async function extractNotesFromPages(relevantPages, userQuestions, paperTitle, paperAbstract, referenceList, onStreamCallback) {

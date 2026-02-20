@@ -60,34 +60,61 @@ router.post('/batch-embeddings', async (req, res, next) => {
 });
 
 router.post('/filter-papers', async (req, res, next) => {
+  const startTime = Date.now();
   try {
     const { papers, userQuestions, keywords } = req.body.data;
     console.log('[FILTER-PAPERS] Received:', {
       papersCount: papers?.length,
       userQuestionsCount: userQuestions?.length,
       keywordsCount: keywords?.length,
-      firstPaperTitle: papers?.[0]?.title
+      firstPaperTitle: papers?.[0]?.title,
+      firstPaperSummaryExists: !!papers?.[0]?.summary,
+      environment: process.env.NODE_ENV || 'not-set'
     });
     
-    // Add timeout of 120 seconds for filtering (embedding generation can be slow)
+    // Timeout varies by environment AND operation:
+    // Filtering with LLM selection is VERY SLOW because:
+    // - Stage 1: Generate embeddings for 77 papers = ~30-40 seconds
+    // - Stage 2: LLM call on top 100 papers = ~65 seconds (observed in logs)
+    // - Stage 3: LLM call on 80 leftover papers = ~60+ seconds (was timing out)
+    // - Plus overhead and network latency
+    // ACTUAL NEEDED: 150-200 seconds minimum, safety margin = 300s
+    // - Localhost (dev): 300 seconds (5 minutes)
+    // - Production: 300 seconds (5 minutes - same, network delay minimal at this scale)
+    const isDev = process.env.NODE_ENV === 'development';
+    const timeoutMs = 300000; // 300s both dev and prod (5 minutes - LLM operations are inherently slow)
+    
+    console.log('[FILTER-PAPERS] Starting with timeout:', {
+      timeoutSeconds: timeoutMs / 1000,
+      environment: isDev ? 'development' : 'production'
+    });
+    
     const filterPromise = geminiService.filterRelevantPapers(papers, userQuestions, keywords);
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Filter papers operation timed out after 120s')), 120000)
+      setTimeout(() => reject(new Error(`Filter papers operation timed out after ${timeoutMs/1000}s`)), timeoutMs)
     );
     
     const result = await Promise.race([filterPromise, timeoutPromise]);
     
+    const elapsed = Date.now() - startTime;
     console.log('[FILTER-PAPERS] Returning:', {
       resultCount: result?.length,
       firstResultTitle: result?.[0]?.title,
-      firstResultScore: result?.[0]?.relevanceScore
+      firstResultScore: result?.[0]?.relevanceScore,
+      elapsedMs: elapsed,
+      elapsedSeconds: (elapsed / 1000).toFixed(2)
     });
     res.json({ success: true, data: result });
   } catch (err) { 
-    console.error('[FILTER-PAPERS] Error:', {
+    const elapsed = Date.now() - startTime;
+    console.error('[FILTER-PAPERS] ❌ ERROR:', {
       message: err.message,
       type: err.constructor.name,
-      papersCount: req.body?.data?.papers?.length
+      stack: err.stack,
+      papersCount: req.body?.data?.papers?.length,
+      elapsedMs: elapsed,
+      elapsedSeconds: (elapsed / 1000).toFixed(2),
+      environment: process.env.NODE_ENV || 'not-set'
     });
     next(err); 
   }
@@ -109,10 +136,23 @@ router.post('/extract-notes', async (req, res, next) => {
     console.log('   - pageIndex:', relevantPages?.[0]?.pageIndex);
     console.log('   - Available keys:', relevantPages?.[0] ? Object.keys(relevantPages[0]) : []);
 
-    // Add timeout of 150 seconds for note extraction (can be slow with many pages)
+    // Timeout for note extraction:
+    // Multiple Gemini API calls for each of 20+ papers and their pages
+    // Each paper can have multiple pages, each requiring LLM processing
+    // Similar to filtering, LLM operations are inherently slow
+    // - Localhost: 300 seconds (5 minutes)
+    // - Production: 300 seconds (5 minutes - same timeout)
+    const isDev = process.env.NODE_ENV === 'development';
+    const timeoutMs = 300000; // 300s both dev and prod (5 minutes - LLM operations are slow)
+    
+    console.log('[EXTRACT-NOTES] Starting with timeout:', {
+      timeoutSeconds: timeoutMs / 1000,
+      environment: isDev ? 'development' : 'production'
+    });
+    
     const extractPromise = geminiService.extractNotesFromPages(relevantPages, userQuestions, paperTitle, paperAbstract, referenceList);
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Extract notes operation timed out after 150s')), 150000)
+      setTimeout(() => reject(new Error(`Extract notes operation timed out after ${timeoutMs/1000}s`)), timeoutMs)
     );
     
     const result = await Promise.race([extractPromise, timeoutPromise]);
