@@ -56,13 +56,19 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`🚀 Backend API running on port ${PORT}`);
   logger.info(`📊 Environment: ${config.nodeEnv}`);
   
+  // === FIX: Set socket timeouts to allow long-running operations ===
+  // Backend filtering takes ~109 seconds, need socket timeout > that
+  server.timeout = 400000;           // 400 seconds (total socket timeout)
+  server.requestTimeout = 400000;    // 400 seconds (request timeout)
+  server.keepAliveTimeout = 65000;   // 65 seconds (keep-alive timeout)
+  
   // === INVESTIGATION: Log socket configuration ===
   console.log('\n╔════════════════════════════════════════════════════════════════╗');
   console.log('║ SOCKET CONFIGURATION (Timeout Investigation)                   ║');
   console.log('╚════════════════════════════════════════════════════════════════╝');
   console.log(`📋 Server timeout: ${server.timeout}ms`);
   console.log(`📋 Keep-alive timeout: ${server.keepAliveTimeout}ms`);
-  console.log(`📋 Request timeout: ${server.requestTimeout || 'not set'}ms`);
+  console.log(`📋 Request timeout: ${server.requestTimeout}ms`);
   console.log('═══════════════════════════════════════════════════════════════\n');
 });
 
