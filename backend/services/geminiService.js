@@ -840,7 +840,7 @@ REMEMBER YOU ARE A STUDENT RESEARCH ASSISSTANT, YOUR GOAL IS TO HELP THE USER SE
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         systemInstruction: { parts: [{ text: systemPrompt }] }
       }),
-      80000, // 80 seconds
+      50000, // 60 seconds - max timeout before fallback to OpenAI
       'Gemini Paper Selection'
     );
 
@@ -1432,8 +1432,7 @@ async function performSearch(query) {
       const params = new URLSearchParams({
         key: config.googleSearchKey,
         cx: config.googleSearchCx,
-        q: q.replace(/:pdf/gi, '').replace(/filetype:pdf/gi, '').trim(),
-        fileType: 'pdf',
+        q: q.trim(), // Search with original query, keep PDF filters if user included them
         num: '10'
       });
 
@@ -1442,6 +1441,7 @@ async function performSearch(query) {
       const data = await response.json();
       return data.items || [];
     } catch (e) {
+      console.warn('[performSearch] Google CSE error for query:', q, e.message);
       return [];
     }
   };
@@ -1449,22 +1449,23 @@ async function performSearch(query) {
   const resultsArrays = await Promise.all(allQueries.map(fetchSingle));
   const uniqueSourcesMap = new Map();
 
+  // Accept all valid results, not just those with "pdf" in the URL
   resultsArrays.flat().forEach(item => {
     const link = item.link || '';
-    if (link && link.toLowerCase().includes('pdf')) {
-      if (!uniqueSourcesMap.has(link)) {
-        uniqueSourcesMap.set(link, {
-          title: item.title || 'Untitled PDF',
-          uri: link,
-          snippet: item.snippet || 'No description.'
-        });
-      }
+    if (link && !uniqueSourcesMap.has(link)) {
+      uniqueSourcesMap.set(link, {
+        title: item.title || 'Untitled',
+        uri: link,
+        snippet: item.snippet || 'No description.'
+      });
     }
   });
 
   const sources = Array.from(uniqueSourcesMap.values());
+  console.log('[performSearch] Found', sources.length, 'results for query:', query);
+  
   return {
-    summary: sources.length === 0 ? 'No PDF results found.' : 'Found ' + sources.length + ' unique PDF sources.',
+    summary: sources.length === 0 ? 'No results found.' : 'Found ' + sources.length + ' relevant sources.',
     sources,
     allQueries
   };
