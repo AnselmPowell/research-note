@@ -752,13 +752,19 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           firstCandidateTitle: candidates[0]?.title
         });
 
+        // === INVESTIGATION: Add filter timing ===
+        const filterStartTime = performance.now();
+        console.log('[ResearchContext] ⏱️  Filtering START');
+        
         const filtered = await filterRelevantPapers(candidates, query.questions, displayKeywords);
 
-        console.log('[ResearchContext] ✅ Filtering complete:', {
+        const filterDuration = (performance.now() - filterStartTime).toFixed(0);
+        console.log('[ResearchContext] ✅ Filtering COMPLETE:', {
+          durationMs: filterDuration,
+          durationSeconds: (parseInt(filterDuration) / 1000).toFixed(2),
           inputCount: candidates.length,
           outputCount: filtered.length,
-          firstFilteredTitle: filtered[0]?.title,
-          firstFilteredScore: filtered[0]?.relevanceScore
+          firstFilteredTitle: filtered[0]?.title
         });
 
         if (signal.aborted) return;
@@ -792,6 +798,11 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setResearchPhase('completed');
       }
     } catch (err: any) {
+      // === INVESTIGATION: Log filtering errors ===
+      console.error('[ResearchContext] ❌ Filtering ERROR:', {
+        message: err.message,
+        name: err.name
+      });
       if (!signal.aborted) {
         setGatheringStatus("Research failed.");
         setResearchPhase('failed');

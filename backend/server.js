@@ -52,9 +52,44 @@ app.get('/api/health', (req, res) => {
 app.use(errorHandler);
 
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`🚀 Backend API running on port ${PORT}`);
   logger.info(`📊 Environment: ${config.nodeEnv}`);
+  
+  // === INVESTIGATION: Log socket configuration ===
+  console.log('\n╔════════════════════════════════════════════════════════════════╗');
+  console.log('║ SOCKET CONFIGURATION (Timeout Investigation)                   ║');
+  console.log('╚════════════════════════════════════════════════════════════════╝');
+  console.log(`📋 Server timeout: ${server.timeout}ms`);
+  console.log(`📋 Keep-alive timeout: ${server.keepAliveTimeout}ms`);
+  console.log(`📋 Request timeout: ${server.requestTimeout || 'not set'}ms`);
+  console.log('═══════════════════════════════════════════════════════════════\n');
+});
+
+// === INVESTIGATION: Monitor all socket connections ===
+server.on('connection', (socket) => {
+  const socketId = `${socket.remoteAddress}:${socket.remotePort}`;
+  const connectionTime = new Date().toISOString();
+  
+  console.log(`[SOCKET] ✅ NEW CONNECTION: ${socketId} at ${connectionTime}`);
+  console.log(`[SOCKET]    Default timeout: ${socket.timeout}ms`);
+  
+  // Track when socket times out
+  socket.on('timeout', () => {
+    const elapsedTime = new Date().toISOString();
+    console.error(`[SOCKET] ❌ TIMEOUT: ${socketId} at ${elapsedTime}`);
+    console.error(`[SOCKET]    Socket timeout value: ${socket.timeout}ms`);
+  });
+  
+  // Track when socket ends normally
+  socket.on('end', () => {
+    console.log(`[SOCKET] ✓ ENDED: ${socketId}`);
+  });
+  
+  // Track socket errors
+  socket.on('error', (err) => {
+    console.error(`[SOCKET] ⚠️  ERROR: ${socketId} - ${err.message}`);
+  });
 });
 
 // Graceful shutdown

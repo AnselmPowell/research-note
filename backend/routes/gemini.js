@@ -60,16 +60,28 @@ router.post('/batch-embeddings', async (req, res, next) => {
 });
 
 router.post('/filter-papers', async (req, res, next) => {
+  const requestId = Math.random().toString(36).substring(7);
   const startTime = Date.now();
+  const requestStartTime = new Date().toISOString();
+  
   try {
+    // === INVESTIGATION: Log request start ===
+    console.log(`\n[FILTER-${requestId}] ⏱️  REQUEST START: ${requestStartTime}`);
+    console.log(`[FILTER-${requestId}] 🔗 Client: ${req.ip}`);
+    console.log(`[FILTER-${requestId}] 📊 Socket timeout: ${req.socket?.timeout}ms`);
+    
     const { papers, userQuestions, keywords } = req.body.data;
-    console.log('[FILTER-PAPERS] Received:', {
-      papersCount: papers?.length,
-      userQuestionsCount: userQuestions?.length,
-      keywordsCount: keywords?.length,
-      firstPaperTitle: papers?.[0]?.title,
-      firstPaperSummaryExists: !!papers?.[0]?.summary,
-      environment: process.env.NODE_ENV || 'not-set'
+    console.log(`[FILTER-${requestId}] 📥 Input: ${papers?.length} papers, ${userQuestions?.length} questions`);
+    
+    // === INVESTIGATION: Track connection lifecycle ===
+    req.on('close', () => {
+      const elapsed = Date.now() - startTime;
+      console.warn(`[FILTER-${requestId}] ⚠️  CLIENT CLOSED: connection ended after ${elapsed}ms`);
+    });
+    
+    req.on('aborted', () => {
+      const elapsed = Date.now() - startTime;
+      console.warn(`[FILTER-${requestId}] ❌ REQUEST ABORTED: by client after ${elapsed}ms`);
     });
     
     // Timeout varies by environment AND operation:
@@ -84,10 +96,8 @@ router.post('/filter-papers', async (req, res, next) => {
     const isDev = process.env.NODE_ENV === 'development';
     const timeoutMs = 300000; // 300s both dev and prod (5 minutes - LLM operations are inherently slow)
     
-    console.log('[FILTER-PAPERS] Starting with timeout:', {
-      timeoutSeconds: timeoutMs / 1000,
-      environment: isDev ? 'development' : 'production'
-    });
+    console.log(`[FILTER-${requestId}] ⏳ Timeout set: ${timeoutMs / 1000}s`);
+    console.log(`[FILTER-${requestId}] 🔄 Starting filtering operation...`);
     
     const filterPromise = geminiService.filterRelevantPapers(papers, userQuestions, keywords);
     const timeoutPromise = new Promise((_, reject) =>
@@ -97,25 +107,21 @@ router.post('/filter-papers', async (req, res, next) => {
     const result = await Promise.race([filterPromise, timeoutPromise]);
     
     const elapsed = Date.now() - startTime;
-    console.log('[FILTER-PAPERS] Returning:', {
-      resultCount: result?.length,
-      firstResultTitle: result?.[0]?.title,
-      firstResultScore: result?.[0]?.relevanceScore,
-      elapsedMs: elapsed,
-      elapsedSeconds: (elapsed / 1000).toFixed(2)
-    });
+    
+    // === INVESTIGATION: Log successful response ===
+    console.log(`[FILTER-${requestId}] ✅ COMPLETED: ${elapsed}ms`);
+    console.log(`[FILTER-${requestId}] 📤 Returning: ${result?.length} papers`);
+    console.log(`[FILTER-${requestId}] ⏱️  Total elapsed: ${(elapsed / 1000).toFixed(2)}s\n`);
+    
     res.json({ success: true, data: result });
   } catch (err) { 
     const elapsed = Date.now() - startTime;
-    console.error('[FILTER-PAPERS] ❌ ERROR:', {
-      message: err.message,
-      type: err.constructor.name,
-      stack: err.stack,
-      papersCount: req.body?.data?.papers?.length,
-      elapsedMs: elapsed,
-      elapsedSeconds: (elapsed / 1000).toFixed(2),
-      environment: process.env.NODE_ENV || 'not-set'
-    });
+    
+    // === INVESTIGATION: Log error with timing ===
+    console.error(`[FILTER-${requestId}] ❌ ERROR after ${elapsed}ms (${(elapsed / 1000).toFixed(2)}s):`);
+    console.error(`[FILTER-${requestId}]    Message: ${err.message}`);
+    console.error(`[FILTER-${requestId}]    Type: ${err.constructor.name}`);
+    console.error(`[FILTER-${requestId}]    Socket connected: ${!req.socket?.destroyed}\n`);
     next(err); 
   }
 });
