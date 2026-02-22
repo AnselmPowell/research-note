@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useDatabase } from '../../database/DatabaseContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
-import { FileText, X, Plus, Upload, Link, Search, Loader2, AlertCircle, CheckSquare, Square, Trash2, Check } from 'lucide-react';
+import { FileText, X, Plus, Upload, Link, Search, Loader2, AlertCircle, CheckSquare, Square, Trash2, Check, Brain } from 'lucide-react';
 
 export const SourcesPanel: React.FC = () => {
     const { savedPapers, deletePaper, savePaper } = useDatabase();
@@ -21,6 +21,20 @@ export const SourcesPanel: React.FC = () => {
 
     // Selection state for bulk operations
     const [selectedPaperUris, setSelectedPaperUris] = useState<string[]>([]);
+
+    // Delete confirmation modal state
+    const [deleteModal, setDeleteModal] = useState<{
+        isOpen: boolean;
+        isBulk: boolean;
+        uri?: string;
+        title?: string;
+        count?: number;
+        isProcessing: boolean;
+    }>({
+        isOpen: false,
+        isBulk: false,
+        isProcessing: false
+    });
 
     // Show all papers - memoize this computation
     const sourcePapers = useMemo(() =>
@@ -180,59 +194,75 @@ export const SourcesPanel: React.FC = () => {
         }
     };
 
-    const handleRemovePaper = async (uri: string, title: string) => {
-        if (confirm(`Remove "${title}" from sources?`)) {
-            try {
-                await deletePaper(uri);
+    const handleRemovePaper = (uri: string, title: string) => {
+        setDeleteModal({
+            isOpen: true,
+            isBulk: false,
+            uri,
+            title,
+            isProcessing: false
+        });
+    };
 
-                // Also remove from LibraryContext if loaded to maintain consistency
-                const isLoaded = loadedPdfs.some(p => p.uri === uri);
-                if (isLoaded) {
-                    removePdf(uri); // Remove from loaded PDFs and context
+    const handleConfirmDelete = async () => {
+        setDeleteModal(prev => ({ ...prev, isProcessing: true }));
+        try {
+            if (deleteModal.isBulk) {
+                // Bulk delete
+                for (const uri of selectedPaperUris) {
+                    await deletePaper(uri);
+                    const isLoaded = loadedPdfs.some(p => p.uri === uri);
+                    if (isLoaded) {
+                        removePdf(uri);
+                    }
                 }
-
-                // Remove from selection if selected
-                setSelectedPaperUris(prev => prev.filter(u => u !== uri));
-            } catch (error) {
-                console.error('[SourcesPanel] Failed to remove paper:', error);
+                setSelectedPaperUris([]);
+            } else {
+                // Single delete
+                if (deleteModal.uri) {
+                    await deletePaper(deleteModal.uri);
+                    const isLoaded = loadedPdfs.some(p => p.uri === deleteModal.uri);
+                    if (isLoaded) {
+                        removePdf(deleteModal.uri);
+                    }
+                    setSelectedPaperUris(prev => prev.filter(u => u !== deleteModal.uri));
+                }
             }
+        } catch (error) {
+            console.error('[SourcesPanel] Delete failed:', error);
+        } finally {
+            setDeleteModal({
+                isOpen: false,
+                isBulk: false,
+                isProcessing: false
+            });
         }
     };
 
-    const handleSelectAll = useCallback(async () => {
+    const handleSelectAll = useCallback(() => {
         const allSelected = selectedPaperUris.length === filteredPapers.length && selectedPaperUris.length > 0;
 
         if (allSelected) {
             // Deselect all: Remove from selection and AI context
+            setSelectedPaperUris([]);
             for (const paper of filteredPapers) {
                 if (isPdfInContext(paper.uri)) {
                     togglePdfContext(paper.uri, paper.title);
                 }
             }
-            setSelectedPaperUris([]);
         } else {
-            // Select all: Add to selection and AI context
-            const urisToSelect: string[] = [];
-
+            // Select all: Add ALL filtered papers to selection
+            setSelectedPaperUris(filteredPapers.map(p => p.uri));
+            
+            // Add already-loaded papers to AI context
             for (const paper of filteredPapers) {
-                // Ensure PDF is loaded
                 const isLoaded = loadedPdfs.some(p => p.uri === paper.uri);
-                if (!isLoaded) {
-                    const result = await loadPdfFromUrl(paper.uri, paper.title);
-                    if (!result.success) continue; // Skip failed loads
-                }
-
-                // Add to AI context if not already there
-                if (!isPdfInContext(paper.uri)) {
+                if (isLoaded && !isPdfInContext(paper.uri)) {
                     togglePdfContext(paper.uri, paper.title);
                 }
-
-                urisToSelect.push(paper.uri);
             }
-
-            setSelectedPaperUris(urisToSelect);
         }
-    }, [selectedPaperUris.length, filteredPapers, isPdfInContext, togglePdfContext, loadedPdfs, loadPdfFromUrl]);
+    }, [selectedPaperUris.length, filteredPapers, loadedPdfs, isPdfInContext, togglePdfContext]);
 
     const handleToggleSelect = useCallback(async (uri: string, title: string) => {
         const isCurrentlySelected = selectedPaperUris.includes(uri);
@@ -265,23 +295,15 @@ export const SourcesPanel: React.FC = () => {
         }
     }, [selectedPaperUris, isPdfInContext, togglePdfContext, loadedPdfs, loadPdfFromUrl]);
 
-    const handleBulkDelete = async () => {
+    const handleBulkDelete = () => {
         if (selectedPaperUris.length === 0) return;
 
-        if (confirm(`Remove ${selectedPaperUris.length} source${selectedPaperUris.length > 1 ? 's' : ''} from your library?`)) {
-            try {
-                for (const uri of selectedPaperUris) {
-                    await deletePaper(uri);
-                    const isLoaded = loadedPdfs.some(p => p.uri === uri);
-                    if (isLoaded) {
-                        removePdf(uri);
-                    }
-                }
-                setSelectedPaperUris([]);
-            } catch (error) {
-                console.error('[SourcesPanel] Bulk delete failed:', error);
-            }
-        }
+        setDeleteModal({
+            isOpen: true,
+            isBulk: true,
+            count: selectedPaperUris.length,
+            isProcessing: false
+        });
     };
 
     return (
@@ -490,20 +512,27 @@ export const SourcesPanel: React.FC = () => {
                                     onClick={() => handleOpenPaper(paper.uri, paper.title)}
                                 >
                                     <div className="flex items-start gap-2">
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleToggleSelect(paper.uri, paper.title); }}
-                                            disabled={isDownloading}
-                                            className={`mt-0.5 flex-shrink-0 transition-colors ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-300 dark:text-gray-600 hover:text-gray-400'
-                                                }`}
-                                        >
-                                            {isDownloading ? (
-                                                <Loader2 size={16} className="animate-spin text-scholar-600" />
-                                            ) : (
-                                                isSelected ? <CheckSquare size={16} /> : <Square size={16} />
-                                            )}
-                                        </button>
+                                        <div className="items-center gap-1">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleToggleSelect(paper.uri, paper.title); }}
+                                                disabled={isDownloading}
+                                                className={`mt-0.5 flex-shrink-0 transition-colors ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-300 dark:text-gray-600 hover:text-gray-400'
+                                                    }`}
+                                            >
+                                                {isDownloading ? (
+                                                    <Loader2 size={16} className="animate-spin text-scholar-600" />
+                                                ) : (
+                                                    isSelected ? <CheckSquare size={16} /> : <Square size={16} />
+                                                )}
+                                            </button>
 
-                                        <FileText size={14} className="text-scholar-600 dark:text-scholar-400 mt-0.5 flex-shrink-0" />
+                                            {/* Brain icon: Shows if paper is in AI context */}
+                                            {isInContext && (
+                                                <Brain size={18} className="text-scholar-600 dark:text-scholar-400 flex-shrink-0" title="Added to AI context" />
+                                            )}
+                                        </div>
+
+                                        
                                         <div className="flex-1 min-w-0">
                                             <h3 className="text-xs font-medium text-gray-900 dark:text-white line-clamp-2 leading-tight mb-1">
                                                 {paper.title}
@@ -534,6 +563,44 @@ export const SourcesPanel: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {deleteModal.isOpen && (
+                <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-transparent" onClick={() => !deleteModal.isProcessing && setDeleteModal(prev => ({ ...prev, isOpen: false }))} />
+
+                    <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-xl shadow-2xl ring-1 ring-gray-900/5 dark:ring-white/10 p-6 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="text-center mb-6">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                                {deleteModal.isBulk ? 'Remove Sources?' : 'Remove Source?'}
+                            </h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                                {deleteModal.isBulk
+                                    ? `You're about to remove ${deleteModal.count} ${deleteModal.count === 1 ? 'source' : 'sources'}. This action cannot be undone.`
+                                    : `You're about to remove "${deleteModal.title}". This action cannot be undone.`}
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                onClick={() => setDeleteModal(prev => ({ ...prev, isOpen: false }))}
+                                disabled={deleteModal.isProcessing}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleConfirmDelete}
+                                disabled={deleteModal.isProcessing}
+                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {deleteModal.isProcessing ? <Loader2 size={16} className="animate-spin" /> : null}
+                                Remove
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
