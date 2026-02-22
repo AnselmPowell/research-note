@@ -55,7 +55,7 @@ app.use('/api/v1/search', searchRoutes);     // NEW: OpenAlex, Google CSE, PDFVe
 ```
 
 ### Critical Services Status
-- ✅ **Gemini AI**: `gemini-3-flash-preview` for generation, `gemini-embedding-001` for embeddings
+- ✅ **Gemini AI**: `gemini-2.5-flash` for generation, `gemini-embedding-001` for embeddings
 - ✅ **Database**: Neon Serverless Postgres with user-scoped queries
 - ✅ **ArXiv**: Backend proxy + new `abs:` AND queries for precision
 - ✅ **OpenAlex**: Free academic DB, no API key required

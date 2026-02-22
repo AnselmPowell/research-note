@@ -2,7 +2,7 @@
 
 ## AI Provider Stack
 
-**Primary:** Google Gemini (gemini-3-flash-preview, gemini-3-pro-preview)
+**Primary:** Google Gemini (gemini-2.5-flash, gemini-3-pro-preview)
 **Fallback:** OpenAI (gpt-4o-mini)
 ⚠️ **Embedding Model:** `gemini-embedding-001` (switched from text-embedding-004 - Feb 6 shutdown)
 
@@ -12,7 +12,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 // Automatic failover
 try {
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-2.5-flash",
     contents: prompt
   });
 } catch (error) {
@@ -28,7 +28,7 @@ Generate focused primary + secondary keywords with AND combinations.
 
 ```javascript
 // backend/services/geminiService.js — generateArxivSearchTerms()
-// Model: gemini-3-flash-preview, temperature: 0.1, responseMimeType: application/json
+// Model: gemini-2.5-flash, temperature: 0.1, responseMimeType: application/json
 // Prompt: Academic keyword engine with 7 worked examples
 
 // Input: topics + questions joined as userQuery
@@ -96,7 +96,7 @@ POST /api/v1/search/pdfvector   // 40 over-fetched, full fields for scoring, 65s
 
 **Google Grounding** (`backend/services/geminiService.js:searchWithGrounding`):
 ```javascript
-// Uses gemini-3-flash-preview with tools: [{ googleSearch: {} }]
+// Uses gemini-2.5-flash with tools: [{ googleSearch: {} }]
 // Prompt asks for top 10-15 academic PDFs with summaries
 // retryWithBackoff: 3 retries on 503, exponential delay starting 1000ms
 // Route: POST /api/v1/gemini/grounding-search
@@ -188,7 +188,7 @@ const extractNotesFromPages = async (
       Return JSON: { "notes": [{ "quote", "justification", "pageNumber", "relevanceScore" }] }`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });

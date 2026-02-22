@@ -25,7 +25,7 @@
 - **Routes:** `/api/arxiv-proxy`, `/api/gemini`, `/api/database`, `/api/agent`
 
 ### AI Services
-- **Primary:** Google Gemini (gemini-3-flash-preview, gemini-3-pro-preview)
+- **Primary:** Google Gemini (gemini-2.5-flash, gemini-3-flash)
 - **Fallback:** OpenAI (gpt-4o-mini)
 - **Embeddings:** gemini-embedding-001 ⚠️ (migrated from text-embedding-004)
 

@@ -12,7 +12,7 @@
 ### Backend (Added Jan 2026)
 - **Runtime**: Node.js 20 + Express
 - **AI Models**:
-  - `gemini-3-flash-preview` (text generation)
+  - `gemini-2.5-flash` (text generation)
   - `gemini-embedding-001` (768-dim vectors) ⚠️ **Updated Feb 6** from `text-embedding-004`
   - `gpt-4o-mini` (fallback)
 - **Database**: Neon Serverless Postgres

@@ -74,7 +74,7 @@ A tri-modal search interface tailored for different levels of discovery:
 
 ### 2. The Deep Research Pipeline
 The core of the application is a multi-stage asynchronous engine:
-1. **Intent Modeling:** Uses `gemini-3-flash-preview` to perform query expansion, breaking simple topics into structured academic search strings
+1. **Intent Modeling:** Uses `gemini-2.5-flash` to perform query expansion, breaking simple topics into structured academic search strings
 2. **Distributed Gathering:** High-concurrency worker pool queries arXiv via optimized proxy failovers
 3. **Semantic Distillation:** Uses `text-embedding-004` to calculate cosine similarity between user intent and paper abstracts
 4. **Geometric PDF Reconstruction:** Custom coordinate-geometry sorter that detects 2-column layouts and reorders text items

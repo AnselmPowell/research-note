@@ -144,7 +144,7 @@ If you cannot find clear information for any field, return the current value for
     if (signal?.aborted) throw new Error('Aborted');
     
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });
@@ -192,7 +192,7 @@ If you cannot find clear information for any field, return the current value for
 };
 
 export const generateSearchVariations = async (originalQuery: string): Promise<string[]> => {
-  const model = "gemini-3-flash-preview";
+  const model = "gemini-2.5-flash";
   const prompt = `You are a research assistant. The user is looking for PDF documents/papers about: "${originalQuery}".
   Generate 5 additional, distinct, simple keyword-based search queries to find relevant research PDFs.
   Do not use boolean operators like OR/AND. Keep them simple and targeted.
@@ -290,7 +290,7 @@ export const generateArxivSearchTerms = async (topics: string[], questions: stri
     }
     
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });
@@ -340,7 +340,7 @@ export const generateInsightQueries = async (userQuestions: string, contextQuery
     }
     
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });
@@ -731,7 +731,7 @@ Abstract: ${paperAbstract || "Not available"}\n\n ############`
             }
             
             const response = await ai.models.generateContent({
-                model: "gemini-3-flash-preview",
+                model: "gemini-2.5-flash",
                 contents: prompt,
                 config: { responseMimeType: "application/json" }
             });

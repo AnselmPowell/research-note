@@ -40,7 +40,7 @@ async function sendMessage(message, fileUris, contextNotes) {
   if (!genAI) throw new Error('Gemini AI not initialized');
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-2.5-flash',
     systemInstruction: 'You are an advanced Research Assistant...'
   });
 
