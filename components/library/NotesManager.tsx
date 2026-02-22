@@ -250,8 +250,13 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
         const paperA = paperByUri.get(a.paper_uri);
         const paperB = paperByUri.get(b.paper_uri);
-        const yearA = paperA?.created_at || paperA?.published || paperA?.publishedDate ? new Date(paperA.created_at || paperA.published || paperA.publishedDate).getFullYear() : 0;
-        const yearB = paperB?.created_at || paperB?.published || paperB?.publishedDate ? new Date(paperB.created_at || paperB.published || paperB.publishedDate).getFullYear() : 0;
+        // Fixed: Corrected precedence and removed non-existent 'published' field
+        const yearA = paperA?.year ? parseInt(paperA.year) : 
+          (paperA?.publishedDate ? new Date(paperA.publishedDate).getFullYear() : 
+          (paperA?.created_at ? new Date(paperA.created_at).getFullYear() : 0));
+        const yearB = paperB?.year ? parseInt(paperB.year) : 
+          (paperB?.publishedDate ? new Date(paperB.publishedDate).getFullYear() : 
+          (paperB?.created_at ? new Date(paperB.created_at).getFullYear() : 0));
         valA = yearA;
         valB = yearB;
       } else {

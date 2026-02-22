@@ -104,8 +104,12 @@ export const SourcesPanel: React.FC = () => {
                         pdfUri: loadedPdf.uri,
                         title: loadedPdf.metadata?.title || file.name.replace('.pdf', ''),
                         authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
-                        summary: loadedPdf.metadata?.subject || '',  // Include subject as summary
-                        publishedDate: new Date().toISOString(),
+                        abstract: loadedPdf.metadata?.subject || '',
+                        summary: loadedPdf.metadata?.subject || '',
+                        publishedDate: loadedPdf.metadata?.publishedDate || null,
+                        harvardReference: loadedPdf.metadata?.harvardReference || null,
+                        publisher: loadedPdf.metadata?.publisher || null,
+                        categories: [],
                         numPages: loadedPdf.numPages
                     };
 
@@ -147,8 +151,12 @@ export const SourcesPanel: React.FC = () => {
                     pdfUri: loadedPdf.uri,
                     title: loadedPdf.metadata?.title || 'Untitled Document',
                     authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
-                    summary: loadedPdf.metadata?.subject || '',  // Include subject as summary
-                    publishedDate: new Date().toISOString(),
+                    abstract: loadedPdf.metadata?.subject || '',
+                    summary: loadedPdf.metadata?.subject || '',
+                    publishedDate: loadedPdf.metadata?.publishedDate || null,
+                    harvardReference: loadedPdf.metadata?.harvardReference || null,
+                    publisher: loadedPdf.metadata?.publisher || null,
+                    categories: [],
                     numPages: loadedPdf.numPages
                 };
 

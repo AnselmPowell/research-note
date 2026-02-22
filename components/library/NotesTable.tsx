@@ -119,6 +119,22 @@ export const NotesTable: React.FC<NotesTableProps> = ({
         return <ArrowUpDown size={12} className={`ml-1 ${sortDirection === 'asc' ? 'rotate-180' : ''} text-scholar-600`} />;
     };
 
+    // Tooltip component for instant hover display
+    const Tooltip = ({ text, children }: { text: string; children: React.ReactNode }) => {
+        const [isVisible, setIsVisible] = useState(false);
+        return (
+            <div className="relative inline-block w-full" onMouseEnter={() => setIsVisible(true)} onMouseLeave={() => setIsVisible(false)}>
+                {children}
+                {isVisible && text && (
+                    <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-50 bg-gray-900 dark:bg-gray-700 text-white text-xs px-2 py-1 rounded whitespace-normal max-w-xs break-words pointer-events-none">
+                        {text}
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     return (
         <div className="bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden animate-fade-in">
             <table className="w-full text-left border-collapse">
@@ -227,24 +243,30 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                     </td>
 
                                     <td className="hidden lg:table-cell py-5 px-4 vertical-top">
-                                         <span className="text-xs text-gray-600 dark:text-gray-400 font-medium line-clamp-1" title={Array.isArray(paper?.authors) ? paper?.authors.join(', ') : paper?.authors}>
-                                            {Array.isArray(paper?.authors) ? (paper?.authors[0] + (paper!.authors.length > 1 ? ' et al.' : '')) : (paper?.authors || 'Unknown')}
-                                        </span>
+                                         <Tooltip text={Array.isArray(paper?.authors) ? paper?.authors.join(', ') : paper?.authors || ''}>
+                                            <span className="text-xs text-gray-600 dark:text-gray-400 font-medium line-clamp-1 cursor-help">
+                                                {Array.isArray(paper?.authors) ? (paper?.authors[0] + (paper!.authors.length > 1 ? ' et al.' : '')) : (paper?.authors || 'Unknown')}
+                                            </span>
+                                        </Tooltip>
                                     </td>
                                     
                                     <td className="hidden lg:table-cell py-5 px-4 vertical-top">
                                         <span className="text-xs text-gray-500 font-mono">
-                                            {paper?.year || (paper?.published ? new Date(paper.published).getFullYear() : '-')}
+                                            {paper?.year ? paper.year : 
+                                              (paper?.publishedDate ? new Date(paper.publishedDate).getFullYear() : 
+                                              (paper?.created_at ? new Date(paper.created_at).getFullYear() : '—'))}
                                         </span>
                                     </td>
 
                                     <td className="hidden md:table-cell py-5 px-4 vertical-top">
-                                        <span
-                                            className="text-xs font-bold text-scholar-600 hover:underline cursor-pointer truncate block max-w-[200px]"
-                                            onClick={(e) => { e.stopPropagation(); onViewPdf(note); }}
-                                        >
-                                            {paperTitle}
-                                        </span>
+                                        <Tooltip text={paperTitle}>
+                                            <span
+                                                className="text-xs font-bold text-scholar-600 hover:underline cursor-pointer truncate block max-w-[200px]"
+                                                onClick={(e) => { e.stopPropagation(); onViewPdf(note); }}
+                                            >
+                                                {paperTitle}
+                                            </span>
+                                        </Tooltip>
                                     </td>
 
                                     <td className="hidden lg:table-cell py-3 px-4">
@@ -271,9 +293,11 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                     </td>
 
                                     <td className="hidden xl:table-cell py-5 px-4 vertical-top">
-                                        <span className="text-xs text-gray-500 italic line-clamp-2" title={note.related_question}>
-                                            {note.related_question || '-'}
-                                        </span>
+                                        <Tooltip text={note.related_question || ''}>
+                                            <span className="text-xs text-gray-500 italic line-clamp-2 cursor-help">
+                                                {note.related_question || '-'}
+                                            </span>
+                                        </Tooltip>
                                     </td>
 
                                     <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
@@ -343,6 +367,13 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                     <tr className="bg-gray-50/50 dark:bg-gray-800/20 animate-slide-down">
                                         <td colSpan={9} className="p-0">
                                             <div className="px-4 py-4 sm:px-14 pb-6 space-y-4">
+                                                {/* Harvard Reference */}
+                                                {paper?.harvardReference && (
+                                                    <p className="text-xs text-gray-600 dark:text-gray-400 italic">
+                                                        {paper.harvardReference}
+                                                    </p>
+                                                )}
+
                                                 <div className="flex flex-wrap gap-2 mb-2 sm:hidden">
                                                     {/* Mobile star/flag controls */}
                                                     <button

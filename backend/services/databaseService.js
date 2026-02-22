@@ -19,24 +19,57 @@ function getDb() {
 
 
 async function initSchema() {
-  await getDb()`CREATE TABLE IF NOT EXISTS papers (
-    uri TEXT PRIMARY KEY, title TEXT NOT NULL, abstract TEXT, authors JSONB,
-    num_pages INTEGER, is_explicitly_saved BOOLEAN DEFAULT FALSE, user_id TEXT,
+  const sql = getDb();
+  
+  // Create papers table with new metadata columns
+  await sql`CREATE TABLE IF NOT EXISTS papers (
+    uri TEXT PRIMARY KEY, 
+    title TEXT NOT NULL, 
+    abstract TEXT, 
+    authors JSONB,
+    num_pages INTEGER, 
+    is_explicitly_saved BOOLEAN DEFAULT FALSE, 
+    user_id TEXT,
+    published_date TEXT,
+    year TEXT,
+    harvard_reference TEXT,
+    publisher TEXT,
+    categories JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP)`;
+  
+  // Create notes table
   await sql`CREATE TABLE IF NOT EXISTS notes (
-    id SERIAL PRIMARY KEY, paper_uri TEXT REFERENCES papers(uri) ON DELETE CASCADE,
-    content TEXT NOT NULL, justification TEXT, citations JSONB, related_question TEXT,
-    page_number INTEGER, relevance_score FLOAT, is_starred BOOLEAN DEFAULT FALSE,
-    is_flagged BOOLEAN DEFAULT FALSE, user_id TEXT,
+    id SERIAL PRIMARY KEY, 
+    paper_uri TEXT REFERENCES papers(uri) ON DELETE CASCADE,
+    content TEXT NOT NULL, 
+    justification TEXT, 
+    citations JSONB, 
+    related_question TEXT,
+    page_number INTEGER, 
+    relevance_score FLOAT, 
+    is_starred BOOLEAN DEFAULT FALSE,
+    is_flagged BOOLEAN DEFAULT FALSE, 
+    user_id TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP)`;
+  
+  // Create folders table
   await sql`CREATE TABLE IF NOT EXISTS folders (
-    id SERIAL PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL,
-    parent_id INTEGER REFERENCES folders(id) ON DELETE CASCADE, description TEXT,
-    user_id TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP)`;
+    id SERIAL PRIMARY KEY, 
+    name TEXT NOT NULL, 
+    type TEXT NOT NULL,
+    parent_id INTEGER REFERENCES folders(id) ON DELETE CASCADE, 
+    description TEXT,
+    user_id TEXT, 
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP)`;
+  
+  // Create note_assignments table
   await sql`CREATE TABLE IF NOT EXISTS note_assignments (
-    id SERIAL PRIMARY KEY, note_id INTEGER REFERENCES notes(id) ON DELETE CASCADE,
+    id SERIAL PRIMARY KEY, 
+    note_id INTEGER REFERENCES notes(id) ON DELETE CASCADE,
     folder_id INTEGER REFERENCES folders(id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, UNIQUE(note_id, folder_id))`;
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, 
+    UNIQUE(note_id, folder_id))`;
+  
   logger.info('✅ Database schema initialized');
 }
 
@@ -46,10 +79,38 @@ async function savePaper(paper, userId) {
   const authors = JSON.stringify(paper.authors || []);
   const numPages = paper.num_pages || paper.numPages || 0;
   const isSaved = paper.is_explicitly_saved !== undefined ? paper.is_explicitly_saved : true;
-  await getDb()`INSERT INTO papers (uri, title, abstract, authors, num_pages, is_explicitly_saved, user_id)
-    VALUES (${uri}, ${paper.title}, ${abstract}, ${authors}, ${numPages}, ${isSaved}, ${userId})
-    ON CONFLICT (uri) DO UPDATE SET title = EXCLUDED.title, abstract = EXCLUDED.abstract,
-    authors = EXCLUDED.authors, num_pages = EXCLUDED.num_pages, is_explicitly_saved = EXCLUDED.is_explicitly_saved`;
+  
+  // NEW: Extract and store all metadata fields
+  let year = paper.year;
+  if (!year && paper.publishedDate) {
+    const yearMatch = paper.publishedDate.match(/\b(19|20)\d{2}\b/);
+    year = yearMatch ? yearMatch[0] : null;
+  }
+  
+  const publishedDate = paper.publishedDate || null;
+  const harvardReference = paper.harvardReference || null;
+  const publisher = paper.publisher || null;
+  const categories = JSON.stringify(paper.categories || []);
+  
+  await getDb()`INSERT INTO papers (
+    uri, title, abstract, authors, num_pages, is_explicitly_saved, user_id,
+    published_date, year, harvard_reference, publisher, categories
+  )
+  VALUES (
+    ${uri}, ${paper.title}, ${abstract}, ${authors}, ${numPages}, ${isSaved}, ${userId},
+    ${publishedDate}, ${year}, ${harvardReference}, ${publisher}, ${categories}
+  )
+  ON CONFLICT (uri) DO UPDATE SET 
+    title = EXCLUDED.title, 
+    abstract = EXCLUDED.abstract,
+    authors = EXCLUDED.authors, 
+    num_pages = EXCLUDED.num_pages, 
+    is_explicitly_saved = EXCLUDED.is_explicitly_saved,
+    published_date = EXCLUDED.published_date,
+    year = EXCLUDED.year,
+    harvard_reference = EXCLUDED.harvard_reference,
+    publisher = EXCLUDED.publisher,
+    categories = EXCLUDED.categories`;
 }
 
 async function saveNote(note, userId) {

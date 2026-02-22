@@ -87,7 +87,8 @@ export interface ArxivPaper {
   summary: string;
   authors: string[];
   pdfUri: string;
-  publishedDate: string;
+  publishedDate?: string;
+  year?: string;
   sourceQuery?: string;
   sourceApi?: 'arxiv' | 'openalex' | 'google_cse' | 'pdfvector' | 'google_grounding';
   relevanceScore?: number;

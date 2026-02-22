@@ -13,6 +13,7 @@ import {
     FileText
 } from 'lucide-react';
 import { DeepResearchResult, DeepResearchNote } from '../../types';
+import { useState } from 'react';
 
 interface PapersTableProps {
     papers: DeepResearchResult[];
@@ -48,6 +49,22 @@ export const PapersTable: React.FC<PapersTableProps> = ({
     const SortIcon = ({ column }: { column: string }) => {
         if (sortColumn !== column) return <ArrowUpDown size={12} className="opacity-20 ml-1" />;
         return <ArrowUpDown size={12} className={`ml-1 ${sortDirection === 'asc' ? 'rotate-180' : ''} text-scholar-600`} />;
+    };
+
+    // Tooltip component for instant hover display
+    const Tooltip = ({ text, children }: { text: string; children: React.ReactNode }) => {
+        const [isVisible, setIsVisible] = useState(false);
+        return (
+            <div className="relative inline-block w-full" onMouseEnter={() => setIsVisible(true)} onMouseLeave={() => setIsVisible(false)}>
+                {children}
+                {isVisible && text && (
+                    <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-50 bg-gray-900 dark:bg-gray-700 text-white text-xs px-2 py-1 rounded whitespace-normal max-w-xs break-words pointer-events-none">
+                        {text}
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+                    </div>
+                )}
+            </div>
+        );
     };
 
     return (
@@ -94,7 +111,9 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                         const isSelected = selectedUris.includes(paper.uri);
                         const isExpanded = expandedUris.has(paper.uri);
                         const notesCount = getNotesCount(paper.uri);
-                        const year = paper.created_at || paper.published || paper.publishedDate ? new Date(paper.created_at || paper.published || paper.publishedDate).getFullYear() : '—';
+                        const year = paper.year ? paper.year : 
+                          (paper.publishedDate ? new Date(paper.publishedDate).getFullYear() : 
+                          (paper.created_at ? new Date(paper.created_at).getFullYear() : '—'));
                         const authors = Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || 'Unknown');
 
                         return (
@@ -127,9 +146,11 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                                     </td>
 
                                     <td className="hidden md:table-cell py-5 px-4">
-                                        <span className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1 italic">
-                                            {authors}
-                                        </span>
+                                        <Tooltip text={authors}>
+                                            <span className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1 italic cursor-help">
+                                                {authors}
+                                            </span>
+                                        </Tooltip>
                                     </td>
 
                                     <td className="hidden lg:table-cell py-5 px-4">
@@ -180,6 +201,13 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                                     <tr className="bg-gray-50/50 dark:bg-gray-800/20 animate-slide-down">
                                         <td colSpan={6} className="p-0">
                                             <div className="px-4 py-4 sm:px-14 pb-6 space-y-4">
+                                                {/* Harvard Reference */}
+                                                {paper.harvardReference && (
+                                                    <p className="text-xs text-gray-600 dark:text-gray-400 italic">
+                                                        {paper.harvardReference}
+                                                    </p>
+                                                )}
+
                                                 <div className="flex flex-wrap gap-2 mb-2">
                                                     {/* Mobile badges shown in expanded view */}
                                                     <div className="sm:hidden flex items-center gap-2">
