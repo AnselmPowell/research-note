@@ -128,15 +128,14 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                             <span className="sr-only">Select</span>
                         </th>
                         <th
-                            className="py-3 px-4 cursor-pointer hover:text-scholar-600 transition-colors group select-none w-1/3"
+                            className="py-3 px-4 cursor-pointer hover:text-scholar-600 transition-colors group select-none w-1/2"
                             onClick={() => onSort('content')}
                         >
                             <div className="flex items-center">
-                                Insight / Quote
+                                Notes
                                 <SortIcon column="content" />
                             </div>
                         </th>
-                        <th className="hidden xl:table-cell py-3 px-4 w-48 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider">Query</th>
                         <th className="hidden lg:table-cell py-3 px-4 w-32 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider">Author</th>
                         <th className="hidden lg:table-cell py-3 px-4 w-20 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider">Year</th>
                         <th
@@ -158,6 +157,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                             </div>
                         </th>
                         <th className="hidden sm:table-cell py-3 px-4 w-24 text-center">Tags</th>
+                        <th className="hidden xl:table-cell py-3 px-4 w-48 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider">Query</th>
                         <th className="py-3 px-4 w-24 text-right">Actions</th>
                     </tr>
                 </thead>
@@ -226,12 +226,6 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                         </div>
                                     </td>
 
-                                    <td className="hidden xl:table-cell py-5 px-4 vertical-top">
-                                        <span className="text-xs text-gray-500 italic line-clamp-2" title={note.related_question}>
-                                            {note.related_question || '-'}
-                                        </span>
-                                    </td>
-
                                     <td className="hidden lg:table-cell py-5 px-4 vertical-top">
                                          <span className="text-xs text-gray-600 dark:text-gray-400 font-medium line-clamp-1" title={Array.isArray(paper?.authors) ? paper?.authors.join(', ') : paper?.authors}>
                                             {Array.isArray(paper?.authors) ? (paper?.authors[0] + (paper!.authors.length > 1 ? ' et al.' : '')) : (paper?.authors || 'Unknown')}
@@ -274,6 +268,12 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                 <Flag size={14} fill={note.is_flagged ? "currentColor" : "none"} />
                                             </button>
                                         </div>
+                                    </td>
+
+                                    <td className="hidden xl:table-cell py-5 px-4 vertical-top">
+                                        <span className="text-xs text-gray-500 italic line-clamp-2" title={note.related_question}>
+                                            {note.related_question || '-'}
+                                        </span>
                                     </td>
 
                                     <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
@@ -341,7 +341,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                 {/* Expanded Details Row */}
                                 {isExpanded && (
                                     <tr className="bg-gray-50/50 dark:bg-gray-800/20 animate-slide-down">
-                                        <td colSpan={6} className="p-0">
+                                        <td colSpan={9} className="p-0">
                                             <div className="px-4 py-4 sm:px-14 pb-6 space-y-4">
                                                 <div className="flex flex-wrap gap-2 mb-2 sm:hidden">
                                                     {/* Mobile star/flag controls */}
@@ -395,7 +395,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                         );
                     }) : (
                         <tr>
-                            <td colSpan={6} className="py-24 text-center">
+                            <td colSpan={9} className="py-24 text-center">
                                 <div className="flex flex-col items-center justify-center opacity-40">
                                     <MessageSquareQuote size={48} className="mb-4 text-gray-300 dark:text-gray-600" />
                                     <p className="text-gray-900 dark:text-white font-bold">No notes found</p>
