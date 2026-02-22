@@ -391,7 +391,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                 </div>
 
                                                 <div className="mb-4">
-                                                    <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed font-serif italic bg-white dark:bg-gray-900/50 p-4 rounded-lg border border-gray-100 dark:border-gray-800">
+                                                    <p className="text-base text-gray-800 dark:text-gray-200 leading-relaxed font-serif bg-white dark:bg-gray-900/50 p-4 rounded-lg border border-gray-100 dark:border-gray-800">
                                                         "{note.content}"
                                                     </p>
                                                 </div>

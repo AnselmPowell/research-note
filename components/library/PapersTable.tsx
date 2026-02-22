@@ -102,8 +102,8 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                                 <SortIcon column="year" />
                             </div>
                         </th>
-                        <th className="hidden sm:table-cell py-3 px-4 w-24 text-center">Status</th>
-                        <th className="py-3 px-4 w-24 text-right">Actions</th>
+                        <th className="hidden sm:table-cell py-3 px-4 w-24 text-center">Notes</th>
+                        <th className="py-3 px-4 w-24 text-center">Actions</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
