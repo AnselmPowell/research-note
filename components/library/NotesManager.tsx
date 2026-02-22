@@ -236,10 +236,27 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     }
     if (localFilters.source !== 'all') base = base.filter(n => n.paper_uri === localFilters.source);
     if (localFilters.query !== 'all') base = base.filter(n => n.related_question === localFilters.query);
-    if (localFilters.flagged) base = base.filter(n => n.is_flagged);
+    // NOTE: flagged filter is already applied via activeView === 'flagged', so don't duplicate it here
+    // PHASE 3: Enhanced text search - includes note content, justification, AND paper metadata
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      base = base.filter(n => n.content.toLowerCase().includes(q) || n.justification?.toLowerCase().includes(q));
+      base = base.filter(n => {
+        // Search note content and justification
+        const noteMatch = n.content.toLowerCase().includes(q) || 
+                          n.justification?.toLowerCase().includes(q);
+        
+        // Also search paper title and abstract
+        const paper = paperByUri.get(n.paper_uri);
+        const paperMatch = paper?.title?.toLowerCase().includes(q) ||
+                           paper?.abstract?.toLowerCase().includes(q);
+        
+        // Also search authors
+        const authorsMatch = Array.isArray(paper?.authors) ?
+          paper.authors.some(author => author.toLowerCase().includes(q)) :
+          paper?.authors?.toLowerCase().includes(q);
+        
+        return noteMatch || paperMatch || authorsMatch;
+      });
     }
     base.sort((a, b) => {
       let valA, valB;
@@ -306,6 +323,84 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
   const paginatedNotes = filteredNotes.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const paginatedPapers = filteredPapers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+
+   const uniqueQueries = useMemo(() => {
+    // PHASE 2: Context-aware query dropdown - only shows queries from currently filtered notes
+    // This means if user searches "neural networks", dropdown only shows queries matching that search
+    const uniqueSet = new Set<string>();
+    filteredNotes.forEach(note => {
+      if (note.related_question && note.related_question.trim().length > 0) {
+        uniqueSet.add(note.related_question);
+      }
+    });
+    return Array.from(uniqueSet).sort();
+  }, [filteredNotes]);
+
+  const uniqueSourcePapers = useMemo(() => {
+    let base = [...savedNotes];
+
+    // Apply text search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      base = base.filter(n =>
+        n.content.toLowerCase().includes(q) ||
+        n.justification?.toLowerCase().includes(q)
+      );
+    }
+
+    // Apply query filter (but NOT source filter - that's what we're generating options for)
+    if (localFilters.query !== 'all') {
+      base = base.filter(n => n.related_question === localFilters.query);
+    }
+
+    // Apply activeView filters only when on notes tab
+    if (activeTab === 'notes') {
+      if (activeView === 'starred') base = base.filter(n => n.is_starred);
+      else if (activeView === 'flagged') base = base.filter(n => n.is_flagged);
+      else if (activeView === 'recent') {
+        const oneDayAgo = new Date().getTime() - 86400000;
+        base = base.filter(n => new Date(n.created_at || 0).getTime() > oneDayAgo);
+      }
+    }
+
+    // Extract unique papers from filtered notes
+    const paperMap = new Map<string, { uri: string; title: string }>();
+    base.forEach(note => {
+      const paper = paperByUri.get(note.paper_uri);
+      if (paper && !paperMap.has(note.paper_uri)) {
+        paperMap.set(note.paper_uri, {
+          uri: note.paper_uri,
+          title: paper.title || 'Unknown Source'
+        });
+      }
+    });
+
+    return Array.from(paperMap.values()).sort((a, b) => a.title.localeCompare(b.title));
+  }, [savedNotes, searchQuery, localFilters.query, activeView, activeTab, paperByUri]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, localFilters, activeView, activeTab, viewMode, paperSubFilter, sortColumn, sortDirection]);
+
+  useEffect(() => {
+    if (localFilters.source !== 'all') {
+      const paperExists = uniqueSourcePapers.some(p => p.uri === localFilters.source);
+      if (!paperExists) {
+        setLocalFilters(prev => ({ ...prev, source: 'all' }));
+      }
+    }
+  }, [uniqueSourcePapers, localFilters.source]);
+
+
+  useEffect(() => {
+    if (localFilters.query !== 'all') {
+      const queryExists = uniqueQueries.includes(localFilters.query);
+      if (!queryExists) {
+        setLocalFilters(prev => ({ ...prev, query: 'all' }));
+      }
+    }
+  }, [uniqueQueries, localFilters.query]);
 
   const handleToggleExpand = useCallback((id: number) => {
     setExpandedNotes(prev => {
@@ -437,16 +532,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     noted: Array.from(new Set(savedNotes.map(n => n.paper_uri))).length
   }), [savedPapers, savedNotes]);
 
-  const uniqueQueries = useMemo(() => {
-
-    const uniqueSet = new Set<string>();
-    savedNotes.forEach(note => {
-      if (note.related_question && note.related_question.trim().length > 0) {
-        uniqueSet.add(note.related_question);
-      }
-    });
-    return Array.from(uniqueSet).sort();
-  }, [savedNotes]);
+ 
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-cream dark:bg-dark-bg font-sans notes-manager-container" style={{ containerType: 'inline-size' }}>
@@ -694,7 +780,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                       onChange={(e) => setLocalFilters({ ...localFilters, source: e.target.value })}
                     >
                       <option value="all">All Sources</option>
-                      {savedPapers.map(p => <option key={p.uri} value={p.uri}>{p.title}</option>)}
+                      {uniqueSourcePapers.map(p => <option key={p.uri} value={p.uri}>{p.title}</option>)}
                     </select>
                   </div>
                 )}
@@ -706,9 +792,11 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                       className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none filter-input"
                       value={localFilters.query}
                       onChange={(e) => setLocalFilters({ ...localFilters, query: e.target.value })}
+                      title={localFilters.query !== 'all' ? localFilters.query : ''}
+                      style={{ whiteSpace: 'normal' }}
                     >
                       <option value="all">All Queries</option>
-                      {uniqueQueries.map(query => <option key={query} value={query}>{query}</option>)}
+                      {uniqueQueries.map(query => <option key={query} value={query} title={query}>{query}</option>)}
                     </select>
                   </div>
                 )}
