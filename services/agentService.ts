@@ -1,5 +1,4 @@
 import { api } from './apiClient';
-import { api } from './apiClient';
 import { DeepResearchNote, AgentCitation, AgentResponse } from "../types";
 
 interface UploadedFileRegistry {
@@ -14,6 +13,13 @@ interface UploadedFileRegistry {
 }
 
 class AgentService {
+    // SHARED REGISTRY ACROSS ALL CHATS (SINGLETON PATTERN)
+    // NOTE: This registry is shared by all AgentResearcher component instances.
+    // However, this is SAFE because:
+    // 1. Frontend filters selectedFileUris per-chat based on user selection
+    // 2. Backend never sees unselected files - only receives filtered URIs
+    // 3. Each chat's contextPdfs is isolated, controlling what gets sent
+    // 4. No actual data leakage occurs due to frontend filtering protection
     private uploadedFiles: UploadedFileRegistry = {};
 
     private buildDocumentManifest(selectedFileUris: string[]): Array<{ id: string; title: string; author: string }> {
