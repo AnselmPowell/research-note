@@ -1,6 +1,65 @@
 # Active Context - Research Note
 
-## Current Work Focus (February 19, 2026)
+## Current Work Focus (February 23, 2026)
+
+### MAJOR COMPLETION: Agent Researcher Phase 1 - File Upload Pipeline ✅
+
+**Session (Feb 23, 2026) - Critical Bug Fixes & Complete Pipeline**
+
+**4 CRITICAL BUGS FIXED:**
+
+1. ✅ **Infinite Loop on Startup** 
+   - useEffect auto-sync timer re-ran every 1.5s
+   - **Fix:** Disable timer, move syncFiles outside useEffect, add explicit trigger on contextPdfs.length
+
+2. ✅ **fileUri=[object Object]** 
+   - Backend returned entire cache object instead of URI string
+   - **Fix:** Return only `.uri` property: `return cachedFile.uri;`
+
+3. ✅ **Files Never Uploaded (ROOT CAUSE)**
+   - syncFiles() was defined but never called
+   - **Fix:** Added new useEffect with `[contextPdfs.length]` dependency to auto-trigger
+   ```typescript
+   useEffect(() => {
+     if (contextPdfs.length > 0) syncFiles();
+   }, [contextPdfs.length]);
+   ```
+
+4. ✅ **Type Error: .keys() on Object**
+   - Called `Array.from(uploadedFiles.keys())` on plain object `{}`
+   - **Fix:** Changed to `Object.keys(uploadedFiles)`
+
+**AGENT PIPELINE NOW COMPLETE:**
+- ✅ Files upload automatically when added to context
+- ✅ Stored in uploadedFiles with ACTIVE state
+- ✅ Sent to Gemini as base64 inlineData
+- ✅ Gemini analyzes PDF content
+- ✅ Citations extracted from responses
+
+**Files Modified:**
+- `components/researcherAI/AgentResearcher.tsx` - syncFiles moved outside useEffect, new contextPdfs.length watcher
+- `services/agentService.ts` - uploadPdf + sendMessage debug logging
+- `backend/services/agentService.js` - uploadFile URI return, sendMessage file lookup
+- `services/apiClient.ts` - Removed 40+ console.log statements
+- `backend/routes/agent.js` - Removed 60+ console.log statements
+
+**Data Flow:**
+```
+User adds PDF → contextPdfs.length changes → useEffect fires
+→ syncFiles() → agentService.uploadPdf() → uploadedFiles[uri] = file
+→ User sends message → selectedFileUris extracted
+→ sendMessage filters uploadedFiles by URI match
+→ Extracts googleFileUri for each file
+→ Backend converts to base64 inlineData
+→ Gemini receives files + processes
+→ Response returned with citations
+```
+
+**Debug Logging:**
+- Frontend: `[AgentResearcher] Syncing X PDFs`, `[uploadPdf] DEBUG`, `[sendMessage] DEBUG`
+- Backend: `[sendMessage] DEBUG: fileUris received`, `File in cache?`, `Total parts: X`
+
+---
 
 ### Primary Active Focus: Multi-Source Search Aggregation & ArXiv Precision
 

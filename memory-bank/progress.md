@@ -56,14 +56,76 @@
 - Anonymous → Authenticated migration
 - 🚨 **TODO:** Rotate hardcoded credentials in `database/db.ts`
 
-### ✅ AI Assistant (90%)
+### ✅ AI Assistant (100%) - NOW COMPLETE WITH FILE SUPPORT
 - Context-aware conversation
 - Tool calling for note access
 - Citation generation
 - PDF source linking
 - Conversation history
+- 🆕 **Feb 23:** File upload pipeline working end-to-end
+  - Files uploaded when added to context
+  - Passed as base64 inlineData to Gemini
+  - Gemini analyzes file content in responses
+  - Citations properly extracted from responses
+
+### ✅ Agent Researcher (95%)
+- Dynamic system instructions based on selected documents
+- Citation extraction and formatting
+- Context notes integration
+- TypeScript typing for responses
+- 🆕 **Feb 23:** File upload → Gemini pipeline fixed
+  - Automatic sync when files added to context
+  - Proper caching with URI-based lookups
+  - Base64 encoding for API transmission
+  - Complete debug tracing for troubleshooting
 
 ## Recent Critical Fixes
+
+### ✅ AGENT RESEARCHER CRITICAL BUG FIXES (Feb 23, 2026) - PHASE 1 COMPLETE
+**Major Accomplishment:** File upload → Gemini pipeline now fully functional
+
+**Bug 1: Infinite Loop on Startup**
+- **Problem:** useEffect auto-sync timer re-ran every 1.5s, causing repeated uploads
+- **Root Cause:** Dependency array `[contextPdfs]` triggered on every state change
+- **Solution:** Disabled timer, moved syncFiles outside useEffect, added explicit trigger on `contextPdfs.length` change
+```typescript
+// BEFORE: Timer runs repeatedly, syncFiles defined inside useEffect
+// AFTER: Function defined at component level
+const syncFiles = async () => { /* upload logic */ };
+useEffect(() => {
+  if (contextPdfs.length > 0) syncFiles();
+}, [contextPdfs.length]); // Explicit trigger on PDF count change
+```
+
+**Bug 2: fileUri=[object Object] Error**
+- **Problem:** Backend returned entire cached object instead of URI string
+- **Root Cause:** uploadFile returned `uploadedFiles.get(uniqueId)` (whole object) when file was cached
+- **Solution:** Return only the `.uri` property
+```javascript
+// BEFORE: return uploadedFiles.get(uniqueId); // Returns {uri, file, mimeType}
+// AFTER: 
+const cachedFile = uploadedFiles.get(uniqueId);
+return cachedFile.uri; // Returns only "file://..."
+```
+
+**Bug 3: Files Never Uploaded (ROOT CAUSE)**
+- **Problem:** uploadedFiles stayed empty when sending message
+- **Root Cause:** `syncFiles()` was defined but NEVER CALLED
+- **Solution:** Added useEffect that automatically calls syncFiles when files are added to context
+```typescript
+// NEW useEffect watches contextPdfs length and triggers sync
+useEffect(() => {
+  if (contextPdfs.length > 0) {
+    syncFiles().catch(err => console.error('[AgentResearcher] Error syncing files:', err));
+  }
+}, [contextPdfs.length]);
+```
+
+**Bug 4: File Lookup Type Error**
+- **Problem:** `.keys()` called on plain object instead of Map
+- **Fix:** Changed `Array.from(uploadedFiles.keys())` → `Object.keys(uploadedFiles)`
+
+**Result:** Complete file upload → processing → sending pipeline now working end-to-end
 
 ### ✅ Multi-Source Search & ArXiv Precision (Feb 19, 2026)
 **Problem:** ArXiv search returned 200+ low-relevance papers using scattered keywords.

@@ -203,29 +203,125 @@ const extractNotesFromPages = async (
 };
 ```
 
-## Agent Pipeline
+## Agent Pipeline (COMPLETE - Feb 23, 2026)
 
-### File Upload
+### Architecture: File Storage & Retrieval (UPDATED Feb 23)
+Frontend: Plain object `{}` with URI as key | Backend: Map with uniqueId as key
+
+**Frontend File Upload:**
 ```typescript
-async uploadFile(file: File): Promise<string> {
-  const uploadResult = await ai.files.upload({
-    file: file,
-    config: { displayName: file.name, mimeType: 'application/pdf' }
-  });
+// components/researcherAI/AgentResearcher.tsx
+const syncFiles = async () => { // MOVED OUTSIDE useEffect
+  if (contextPdfs.length === 0) return;
+  const promises = contextPdfs.map(pdf =>
+    agentService.uploadPdf(pdf.file, pdf.uri, { 
+      title: pdf.metadata.title || pdf.file.name,
+      author: pdf.metadata.author || 'Unknown'
+    })
+  );
+  await Promise.all(promises);
+};
 
-  // Wait for ACTIVE state (up to 60 seconds)
-  let attempts = 0;
-  while (attempts < 30) {
-    const status = await ai.files.get({ name: uploadResult.name });
-    if (status.state === 'ACTIVE') return uploadResult.uri;
-    await delay(2000);
-    attempts++;
-  }
-  throw new Error("File processing timeout");
+// ✅ NEW: Auto-sync when files added to context
+useEffect(() => {
+  if (contextPdfs.length > 0) syncFiles().catch(console.error);
+}, [contextPdfs.length]); // Triggers on count change, not array change
+```
+
+**Frontend Service Storage:**
+```typescript
+// services/agentService.ts
+async uploadPdf(file: File, uniqueId: string, metadata?): Promise<string> {
+  const result = await api.agent.uploadFile(file, uniqueId);
+  this.uploadedFiles[uniqueId] = {
+    googleFileUri: result.fileUri || result.uri,
+    state: 'ACTIVE',
+    metadata: metadata || { title: file.name, author: 'Unknown' }
+  };
+  return result.fileUri || result.uri; // ✅ Return URI string only
 }
 ```
 
-### Message Handling with Tool Calling
+**Backend File Caching:**
+```javascript
+// backend/services/agentService.js
+uploadedFiles = new Map(); // Store as Map for quick lookups
+
+async function uploadFile(file, uniqueId) {
+  // Return cached file if exists
+  if (uploadedFiles.has(uniqueId)) {
+    const cachedFile = uploadedFiles.get(uniqueId);
+    return cachedFile.uri; // ✅ Return URI, not entire object
+  }
+  
+  // Store new file
+  const fileUri = `file://${uniqueId}`;
+  uploadedFiles.set(uniqueId, {
+    uri: fileUri,
+    file: file,
+    mimeType: file.mimetype,
+    originalName: file.originalname
+  });
+  return fileUri;
+}
+```
+
+### Message with Files Pipeline (UPDATED Feb 23)
+```typescript
+// Frontend: Extract selected files, pass to backend
+async sendMessage(message: string, contextNotes: DeepResearchNote[], selectedFileUris: string[]) {
+  const selectedSet = new Set(selectedFileUris);
+  const fileUris = Object.entries(this.uploadedFiles)
+    .filter(([uniqueId, f]) => f.state === 'ACTIVE' && selectedSet.has(uniqueId))
+    .map(([_, f]) => f.googleFileUri); // Extract URI strings only
+    
+  return api.agent.sendMessage(message, fileUris, contextNotes, documentMetadata);
+}
+
+// Backend: Convert files to base64, embed in message
+async function sendMessage(message, fileUris, contextNotes, documentMetadata) {
+  const parts = [];
+  
+  // Attach files as base64 inlineData
+  if (fileUris && fileUris.length > 0) {
+    for (const uri of fileUris) {
+      const uniqueId = uri.replace('file://', '');
+      const fileData = uploadedFiles.get(uniqueId);
+      
+      if (fileData) {
+        const base64Data = fileData.file.buffer.toString('base64');
+        parts.push({
+          inlineData: {
+            mimeType: fileData.mimeType || 'application/pdf',
+            data: base64Data
+          }
+        });
+      }
+    }
+  }
+  
+  // Add text message
+  parts.push({ text: enhancedMessage });
+  
+  // Send to Gemini
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts }]
+  });
+  
+  const { text, citations } = extractCitations(result.response.text());
+  return { text, citations };
+}
+```
+
+### Critical Fixes Applied (Feb 23)
+| Issue | Fix |
+|-------|-----|
+| Auto-sync timer runs repeatedly | Moved syncFiles outside useEffect, added explicit trigger |
+| Backend returns [object Object] | Return only .uri instead of entire cache object |
+| Files never stored in uploadedFiles | Added useEffect with contextPdfs.length dependency |
+| .keys() error on plain object | Changed to Object.keys() |
+
+### File Upload Message Handling with Tool Calling
 ```typescript
 const readNotesTool: FunctionDeclaration = {
   name: "readContextNotes",
