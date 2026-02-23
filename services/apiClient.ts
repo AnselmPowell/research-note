@@ -127,11 +127,12 @@ export const api = {
       formData.append('file', file);
       formData.append('uniqueId', uniqueId);
       const response = await fetch(API_BASE_URL + '/agent/upload-file', { method: 'POST', body: formData });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const result: ApiResponse<any> = await response.json();
-      if (!result.success) throw new Error(result.error?.message);
+      if (!result.success) throw new Error(result.error?.message || 'Upload failed');
       return result.data;
     },
-    sendMessage: (message: string, fileUris: string[], contextNotes: any[]) =>
-      apiCall('/agent/send-message', 'POST', { message, fileUris, contextNotes }),
+    sendMessage: (message: string, fileUris: string[], contextNotes: any[], documentMetadata?: any[]) =>
+      apiCall('/agent/send-message', 'POST', { message, fileUris, contextNotes, documentMetadata }),
   },
 };

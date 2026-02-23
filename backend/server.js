@@ -1,15 +1,26 @@
 // Load environment variables from .env file
 require('dotenv').config();
 
+console.log('\n╔════════════════════════════════════════════════════════════════╗');
+console.log('║ 🚀 BACKEND SERVER STARTUP                                      ║');
+console.log('╚════════════════════════════════════════════════════════════════╝\n');
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 
 const { initializeEnvironment } = require('./config/env');
+console.log('[Server] ✅ Config module imported');
+
 const routes = require('./routes');
+console.log('[Server] ✅ Routes module imported');
+
 const errorHandler = require('./middleware/errorHandler');
+console.log('[Server] ✅ Error handler imported');
+
 const logger = require('./utils/logger');
+console.log('[Server] ✅ Logger imported\n');
 
 const config = initializeEnvironment();
 const app = express();

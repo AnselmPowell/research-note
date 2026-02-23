@@ -1,6 +1,14 @@
 const logger = require('../utils/logger');
 
 function errorHandler(err, req, res, next) {
+  console.error('[ErrorHandler] ❌ ERROR CAUGHT');
+  console.error('[ErrorHandler] 📋 Method:', req.method);
+  console.error('[ErrorHandler] 📋 Path:', req.path);
+  console.error('[ErrorHandler] 📋 Error message:', err.message);
+  console.error('[ErrorHandler] 📋 Error code:', err.code);
+  console.error('[ErrorHandler] 📋 Error status:', err.status);
+  console.error('[ErrorHandler] 📋 Full error stack:', err.stack);
+  
   logger.error(`API Error on ${req.method} ${req.path}: ${err.message}`);
 
   // Rate limit errors

@@ -84,30 +84,33 @@ export const AgentResearcher: React.FC = () => {
   // Logic to determine if the bar should be visible
   const showDeepBar = activeTool === 'deep' || (hasContext && !isDismissed);
 
-  // --- SYNC LOGIC ---
+  // --- SYNC FILES FUNCTION ---
+  const syncFiles = async () => {
+    if (contextPdfs.length === 0) return;
+    
+    setIsSyncing(true);
+    
+    const promises = contextPdfs.map(pdf => {
+        const meta = {
+            title: pdf.metadata.title || pdf.file.name,
+            author: pdf.metadata.author || 'Unknown'
+        };
+        return agentService.uploadPdf(pdf.file, pdf.uri, meta);
+    });
+
+    await Promise.all(promises);
+    setIsSyncing(false);
+  };
+
+  // --- SYNC FILES WHEN CONTEXT CHANGES ---
   useEffect(() => {
-    const syncFiles = async () => {
-      // CHANGED: Only sync contextPdfs, not all loadedPdfs
-      if (contextPdfs.length === 0) return;
-      
-      console.log(`[AgentResearcher] 🔄 Syncing ${contextPdfs.length} checked PDFs to Agent...`);
-      setIsSyncing(true);
-      
-      const promises = contextPdfs.map(pdf => {
-          const meta = {
-              title: pdf.metadata.title || pdf.file.name,
-              author: pdf.metadata.author || 'Unknown'
-          };
-          return agentService.uploadFile(pdf.file, pdf.uri, meta);
+    if (contextPdfs.length > 0) {
+      console.log(`[AgentResearcher] Syncing ${contextPdfs.length} PDFs to agent...`);
+      syncFiles().catch(error => {
+        console.error('[AgentResearcher] Error syncing files:', error);
       });
-
-      await Promise.all(promises);
-      setIsSyncing(false);
-    };
-
-    const timer = setTimeout(syncFiles, 1500);
-    return () => clearTimeout(timer);
-  }, [contextPdfs]); // Dependency is contextPdfs, not loadedPdfs
+    }
+  }, [contextPdfs.length]); // Dependency on count to avoid infinite loops
 
   // --- CLICK OUTSIDE LOGIC ---
   useEffect(() => {
@@ -140,7 +143,17 @@ export const AgentResearcher: React.FC = () => {
     setIsProcessing(true);
 
     try {
-      const response = await agentService.sendMessage(text, contextNotes);
+      // CRITICAL: Pass ONLY selected PDF URIs to backend
+      const selectedFileUris = contextPdfs.map(p => p.uri);
+      
+      console.log(`[Chat] Sending message with ${selectedFileUris.length} selected PDFs`);
+      
+      const response = await agentService.sendMessage(
+        text, 
+        contextNotes,
+        selectedFileUris  // ← Only selected PDFs, not all loaded PDFs
+      );
+      
       const aiMsg: ChatMessage = { 
         id: (Date.now() + 1).toString(), 
         role: 'model', 

@@ -148,3 +148,18 @@ export interface SearchBarState {
   urlInput: string;
   questionInput: string;
 }
+
+// Agent Research Citation Type
+export interface AgentCitation {
+  id: number;
+  sourceId: string; // PDF URI (local:// or https://...)
+  title: string;
+  page: number;
+  quote: string;
+}
+
+// Agent Research Response Type
+export interface AgentResponse {
+  text: string;
+  citations: AgentCitation[];
+}
