@@ -443,11 +443,18 @@ query_combinations: [
   '1950s economic AND 1950s',
   '1950s economic AND post-war economy'
 ]
-#######
+#######\n
+
+
+VERY IMPORTANT: For the secondary keyords use only single words for example if the user query says "Food supply", USE "food" or "hunger" or "starvation". Be crative and simple using only one word for each secondary keyword. 
 
 \n\n
 User query:
-"${userQuery}"`;
+
+
+"${userQuery}" `
+
+;
 
   // TIER 3: Basic fallback - just use topics/questions as-is
   const basicFallback = {
@@ -533,7 +540,7 @@ CRITICAL: Return ONLY valid JSON in this exact format:
   "query_combinations": ["primary AND secondary", "primary AND secondary"]
 }
 
-User query: "${userQuery}"`;
+User query: "${userQuery}" `;
 
       const gptResult = await withTimeout(
         callOpenAI(gptPrompt),

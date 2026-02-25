@@ -58,11 +58,15 @@ async function sendMessage(message, fileUris, contextNotes = [], documentMetadat
     console.log('[sendMessage] DEBUG: systemInstruction length:', systemInstruction.length);
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash', 
       systemInstruction
     });
 
+
+    
+
     const parts = [];
+
 
     // ATTACH FILES FIRST (multimodal best practice)
     if (fileUris && fileUris.length > 0) {
