@@ -604,7 +604,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
     setGatheringStatus("Analyzing documents...");
-    if (arxivPapers.length > 0) { setResearchPhase('extracting'); setFilteredCandidates(arxivPapers); }
+    if (arxivPapers.length > 0) { setResearchPhase('extracting'); }
     const questionsStr = questions.join('\n');
     const tasks = [];
     if (pdfs.length > 0) tasks.push(analyzeLoadedPdfs(pdfs, questionsStr, signal));

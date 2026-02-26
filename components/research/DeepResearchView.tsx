@@ -10,7 +10,8 @@ import {
   Loader2,
   AlertTriangle,
   X,
-  Sparkles
+  Sparkles,
+  LayoutList
 } from 'lucide-react';
 import { useResearch } from '../../contexts/ResearchContext';
 import { useLibrary } from '../../contexts/LibraryContext';
@@ -18,8 +19,9 @@ import { useUI } from '../../contexts/UIContext';
 // import { useDatabase } from '../../contexts/DatabaseContext';
 import { WebSearchView } from '../websearch/WebSearchView';
 import { DeepSearch } from './DeepSearch';
+import { PaperResults } from './PaperResults';
 
-type TabType = 'web' | 'deep';
+type TabType = 'web' | 'deep' | 'results';
 type SortOption = 'relevant-papers' | 'newest-papers' | 'most-relevant-notes';
 
 export const DeepResearchView: React.FC = () => {
@@ -135,10 +137,18 @@ export const DeepResearchView: React.FC = () => {
                   <Loader2 size={14} className="animate-spin text-scholar-600" />
                 )}
               </button>
+
+              <button
+                onClick={() => { setActiveTab('results'); setActiveSearchMode('results'); }}
+                className={`px-4 py-1 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'results' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+              >
+                <LayoutList size={20} className="flex-shrink-0" />
+                <span className="hidden sm:inline">My Results</span>
+              </button>
             </div>
 
             <div className="flex items-center gap-2">
-              {activeTab === 'deep' && (currentTabCandidates.length > 0) && (
+              {(activeTab === 'deep' || activeTab === 'results') && (currentTabCandidates.length > 0 || (activeTab === 'results')) && (
                 <div className="relative">
                   <button
                     onClick={() => setIsSortOpen(!isSortOpen)}
@@ -195,6 +205,34 @@ export const DeepResearchView: React.FC = () => {
               </div>
             )}
           </div>
+        ) : activeTab === 'results' ? (
+          <PaperResults
+            allNotesExpanded={allNotesExpanded}
+            onAllNotesExpandedChange={setAllNotesExpanded}
+            selectedNoteIds={selectedNoteIds}
+            onSelectedNoteIdsChange={setSelectedNoteIds}
+            onSelectNote={handleSelectNote}
+            sortBy={sortBy}
+            isSortOpen={isSortOpen}
+            showFilters={showFilters}
+            searchQuery={searchQuery}
+            localFilters={localFilters}
+            currentPage={currentPage}
+            isSelectMenuOpen={isSelectMenuOpen}
+            isNoteSelectMenuOpen={isNoteSelectMenuOpen}
+            justCopiedNotes={justCopiedNotes}
+            onSortChange={setSortBy}
+            onSortOpenChange={setIsSortOpen}
+            onShowFiltersChange={setShowFilters}
+            onSearchQueryChange={setSearchQuery}
+            onLocalFiltersChange={setLocalFilters}
+            onCurrentPageChange={setCurrentPage}
+            onSelectMenuOpenChange={setIsSelectMenuOpen}
+            onNoteSelectMenuOpenChange={setIsNoteSelectMenuOpen}
+            onBulkCopyNotes={handleBulkCopyNotesFeedback}
+            onShowClearModal={() => setShowClearModal(true)}
+            status={status}
+          />
         ) : (
           <DeepSearch
             allNotesExpanded={allNotesExpanded}

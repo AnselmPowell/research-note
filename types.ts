@@ -106,7 +106,7 @@ export interface ArxivSearchStructured {
   query_combinations: string[];
 }
 
-export type SearchMode = 'web' | 'deep' | 'upload';
+export type SearchMode = 'web' | 'deep' | 'upload' | 'results';
 export type ResearchPhase = 'idle' | 'initializing' | 'searching' | 'filtering' | 'extracting' | 'completed' | 'failed';
 
 // NEW: Search API metrics tracking
