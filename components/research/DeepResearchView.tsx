@@ -34,9 +34,12 @@ export const DeepResearchView: React.FC = () => {
     selectedArxivIds,
     selectAllArxivPapers,
     clearArxivSelection,
+    selectedWebSourceUris,
+    toggleWebSourceSelection,
     activeSearchMode,
     setActiveSearchMode,
     clearDeepResearchResults,
+    clearPaperResults,
     pendingDeepResearchQuery,
     setPendingDeepResearchQuery,
     performDeepResearch,
@@ -103,13 +106,19 @@ export const DeepResearchView: React.FC = () => {
   const handleClearResults = useCallback(async () => {
     setIsClearingResults(true);
     try {
-      clearDeepResearchResults();
+      if (activeTab === 'results') {
+        // For "My Results" tab, use the new clear function
+        clearPaperResults();
+      } else {
+        // For "Deep Research" tab, use the existing function
+        clearDeepResearchResults();
+      }
       setSelectedNoteIds([]);
       setShowClearModal(false);
     } finally {
       setIsClearingResults(false);
     }
-  }, [clearDeepResearchResults]);
+  }, [activeTab, clearDeepResearchResults, clearPaperResults]);
 
   return (
     <div className="flex flex-col h-full bg-cream dark:bg-dark-card animate-in fade-in duration-700">
@@ -195,7 +204,12 @@ export const DeepResearchView: React.FC = () => {
           <div className="space-y-6">
             {webSearchSources.length > 0 ? (
               webSearchSources.map((source, idx) => (
-                <WebSearchView key={`${source.url}-${idx}`} source={source} />
+                <WebSearchView 
+                  key={`${source.url}-${idx}`} 
+                  source={source}
+                  isSelected={selectedWebSourceUris.has(source.uri)}
+                  onToggle={() => toggleWebSourceSelection(source.uri)}
+                />
               ))
             ) : (
               <div className="py-24 flex flex-col items-center justify-center text-center opacity-40">

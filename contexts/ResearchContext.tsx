@@ -95,6 +95,13 @@ interface ResearchContextType {
   timeToFirstPaper: number | null;
   // NEW: search metrics tracking
   searchMetrics: SearchMetrics | null;
+  // NEW: Accumulated results for "My Results" tab (persistent across searches)
+  accumulatedPapers: ArxivPaper[];
+  accumulatedNotes: DeepResearchNote[];
+  paperResultsMetadata: Record<string, any>;
+  addToPaperResults: (papers: ArxivPaper[], notes: DeepResearchNote[]) => void;
+  clearPaperResults: () => void;
+  removePaperFromResults: (paperId: string) => void;
 }
 
 const ResearchContext = createContext<ResearchContextType | undefined>(undefined);
@@ -194,6 +201,36 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, []);
 
+  // Load persisted paper results (My Results tab) on component mount
+  useEffect(() => {
+    try {
+      console.log('[ResearchContext] 🔍 STARTUP: Loading paper results from localStorage...');
+      
+      const savedPaperResults = localStorageService.getPaperResultsAccumulation();
+      console.log('[ResearchContext] 🔍 STARTUP: paper_results_accumulation contents:', {
+        exists: !!savedPaperResults,
+        papers: savedPaperResults?.accumulatedPapers?.length || 0,
+        notes: savedPaperResults?.accumulatedNotes?.length || 0,
+        metadata: savedPaperResults?.paperResultsMetadata,
+        paperIds: savedPaperResults?.accumulatedPapers?.map((p: any) => p.id || p.pdfUri) || []
+      });
+      
+      if (savedPaperResults) {
+        setAccumulatedPapers(savedPaperResults.accumulatedPapers || []);
+        setAccumulatedNotes(savedPaperResults.accumulatedNotes || []);
+        setPaperResultsMetadata(savedPaperResults.paperResultsMetadata || {});
+        console.log('[ResearchContext] ✅ STARTUP: Loaded persisted paper results:', {
+          papers: savedPaperResults.accumulatedPapers?.length || 0,
+          notes: savedPaperResults.accumulatedNotes?.length || 0
+        });
+      } else {
+        console.log('[ResearchContext] ✅ STARTUP: No persisted paper results found - starting fresh');
+      }
+    } catch (e) {
+      console.error("[ResearchContext] ❌ STARTUP: Failed to load persisted paper results", e);
+    }
+  }, []);
+
   const saveHistory = (newHistory: string[]) => {
     setSearchHistory(newHistory);
     localStorage.setItem('research_history', JSON.stringify(newHistory));
@@ -229,6 +266,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [filteredCandidates, setFilteredCandidates] = useState<ArxivPaper[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [selectedArxivIds, setSelectedArxivIds] = useState<Set<string>>(new Set());
+  const [selectedWebSourceUris, setSelectedWebSourceUris] = useState<Set<string>>(new Set());
   const [isDeepResearching, setIsDeepResearching] = useState(false);
   const [deepResearchResults, setDeepResearchResults] = useState<DeepResearchNote[]>([]);
   const [contextNotes, setContextNotes] = useState<DeepResearchNote[]>([]);
@@ -239,6 +277,18 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [navigationHandled, setNavigationHandled] = useState(false);
   const [pendingDeepResearchQuery, setPendingDeepResearchQuery] = useState<DeepResearchQuery | null>(null);
   const [isDeepSearchBarExpanded, setIsDeepSearchBarExpanded] = useState(false);
+
+  // NEW: Accumulated results for "My Results" tab (persistent across searches)
+  const [accumulatedPapers, setAccumulatedPapers] = useState<ArxivPaper[]>([]);
+  const [accumulatedNotes, setAccumulatedNotes] = useState<DeepResearchNote[]>([]);
+  const [paperResultsMetadata, setPaperResultsMetadata] = useState<Record<string, any>>({});
+  
+  // Track if we've already appended results this session (to avoid duplicates)
+  const hasAppendedResultsRef = useRef(false);
+  
+  // CRITICAL FIX: Store PDFs in ref so they're available when append trigger fires
+  // This avoids race condition where setProcessedPdfs() hasn't updated yet
+  const currentAnalyzingPdfsRef = useRef<LoadedPdf[]>([]);
 
   // NEW: Timing tracking for deep research pipeline
   const [researchTimings, setResearchTimings] = useState<ResearchTimings | null>(null);
@@ -276,6 +326,26 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       localStorageService.clearDeepResearchResults();
     }
   }, [arxivKeywords, arxivCandidates, filteredCandidates, deepResearchResults, searchBarState]);
+
+  // Auto-save accumulated paper results when they change (debounced)
+  useEffect(() => {
+    if (accumulatedPapers.length > 0 || accumulatedNotes.length > 0) {
+      const debouncedSave = debounce(() => {
+        console.log('[ResearchContext] Auto-saving accumulated paper results:', {
+          papers: accumulatedPapers.length,
+          notes: accumulatedNotes.length
+        });
+        localStorageService.savePaperResultsAccumulation({
+          accumulatedPapers,
+          accumulatedNotes,
+          paperResultsMetadata
+        });
+      }, 1500); // Debounce to prevent thrashing
+
+      debouncedSave();
+      return () => debouncedSave.cancel();
+    }
+  }, [accumulatedPapers.length, accumulatedNotes.length, paperResultsMetadata.lastUpdated]);
 
   // NEW: Track when first note is received (check filteredCandidates where notes actually live)
   useEffect(() => {
@@ -362,6 +432,14 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   }, []);
 
+  const toggleWebSourceSelection = useCallback((uri: string) => {
+    setSelectedWebSourceUris(prev => {
+      const next = new Set(prev);
+      if (next.has(uri)) next.delete(uri); else next.add(uri);
+      return next;
+    });
+  }, []);
+
   const selectAllArxivPapers = useCallback((ids: string[]) => setSelectedArxivIds(new Set(ids)), []);
   const clearArxivSelection = useCallback(() => setSelectedArxivIds(new Set()), []);
 
@@ -397,6 +475,177 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       allPhases[phase] = phaseData;
       return { ...prev, phases: allPhases };
     });
+  }, []);
+
+  // NEW: Add papers and notes to accumulation (APPEND, not replace)
+  // Handles duplicate merging intelligently
+  const addToPaperResults = useCallback((papers: ArxivPaper[], notes: DeepResearchNote[]) => {
+    console.log('\n╔════════════════════════════════════════════════════════════════╗');
+    console.log('║ [CONTEXT-ADDTOPAPER] addToPaperResults - CALLED              ║');
+    console.log('╚════════════════════════════════════════════════════════════════╝');
+    
+    console.log('[CONTEXT-ADDTOPAPER] 📥 Function called with:', {
+      papersCount: papers.length,
+      papersIds: papers.map(p => p.id || p.pdfUri),
+      papersTitles: papers.map(p => p.title),
+      notesCount: notes.length,
+      notesStructure: notes.slice(0, 3).map(n => ({
+        pdfUri: n.pdfUri,
+        pageNumber: n.pageNumber,
+        quoteLength: n.quote?.length,
+        hasJustification: !!n.justification
+      }))
+    });
+
+    setAccumulatedPapers(prev => {
+      console.log('[CONTEXT-ADDTOPAPER] 📊 Current accumulated papers before merge:', {
+        count: prev.length,
+        ids: prev.map(p => p.id || p.pdfUri).slice(0, 5)
+      });
+
+      // Convert to map for smart merging
+      const merged: Record<string, ArxivPaper> = {};
+      
+      // Add existing papers to map
+      prev.forEach(p => { 
+        merged[p.id] = { ...p }; 
+      });
+      
+      // Merge new papers (combine notes if duplicate ID)
+      papers.forEach(newPaper => {
+        if (merged[newPaper.id]) {
+          // Paper already exists - merge notes
+          const existingNotes = merged[newPaper.id].notes || [];
+          const newNotes = newPaper.notes || [];
+          
+          // Deduplicate notes by pdfUri + quote hash
+          const noteMap = new Map<string, DeepResearchNote>();
+          [...existingNotes, ...newNotes].forEach(n => {
+            const hash = `${n.pdfUri}::${n.quote.substring(0, 50)}`;
+            if (!noteMap.has(hash)) {
+              noteMap.set(hash, n);
+            }
+          });
+          
+          merged[newPaper.id] = {
+            ...merged[newPaper.id],
+            notes: Array.from(noteMap.values())
+          };
+          console.log(`[CONTEXT-ADDTOPAPER] 🔄 Merged notes for paper ${newPaper.id}: ${Array.from(noteMap.values()).length} total notes`);
+        } else {
+          // New paper - add to map
+          console.log(`[CONTEXT-ADDTOPAPER] ✨ Adding NEW paper: ${newPaper.id} with ${newPaper.notes?.length || 0} notes`);
+          merged[newPaper.id] = newPaper;
+        }
+      });
+      
+      // Return merged papers with new papers first
+      const newPaperIds = new Set(papers.map(p => p.id));
+      const allPapersArray = Object.values(merged);
+      
+      // Separate new vs old papers for proper ordering
+      const newPapers = allPapersArray.filter(p => newPaperIds.has(p.id));
+      const oldPapers = allPapersArray.filter(p => !newPaperIds.has(p.id));
+      
+      const finalResult = [...newPapers, ...oldPapers];  // New papers first, then old
+      console.log('[CONTEXT-ADDTOPAPER] ✅ Papers state updated:', {
+        totalAfterMerge: finalResult.length,
+        newPapersCount: newPapers.length,
+        oldPapersCount: oldPapers.length,
+        allIds: finalResult.map(p => p.id),
+        totalNotesInAll: finalResult.reduce((sum, p) => sum + (p.notes?.length || 0), 0)
+      });
+      
+      return finalResult;
+    });
+    
+    // Add notes to accumulation
+    console.log('[CONTEXT-ADDTOPAPER] 📝 Adding notes to accumulation...');
+    setAccumulatedNotes(prev => {
+      // Create set of existing note keys for deduplication
+      const existingNoteKeys = new Set(
+        prev.map(n => `${n.pdfUri}::${n.quote.substring(0, 50)}`)
+      );
+      
+      // Filter new notes that aren't already in accumulation
+      const uniqueNewNotes = notes.filter(n => 
+        !existingNoteKeys.has(`${n.pdfUri}::${n.quote.substring(0, 50)}`)
+      );
+      
+      const finalNotes = [...uniqueNewNotes, ...prev];
+      console.log('[CONTEXT-ADDTOPAPER] ✅ Notes state updated:', {
+        previousCount: prev.length,
+        incomingCount: notes.length,
+        deduplicatedAdded: uniqueNewNotes.length,
+        newTotalCount: finalNotes.length,
+        newNotesUris: uniqueNewNotes.map(n => n.pdfUri),
+        newNotesPages: uniqueNewNotes.map(n => n.pageNumber)
+      });
+      
+      // Prepend new notes (newest first)
+      return finalNotes;
+    });
+    
+    // Update metadata
+    setPaperResultsMetadata(prev => {
+      const newMetadata = {
+        ...prev,
+        lastUpdated: new Date().toISOString(),
+        totalPapersProcessed: (prev.totalPapersProcessed || 0) + papers.length,
+        totalNotesExtracted: (prev.totalNotesExtracted || 0) + notes.length,
+        lastAddedCount: {
+          papers: papers.length,
+          notes: notes.length,
+          timestamp: new Date().toISOString()
+        }
+      };
+      console.log('[CONTEXT-ADDTOPAPER] 📊 Metadata updated:', newMetadata);
+      return newMetadata;
+    });
+    
+    console.log('╔════════════════════════════════════════════════════════════════╗');
+    console.log('║ [CONTEXT-ADDTOPAPER] addToPaperResults - COMPLETE            ║');
+    console.log('╚════════════════════════════════════════════════════════════════╝\n');
+  }, []);
+
+  const clearPaperResults = useCallback(() => {
+    console.log('[ResearchContext] 🔴 CLEARING ALL PAPER RESULTS');
+    console.log('[ResearchContext] Papers being cleared:', {
+      count: accumulatedPapers.length,
+      ids: accumulatedPapers.map(p => p.id || p.pdfUri)
+    });
+    
+    // Clear React state
+    setAccumulatedPapers([]);
+    setAccumulatedNotes([]);
+    setPaperResultsMetadata({});
+    
+    // Clear primary localStorage key
+    localStorageService.clearPaperResultsAccumulation();
+    
+    // IMPORTANT: Also remove all accumulated papers from database 
+    // (they were added during research sessions and shouldn't persist)
+    // This prevents the papers from reappearing after page refresh
+    accumulatedPapers.forEach(paper => {
+      const paperUri = paper.pdfUri || paper.id;
+      if (paperUri) {
+        console.log('[ResearchContext] 🗑️ Deleting paper from database:', paperUri);
+        try {
+          localStorageService.deletePaper(paperUri);
+        } catch (error) {
+          console.error('[ResearchContext] Failed to delete paper:', paperUri, error);
+        }
+      }
+    });
+    
+    console.log('[ResearchContext] ✅ Cleared all paper results and removed from database');
+  }, [accumulatedPapers]);
+
+  // NEW: Remove a single paper from results
+  const removePaperFromResults = useCallback((paperId: string) => {
+    setAccumulatedPapers(prev => prev.filter(p => p.id !== paperId));
+    setAccumulatedNotes(prev => prev.filter(n => n.pdfUri !== paperId));
+    console.log('[ResearchContext] Removed paper from results:', paperId);
   }, []);
 
   const resetSearch = useCallback(() => {
@@ -536,6 +785,10 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const analyzeLoadedPdfs = useCallback(async (pdfs: LoadedPdf[], questions: string, signal?: AbortSignal) => {
+    // CRITICAL: Store PDFs in ref immediately so they're available for append trigger
+    currentAnalyzingPdfsRef.current = pdfs;
+    console.log('[CONTEXT-ANALYZE-PDF] 📌 Stored PDFs in ref:', pdfs.map(p => p.uri));
+    
     setIsDeepResearching(true);
     setDeepResearchResults([]);
 
@@ -548,7 +801,35 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     try {
       const queries = await generateInsightQueries(questions, searchState.query);
-      const onStreamUpdate = (newNotes: DeepResearchNote[]) => setDeepResearchResults(prev => [...prev, ...newNotes]);
+      
+      // DIAGNOSTIC: Enhanced callback with logging
+      const onStreamUpdate = (newNotes: DeepResearchNote[]) => {
+        console.log(`\n[CONTEXT-STATE-UPDATE] 📥 onStreamUpdate called with ${newNotes?.length || 0} notes`);
+        console.log(`[CONTEXT-STATE-UPDATE] 📊 Notes received structure:`, {
+          isArray: Array.isArray(newNotes),
+          count: newNotes?.length,
+          firstNote: newNotes?.[0] ? {
+            pdfUri: newNotes[0].pdfUri,
+            pageNumber: newNotes[0].pageNumber,
+            quoteLength: newNotes[0].quote?.length,
+            hasRelatedQuestion: !!newNotes[0].relatedQuestion
+          } : 'N/A',
+          allNotesUris: newNotes?.map(n => n.pdfUri) || []
+        });
+        
+        console.log(`[CONTEXT-STATE-UPDATE] 🔄 Calling setDeepResearchResults...`);
+        setDeepResearchResults(prev => {
+          const updated = [...prev, ...newNotes];
+          console.log(`[CONTEXT-STATE-UPDATE] ✅ deepResearchResults updated:`, {
+            previousCount: prev.length,
+            addedCount: newNotes.length,
+            newTotalCount: updated.length,
+            allPdfUris: updated.map(n => n.pdfUri),
+            allPageNumbers: updated.map(n => n.pageNumber)
+          });
+          return updated;
+        });
+      };
 
       for (const pdf of pdfs) {
         if (signal?.aborted) break;
@@ -564,7 +845,10 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               updateUploadedPaperStatus(pdf.uri, 'extracting');
             }
 
-            await extractNotesFromPages(
+            console.log(`\n[CONTEXT-ANALYZE-PDF] 🔄 Calling extractNotesFromPages for PDF: ${pdf.uri}`);
+            console.log(`[CONTEXT-ANALYZE-PDF] 📊 Input: ${relevantPages.length} relevant pages`);
+            
+            const allNotes = await extractNotesFromPages(
               relevantPages,
               questions,
               pdf.metadata.title,
@@ -572,6 +856,37 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               pdf.references,
               onStreamUpdate
             );
+            
+            // CRITICAL FIX: Capture returned notes and add to deepResearchResults
+            console.log(`[CONTEXT-ANALYZE-PDF] ✅ extractNotesFromPages returned: ${allNotes?.length || 0} notes`);
+            console.log(`[CONTEXT-ANALYZE-PDF] 📊 Notes Structure (first 3):`, {
+              notesArray: Array.isArray(allNotes),
+              totalCount: allNotes?.length,
+              firstNote: allNotes?.[0] ? {
+                pdfUri: allNotes[0].pdfUri,
+                pageNumber: allNotes[0].pageNumber,
+                quoteLength: allNotes[0].quote?.length,
+                hasJustification: !!allNotes[0].justification
+              } : 'No notes',
+              secondNote: allNotes?.[1] ? {
+                pdfUri: allNotes[1].pdfUri,
+                pageNumber: allNotes[1].pageNumber,
+                quoteLength: allNotes[1].quote?.length
+              } : 'No second note',
+              thirdNote: allNotes?.[2] ? {
+                pdfUri: allNotes[2].pdfUri,
+                pageNumber: allNotes[2].pageNumber,
+                quoteLength: allNotes[2].quote?.length
+              } : 'No third note'
+            });
+            
+            if (allNotes && allNotes.length > 0) {
+              console.log(`[CONTEXT-ANALYZE-PDF] 🎯 Calling onStreamUpdate with ${allNotes.length} notes`);
+              onStreamUpdate(allNotes);
+              console.log(`[CONTEXT-ANALYZE-PDF] ✅ onStreamUpdate complete - notes should be in deepResearchResults now`);
+            } else {
+              console.log(`[CONTEXT-ANALYZE-PDF] ⚠️  No notes returned from extractNotesFromPages`);
+            }
           }
 
           // Mark as completed
@@ -603,8 +918,25 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (abortControllerRef.current) abortControllerRef.current.abort();
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
+    
+    // CRITICAL FIX: Store the PDFs being analyzed BEFORE setting phase
+    // Must happen before phase change to avoid race condition in AgentResearcher append trigger
+    console.log('[ResearchContext] 🔄 Setting processedPdfs to:', pdfs.map(p => p.uri));
+    setProcessedPdfs(pdfs);
+    
+    console.log('[ResearchContext] 🔍 performHybridResearch called:', {
+      pdfsCount: pdfs.length,
+      arxivPapersCount: arxivPapers.length,
+      shouldSetExtractingPhase: pdfs.length > 0 || arxivPapers.length > 0
+    });
+    
     setGatheringStatus("Analyzing documents...");
-    if (arxivPapers.length > 0) { setResearchPhase('extracting'); }
+    // CRITICAL: Set extracting phase even if only PDFs (no ArXiv)
+    // This triggers AgentResearcher's reset useEffect for new research sessions
+    if (pdfs.length > 0 || arxivPapers.length > 0) {
+      console.log('[ResearchContext] ⏱️ Setting phase to extracting');
+      setResearchPhase('extracting');
+    }
     const questionsStr = questions.join('\n');
     const tasks = [];
     if (pdfs.length > 0) tasks.push(analyzeLoadedPdfs(pdfs, questionsStr, signal));
@@ -615,7 +947,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setResearchPhase('completed'); // Always set completed, regardless of arxiv papers
       setGatheringStatus("Analysis complete.");
     }
-  }, [analyzeLoadedPdfs, analyzeArxivPapers]);
+  }, [analyzeLoadedPdfs, analyzeArxivPapers, setProcessedPdfs]);
 
   const processUserUrls = useCallback(async (urls: string[], signal?: AbortSignal): Promise<LoadedPdf[]> => {
     const userPdfs: LoadedPdf[] = [];
@@ -654,6 +986,12 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const performDeepResearch = useCallback(async (query: DeepResearchQuery) => {
+    console.log('[ResearchContext] 🚀 performDeepResearch START - Initiating research:', {
+      topicsCount: query.topics.length,
+      urlsCount: query.urls.length,
+      questionsCount: query.questions.length
+    });
+
     setActiveSearchMode('deep');
     if (query.topics.length > 0) addToHistory(query.topics[0]);
 
@@ -853,6 +1191,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     toggleArxivSelection,
     selectAllArxivPapers,
     clearArxivSelection,
+    selectedWebSourceUris,
+    toggleWebSourceSelection,
     isDeepResearching,
     deepResearchResults,
     contextNotes,
@@ -887,18 +1227,29 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     timeToFirstNotes,
     timeToFirstPaper,
     // NEW: Search metrics tracking
-    searchMetrics
+    searchMetrics,
+    // NEW: Accumulated results for "My Results" tab
+    accumulatedPapers,
+    accumulatedNotes,
+    paperResultsMetadata,
+    addToPaperResults,
+    clearPaperResults,
+    removePaperFromResults
   }), [
     activeSearchMode, searchState, searchBarState, updateSearchBar, clearSearchBar,
     searchHistory, addToHistory, removeFromHistory, clearHistory,
     researchPhase, gatheringStatus, arxivKeywords, arxivCandidates, filteredCandidates,
     selectedArxivIds, toggleArxivSelection, selectAllArxivPapers, clearArxivSelection,
+    selectedWebSourceUris, toggleWebSourceSelection,
     isDeepResearching, deepResearchResults, contextNotes, toggleContextNote, isNoteInContext,
     performWebSearch, performDeepResearch, performHybridResearch, stopDeepResearch, resetSearch,
     analyzeLoadedPdfs, analyzeArxivPapers, resetAllResearchData, processedPdfs,
     showUploadedTab, shouldOpenPdfViewer, uploadedPaperStatuses, updateUploadedPaperStatus,
     navigationHandled, pendingDeepResearchQuery, isDeepSearchBarExpanded,
-    researchTimings, timeToFirstNotes, timeToFirstPaper, searchMetrics
+    researchTimings, timeToFirstNotes, timeToFirstPaper, searchMetrics,
+    // NEW: Accumulated results
+    accumulatedPapers, accumulatedNotes, paperResultsMetadata,
+    addToPaperResults, clearPaperResults, removePaperFromResults
   ]);
 
   return (

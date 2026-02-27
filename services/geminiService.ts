@@ -85,9 +85,22 @@ export const extractNotesFromPages = async (
   referenceList?: string[],
   onStreamUpdate?: (notes: DeepResearchNote[]) => void
 ): Promise<DeepResearchNote[]> => {
-  return await api.gemini.extractNotes({
-    relevantPages, userQuestions, paperTitle, paperAbstract, referenceList
-  });
+  
+  try {
+    const response = await api.gemini.extractNotes({
+      relevantPages, userQuestions, paperTitle, paperAbstract, referenceList
+    });
+
+  
+    return response;
+  } catch (error) {
+    console.error('[FRONTEND-EXTRACT] ❌ API CALL FAILED:', {
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+      errorStack: error instanceof Error ? error.stack : undefined
+    });
+    throw error;
+  }
 };
 
 export const performSearch = async (query: string): Promise<SearchResultData> => {

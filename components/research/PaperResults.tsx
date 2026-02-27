@@ -229,6 +229,23 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                     )}
                     {isSaved ? 'Added' : 'Add to Sources'}
                   </button>
+
+                  {/* Remove from My Results button - unique to PaperResults tab */}
+                  {window.location.pathname.includes('research') && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Remove "${paper.title.substring(0, 60)}..." from My Results?`)) {
+                          handleRemovePaper(paper.id);
+                        }
+                      }}
+                      className="text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      title="Remove from My Results"
+                    >
+                      <Trash2 size={12} />
+                      Remove
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -588,44 +605,29 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
 }) => {
   const {
     researchPhase,
-    filteredCandidates,
-    selectedArxivIds,
-    isDeepResearching,
-    deepResearchResults,
-    uploadedPaperStatuses,
-    timeToFirstNotes,
-    stopDeepResearch,
-    selectAllArxivPapers,
-    clearArxivSelection
+    accumulatedPapers,
+    accumulatedNotes,
+    removePaperFromResults,
+    stopDeepResearch
   } = useResearch();
 
-  const { loadedPdfs, isPdfInContext, setActivePdf } = useLibrary();
+  const { setActivePdf } = useLibrary();
   const { openColumn } = useUI();
 
-  // ─── Data Unification: Normalize academic and local papers into unified ArxivPaper format
+  // NEW: Independent selection state for this tab (not tied to global selections)
+  const [accumulatedSelectedIds, setAccumulatedSelectedIds] = useState<Set<string>>(new Set());
+
+  // CRITICAL: currentTabCandidates comes from accumulated papers
+  // NO filtering by selection state - papers stay regardless of checkboxes
   const currentTabCandidates = useMemo(() => {
-    // Academic papers from search selection
-    const academic = filteredCandidates.filter(p => selectedArxivIds.has(p.id));
-
-    // Local PDFs normalized to match ArxivPaper structure exactly
-    const local = loadedPdfs
-      .filter(p => isPdfInContext(p.uri))
-      .map(pdf => ({
-        // Required ArxivPaper fields
-        id: pdf.uri,
-        title: pdf.metadata.title || pdf.file.name,
-        authors: pdf.metadata.author ? [pdf.metadata.author] : [],
-        pdfUri: pdf.uri,
-        summary: pdf.metadata.subject || pdf.metadata.description || '', // Normalize to summary
-        publishedDate: pdf.metadata.creationDate || new Date().toISOString(), // Provide fallback date
-        notes: deepResearchResults.filter(n => n.pdfUri === pdf.uri),
-        analysisStatus: (uploadedPaperStatuses[pdf.uri] || 'completed') as any, // Use analysisStatus, not status
-        harvardReference: '',
-        keywords: [],
-      } as ArxivPaper));
-
-    return [...academic, ...local];
-  }, [filteredCandidates, selectedArxivIds, loadedPdfs, deepResearchResults, uploadedPaperStatuses, isPdfInContext]);
+    console.log('[PaperResults] 📋 currentTabCandidates updated:', {
+      accumulatedPapersCount: accumulatedPapers.length,
+      accumulatedPapersIds: accumulatedPapers.map(p => p.id || p.pdfUri),
+      accumulatedPapersTitles: accumulatedPapers.map(p => p.title).slice(0, 3),
+      totalNotesInPapers: accumulatedPapers.reduce((sum, p) => sum + (p.notes?.length || 0), 0)
+    });
+    return accumulatedPapers;  // ← Use accumulated papers directly
+  }, [accumulatedPapers]);
 
   const isBlurred = researchPhase === 'filtering';
   const isSearching = researchPhase === 'searching' || researchPhase === 'initializing';
@@ -697,7 +699,7 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
     return content.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [content, currentPage]);
 
-  // ─── Selection Actions ────────────────────────────────────────────────────────
+  // ─── Selection Actions (using local accumulatedSelectedIds) ──────────────────
   const handleSelectPage = useCallback(() => {
     const pagePaperIds = sortBy === 'most-relevant-notes'
       ? Array.from(new Set(
@@ -710,19 +712,23 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
         .filter(p => p.analysisStatus !== 'failed')
         .map(p => p.id);
 
-    const allPageSelected = (pagePaperIds as string[]).every(id => selectedArxivIds.has(id));
+    const allPageSelected = (pagePaperIds as string[]).every(id => 
+      accumulatedSelectedIds.has(id)
+    );
 
     if (allPageSelected) {
-      const currentSelection = Array.from(selectedArxivIds);
-      const newSelection = currentSelection.filter(id => !(pagePaperIds as string[]).includes(id));
-      selectAllArxivPapers(newSelection);
+      // Deselect - remove from local selection only
+      const newSelection = new Set(accumulatedSelectedIds);
+      pagePaperIds.forEach(id => newSelection.delete(id));
+      setAccumulatedSelectedIds(newSelection);
     } else {
-      const currentSelection = Array.from(selectedArxivIds);
-      const newSelection = Array.from(new Set([...currentSelection, ...(pagePaperIds as string[])]));
-      selectAllArxivPapers(newSelection);
+      // Select - add to local selection only
+      const newSelection = new Set(accumulatedSelectedIds);
+      (pagePaperIds as string[]).forEach(id => newSelection.add(id));
+      setAccumulatedSelectedIds(newSelection);
     }
     onSelectMenuOpenChange(false);
-  }, [paginatedContent, selectedArxivIds, sortBy, selectAllArxivPapers, onSelectMenuOpenChange]);
+  }, [paginatedContent, accumulatedSelectedIds, sortBy, onSelectMenuOpenChange]);
 
   const handleSelectAllTotal = useCallback(() => {
     const selectableContent = sortBy === 'most-relevant-notes'
@@ -734,9 +740,17 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
         .map(p => p.id);
     
     const allIds = Array.from(new Set(selectableContent));
-    selectAllArxivPapers(allIds);
+    
+    // Check if all are selected
+    const allSelected = allIds.every(id => accumulatedSelectedIds.has(id));
+    
+    if (allSelected) {
+      setAccumulatedSelectedIds(new Set());
+    } else {
+      setAccumulatedSelectedIds(new Set(allIds));
+    }
     onSelectMenuOpenChange(false);
-  }, [content, sortBy, selectAllArxivPapers, onSelectMenuOpenChange]);
+  }, [content, accumulatedSelectedIds, sortBy, onSelectMenuOpenChange]);
 
   const handleSelectNotesPage = useCallback(() => {
     if (sortBy !== 'most-relevant-notes') return;
@@ -874,6 +888,17 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
     return (content as any[]).filter((note: any) => (note?.quote || '').trim().length > 0).length;
   }, [content, sortBy]);
 
+  // NEW: Remove paper from My Results
+  const handleRemovePaper = useCallback((paperId: string) => {
+    removePaperFromResults(paperId);
+    // Also remove from selection state
+    setAccumulatedSelectedIds(prev => {
+      const next = new Set(prev);
+      next.delete(paperId);
+      return next;
+    });
+  }, [removePaperFromResults]);
+
   const handleResetFilters = useCallback(() => {
     onSearchQueryChange('');
     onLocalFiltersChange({ paper: 'all', query: 'all', hasNotes: false });
@@ -901,11 +926,11 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
                   className="flex items-center gap-1 p-2 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
                   title="Selection options"
                 >
-                  <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${selectedArxivIds.size === content.length ? 'bg-scholar-600 border-scholar-600' :
-                    selectedArxivIds.size > 0 ? 'bg-scholar-100 dark:bg-scholar-900/30 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
+                  <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${accumulatedSelectedIds.size === selectableTotalCount ? 'bg-scholar-600 border-scholar-600' :
+                    accumulatedSelectedIds.size > 0 ? 'bg-scholar-100 dark:bg-scholar-900/30 border-scholar-600' : 'border-gray-400 dark:border-gray-500'
                     }`}>
-                    {selectedArxivIds.size === content.length ? <Check size={16} color="white" strokeWidth={3} /> :
-                      selectedArxivIds.size > 0 ? <Minus size={16} className="text-scholar-600 dark:text-scholar-400" strokeWidth={3} /> : null}
+                    {accumulatedSelectedIds.size === selectableTotalCount ? <Check size={16} color="white" strokeWidth={3} /> :
+                      accumulatedSelectedIds.size > 0 ? <Minus size={16} className="text-scholar-600 dark:text-scholar-400" strokeWidth={3} /> : null}
                   </div>
                   <ChevronDown size={14} className="opacity-60" />
                 </button>
@@ -930,7 +955,7 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
                       </button>
                       <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1" />
                       <button
-                        onClick={() => { clearArxivSelection(); onSelectMenuOpenChange(false); }}
+                        onClick={() => { setAccumulatedSelectedIds(new Set()); onSelectMenuOpenChange(false); }}
                         className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                       >
                         <X size={16} className="text-red-500" />
@@ -1147,14 +1172,6 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
             <div className="text-sm text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
               <BookOpenText size={14} className="opacity-60" />
               About {currentTabCandidates.length} paper{currentTabCandidates.length !== 1 ? 's' : ''} with {totalNotes} note{totalNotes !== 1 ? 's' : ''} found
-              {timeToFirstNotes !== null && (
-                <>
-                  <span className="text-xs text-gray-400 mx-0.5">•</span>
-                  <span className="text-sm text-gray-500 dark:text-scholar-400 font-medium">
-                    {(timeToFirstNotes / 1000).toFixed(2)}s
-                  </span>
-                </>
-              )}
             </div>
             {(['initializing', 'searching', 'filtering', 'extracting'].includes(researchPhase)) && (
               <button
@@ -1197,18 +1214,27 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
               />
             ))
           ) : (
-            (paginatedContent as ArxivPaper[]).map((paper) => (
-              <PaperCard
-                key={paper.id}
-                paper={paper}
-                selectedNoteIds={selectedNoteIds}
-                onSelectNote={onSelectNote}
-                forceExpanded={allNotesExpanded}
-                onView={() => handleViewPdf(paper)}
-                isLocal={false}
-                activeQuery={localFilters.query}
-              />
-            ))
+            (() => {
+              console.log('[PaperResults] 🎯 Rendering papers:', {
+                paginatedContentCount: paginatedContent.length,
+                sortBy: sortBy,
+                currentPage: currentPage,
+                totalPages: totalPages,
+                contentType: sortBy === 'most-relevant-notes' ? 'notes' : 'papers'
+              });
+              return (paginatedContent as ArxivPaper[]).map((paper) => (
+                <PaperCard
+                  key={paper.id}
+                  paper={paper}
+                  selectedNoteIds={selectedNoteIds}
+                  onSelectNote={onSelectNote}
+                  forceExpanded={allNotesExpanded}
+                  onView={() => handleViewPdf(paper)}
+                  isLocal={false}
+                  activeQuery={localFilters.query}
+                />
+              ));
+            })()
           )}
         </div>
 

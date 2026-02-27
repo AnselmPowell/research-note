@@ -257,6 +257,7 @@ export const localStorageService = {
       localStorage.removeItem('anonymous_notes');
       localStorage.removeItem('anonymous_folders');
       localStorage.removeItem('anonymous_note_assignments');
+      localStorage.removeItem('paper_results_accumulation');
       
       // Also clear Microsoft auth passwords on sign out
       Object.keys(localStorage).forEach(key => {
@@ -345,5 +346,119 @@ export const localStorageService = {
   // Migration helper for when user signs up
   exportDataForMigration: (): LocalStorageData => {
     return localStorageService.getAllLibraryData();
+  },
+
+  // ─── ACCUMULATED RESULTS STORAGE (for "My Results" tab) ──────────────────
+  // This is SEPARATE from deep_research_results - papers stay even on new searches
+  
+  savePaperResultsAccumulation: (data: {
+    accumulatedPapers: any[];
+    accumulatedNotes: any[];
+    paperResultsMetadata: Record<string, any>;
+  }): void => {
+    try {
+      const saveData = {
+        ...data,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Check size before saving (localStorage ~5MB limit)
+      const serialized = JSON.stringify(saveData);
+      const sizeInMb = new Blob([serialized]).size / (1024 * 1024);
+      
+      if (sizeInMb > 4.5) {
+        console.warn(
+          `[LocalStorage] Warning: Paper results approaching limit (${sizeInMb.toFixed(2)}MB / 5MB)`,
+          'Trimming oldest results...'
+        );
+        // Trim oldest papers to fit
+        const trimmed = {
+          ...saveData,
+          accumulatedPapers: saveData.accumulatedPapers.slice(
+            0,
+            Math.floor(saveData.accumulatedPapers.length * 0.7)
+          ),
+          accumulatedNotes: saveData.accumulatedNotes.slice(
+            0,
+            Math.floor(saveData.accumulatedNotes.length * 0.7)
+          )
+        };
+        const trimmedSerialized = JSON.stringify(trimmed);
+        localStorage.setItem('paper_results_accumulation', trimmedSerialized);
+        console.log('[LocalStorage] Trimmed and saved paper results');
+        return;
+      }
+      
+      localStorage.setItem('paper_results_accumulation', serialized);
+      console.log('[LocalStorage] Paper results accumulation saved:', {
+        papers: data.accumulatedPapers.length,
+        notes: data.accumulatedNotes.length,
+        sizeInMb: sizeInMb.toFixed(2)
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'QuotaExceededError') {
+        console.error('[LocalStorage] Storage quota exceeded! Trimming old results...');
+        localStorageService.trimOldestPaperResults(15);
+        // Retry with smaller dataset
+        try {
+          const retryData = {
+            ...data,
+            accumulatedPapers: data.accumulatedPapers.slice(
+              0,
+              Math.floor(data.accumulatedPapers.length * 0.6)
+            )
+          };
+          localStorage.setItem('paper_results_accumulation', JSON.stringify(retryData));
+          console.log('[LocalStorage] Saved after emergency trim');
+        } catch (retryError) {
+          console.error('[LocalStorage] Failed even after trim:', retryError);
+        }
+      } else {
+        console.error('[LocalStorage] Failed to save paper results:', error);
+      }
+    }
+  },
+
+  getPaperResultsAccumulation: (): any | null => {
+    try {
+      const data = localStorage.getItem('paper_results_accumulation');
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('[LocalStorage] Failed to load paper results:', error);
+      return null;
+    }
+  },
+
+  clearPaperResultsAccumulation: (): void => {
+    try {
+      localStorage.removeItem('paper_results_accumulation');
+      console.log('[LocalStorage] Paper results accumulation cleared');
+    } catch (error) {
+      console.error('[LocalStorage] Failed to clear paper results:', error);
+    }
+  },
+
+  trimOldestPaperResults: (removeCount: number = 10): void => {
+    try {
+      const existing = localStorageService.getPaperResultsAccumulation();
+      if (!existing || !existing.accumulatedPapers.length) return;
+      
+      // Remove oldest papers (they're at the end of the array since newest are prepended)
+      const papersToKeep = existing.accumulatedPapers.slice(0, -removeCount);
+      const pdfUrisToKeep = new Set(papersToKeep.map((p: any) => p.pdfUri || p.id));
+      
+      const trimmed = {
+        ...existing,
+        accumulatedPapers: papersToKeep,
+        accumulatedNotes: existing.accumulatedNotes.filter((note: any) => 
+          pdfUrisToKeep.has(note.pdfUri)
+        )
+      };
+      
+      localStorageService.savePaperResultsAccumulation(trimmed);
+      console.log(`[LocalStorage] Trimmed ${removeCount} oldest papers`);
+    } catch (error) {
+      console.error('[LocalStorage] Failed to trim results:', error);
+    }
   }
 };
