@@ -35,7 +35,8 @@ import {
   Upload,
   User,
   X,
-  AlertTriangle
+  AlertTriangle,
+  Trash2
 } from 'lucide-react';
 import { ExternalLinkIcon } from '../ui/icons';
 
@@ -93,10 +94,11 @@ interface PaperCardProps {
   isLocal?: boolean;
   forceExpanded?: boolean;
   activeQuery?: string;
+  onRemovePaper?: (id: string) => void;
 }
 
 // ─── PaperCard Component ───────────────────────────────────────────────────────
-const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true, activeQuery = 'all' }) => {
+const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true, activeQuery = 'all', onRemovePaper }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isAbstractExpanded, setIsAbstractExpanded] = useState(false);
   const { toggleArxivSelection, selectedArxivIds } = useResearch();
@@ -231,12 +233,12 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                   </button>
 
                   {/* Remove from My Results button - unique to PaperResults tab */}
-                  {window.location.pathname.includes('research') && (
+                  {onRemovePaper && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         if (confirm(`Remove "${paper.title.substring(0, 60)}..." from My Results?`)) {
-                          handleRemovePaper(paper.id);
+                          onRemovePaper(paper.id);
                         }
                       }}
                       className="text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
@@ -326,7 +328,8 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     prevProps.selectedNoteIds === nextProps.selectedNoteIds &&
     prevProps.forceExpanded === nextProps.forceExpanded &&
     prevProps.activeQuery === nextProps.activeQuery &&
-    prevProps.isLocal === nextProps.isLocal
+    prevProps.isLocal === nextProps.isLocal &&
+    prevProps.onRemovePaper === nextProps.onRemovePaper
   );
 });
 
@@ -1232,6 +1235,7 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
                   onView={() => handleViewPdf(paper)}
                   isLocal={false}
                   activeQuery={localFilters.query}
+                  onRemovePaper={handleRemovePaper}
                 />
               ));
             })()
