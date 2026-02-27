@@ -45,6 +45,7 @@ export const AgentResearcher: React.FC = () => {
     const {
         contextNotes,
         performHybridResearch,
+        performHybridAnalysis,
         stopDeepResearch,
         researchPhase,
         selectedArxivIds,
@@ -205,8 +206,8 @@ export const AgentResearcher: React.FC = () => {
 
         console.log(`[AgentResearcher] 🔬 Starting Hybrid Analysis on ${contextPdfs.length} Checked PDFs and ${selectedArxivPapers.length} ArXiv papers.`);
 
-        // Use Unified Action - passing contextPdfs (checked only)
-        performHybridResearch(contextPdfs, selectedArxivPapers, currentQuestions, arxivKeywords);
+        // Use performHybridAnalysis for Agent-selected papers (WITH accumulation to "My Results")
+        performHybridAnalysis(contextPdfs, selectedArxivPapers, currentQuestions, arxivKeywords);
 
         // Open middle column and switch to results tab
         setColumnVisibility(prev => ({ ...prev, middle: true }));

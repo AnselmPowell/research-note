@@ -61,6 +61,7 @@ interface ResearchContextType {
   performWebSearch: (query: string) => Promise<void>;
   performDeepResearch: (query: DeepResearchQuery) => Promise<void>;
   performHybridResearch: (pdfs: LoadedPdf[], arxivPapers: ArxivPaper[], questions: string[], keywords: string[]) => Promise<void>;
+  performHybridAnalysis: (pdfs: LoadedPdf[], arxivPapers: ArxivPaper[], questions: string[], keywords: string[]) => Promise<void>;
   stopDeepResearch: () => void;
   resetSearch: () => void;
   setActiveSearchMode: (mode: SearchMode) => void;
@@ -568,6 +569,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           
           merged[newPaper.id] = {
             ...newPaper,  // 🔑 FIRST: Fresh paper with fresh timestamp (addedToAccumulationAt)
+            addedToAccumulationAt: Date.now(),  // ✅ UPDATE timestamp when re-processing
             notes: Array.from(noteMap.values())  // 🔑 SECOND: Merged notes (preserve old + new)
           };
           console.log(`[CONTEXT-ADDTOPAPER] 🔄 Merged notes for paper ${newPaper.id}: ${Array.from(noteMap.values()).length} total notes`);
@@ -987,45 +989,10 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     console.log('[ResearchContext] 🔄 Setting processedPdfs to:', pdfs.map(p => p.uri));
     setProcessedPdfs(pdfs);
     
-    // NEW: Add papers to accumulatedPapers IMMEDIATELY (at research start)
-    // Papers start with 'pending' status and empty notes, then get updated in real-time
-    // IMPORTANT: Even if papers already exist in accumulation, we update their timestamp
-    // so they appear in the "recent batch" at the top (for re-analysis)
-    if (pdfs.length > 0 || arxivPapers.length > 0) {
-      console.log('[ResearchContext] 📥 Adding papers to accumulatedPapers at research START');
-      
-      const initialPapers = [
-        // Add PDFs as paper objects
-        ...pdfs.map(pdf => ({
-          id: pdf.uri,
-          pdfUri: pdf.uri,
-          title: pdf.metadata.title || pdf.file.name,
-          authors: pdf.metadata.author ? [pdf.metadata.author] : [],
-          analysisStatus: 'pending' as const,
-          notes: [],
-          summary: pdf.text?.substring(0, 500) || '',
-          publishedDate: new Date().toISOString(),
-          references: pdf.references || [],
-          harvardReference: '',
-          publisher: '',
-          categories: [],
-          addedToAccumulationAt: Date.now()  // NEW: Track when added (including re-analysis)
-        } as ArxivPaper)),
-        // Add ArXiv papers with reset status
-        ...arxivPapers.map(paper => ({
-          ...paper,
-          analysisStatus: 'pending' as const,
-          notes: [],
-          addedToAccumulationAt: Date.now()  // NEW: Track when added (including re-analysis)
-        }))
-      ];
-      
-      // Call addToPaperResults to add all papers at once
-      addToPaperResults(initialPapers, []);
-      console.log('[ResearchContext] ✅ Added', initialPapers.length, 'papers to accumulatedPapers');
-    }
+    // NOTE: performHybridResearch is for Deep Search ONLY
+    // NO addToPaperResults() call here - use performHybridAnalysis for Agent papers
     
-    console.log('[ResearchContext] 🔍 performHybridResearch called:', {
+    console.log('[ResearchContext] 🔍 performHybridResearch called (Deep Search):', {
       pdfsCount: pdfs.length,
       arxivPapersCount: arxivPapers.length,
       shouldSetExtractingPhase: pdfs.length > 0 || arxivPapers.length > 0
@@ -1047,6 +1014,111 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!signal.aborted) {
       setResearchPhase('completed'); // Always set completed, regardless of arxiv papers
       setGatheringStatus("Analysis complete.");
+      
+      // 🔑 CRITICAL FIX: Remove any synced papers from accumulation
+      // (They were synced for UI updates during analysis but shouldn't persist in "My Results")
+      // This ensures Deep Search papers don't leak into the Agent's "My Results" tab
+      const deepSearchPaperIds = new Set([
+        ...pdfs.map(p => p.uri),
+        ...arxivPapers.map(p => p.id)
+      ]);
+      
+      console.log('[ResearchContext] 🧹 Cleaning up synced papers from accumulation (Deep Search only):', {
+        removedCount: Array.from(deepSearchPaperIds).length,
+        removedIds: Array.from(deepSearchPaperIds)
+      });
+      
+      setAccumulatedPapers(prev => {
+        const filtered = prev.filter(p => !deepSearchPaperIds.has(p.id));
+        console.log('[ResearchContext] 🧹 Accumulated papers after cleanup:', {
+          before: prev.length,
+          after: filtered.length,
+          removed: prev.length - filtered.length
+        });
+        return filtered;
+      });
+      
+      setAccumulatedNotes(prev => {
+        const filtered = prev.filter(n => !deepSearchPaperIds.has(n.pdfUri));
+        console.log('[ResearchContext] 🧹 Accumulated notes after cleanup:', {
+          before: prev.length,
+          after: filtered.length,
+          removed: prev.length - filtered.length
+        });
+        return filtered;
+      });
+    }
+  }, [analyzeLoadedPdfs, analyzeArxivPapers, setProcessedPdfs]);
+
+  // NEW: performHybridAnalysis - for Agent Researcher (WITH accumulation)
+  const performHybridAnalysis = useCallback(async (pdfs: LoadedPdf[], arxivPapers: ArxivPaper[], questions: string[], keywords: string[]) => {
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+    
+    // CRITICAL FIX: Store the PDFs being analyzed BEFORE setting phase
+    console.log('[ResearchContext] 🔄 Setting processedPdfs to:', pdfs.map(p => p.uri));
+    setProcessedPdfs(pdfs);
+    
+    // ✅ ADDED: Add papers to accumulatedPapers IMMEDIATELY (at research start)
+    // Papers start with 'pending' status and empty notes, then get updated in real-time
+    // IMPORTANT: These are USER-SELECTED papers from Agent, so they SHOULD persist in "My Results"
+    if (pdfs.length > 0 || arxivPapers.length > 0) {
+      console.log('[ResearchContext] 📥 Adding papers to accumulatedPapers at research START (Agent Analysis)');
+      
+      const initialPapers = [
+        // Add PDFs as paper objects
+        ...pdfs.map(pdf => ({
+          id: pdf.uri,
+          pdfUri: pdf.uri,
+          title: pdf.metadata.title || pdf.file.name,
+          authors: pdf.metadata.author ? [pdf.metadata.author] : [],
+          analysisStatus: 'pending' as const,
+          notes: [],
+          summary: pdf.text?.substring(0, 500) || '',
+          publishedDate: new Date().toISOString(),
+          references: pdf.references || [],
+          harvardReference: '',
+          publisher: '',
+          categories: [],
+          addedToAccumulationAt: Date.now()
+        } as ArxivPaper)),
+        // Add ArXiv papers with reset status
+        ...arxivPapers.map(paper => ({
+          ...paper,
+          analysisStatus: 'pending' as const,
+          notes: [],
+          addedToAccumulationAt: Date.now()
+        }))
+      ];
+      
+      // Call addToPaperResults to add all papers at once
+      addToPaperResults(initialPapers, []);
+      console.log('[ResearchContext] ✅ Added', initialPapers.length, 'papers to accumulatedPapers');
+    }
+    
+    console.log('[ResearchContext] 🔍 performHybridAnalysis called (Agent Analysis):', {
+      pdfsCount: pdfs.length,
+      arxivPapersCount: arxivPapers.length,
+      shouldSetExtractingPhase: pdfs.length > 0 || arxivPapers.length > 0
+    });
+    
+    setGatheringStatus("Analyzing documents...");
+    // CRITICAL: Set extracting phase even if only PDFs (no ArXiv)
+    if (pdfs.length > 0 || arxivPapers.length > 0) {
+      console.log('[ResearchContext] ⏱️ Setting phase to extracting');
+      setResearchPhase('extracting');
+    }
+    const questionsStr = questions.join('\n');
+    const tasks = [];
+    if (pdfs.length > 0) tasks.push(analyzeLoadedPdfs(pdfs, questionsStr, signal));
+    if (arxivPapers.length > 0) tasks.push(analyzeArxivPapers(arxivPapers, questions, keywords, signal));
+    await Promise.all(tasks);
+
+    if (!signal.aborted) {
+      setResearchPhase('completed');
+      setGatheringStatus("Analysis complete.");
+      // ✅ NO CLEANUP - Papers stay in accumulation (desired behavior for Agent)
     }
   }, [analyzeLoadedPdfs, analyzeArxivPapers, setProcessedPdfs, addToPaperResults]);
 
@@ -1302,6 +1374,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     performWebSearch,
     performDeepResearch,
     performHybridResearch,
+    performHybridAnalysis,
     stopDeepResearch,
     resetSearch,
     analyzeLoadedPdfs,
@@ -1343,7 +1416,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     selectedArxivIds, toggleArxivSelection, selectAllArxivPapers, clearArxivSelection,
     selectedWebSourceUris, toggleWebSourceSelection,
     isDeepResearching, deepResearchResults, contextNotes, toggleContextNote, isNoteInContext,
-    performWebSearch, performDeepResearch, performHybridResearch, stopDeepResearch, resetSearch,
+    performWebSearch, performDeepResearch, performHybridResearch, performHybridAnalysis, stopDeepResearch, resetSearch,
     analyzeLoadedPdfs, analyzeArxivPapers, resetAllResearchData, processedPdfs,
     showUploadedTab, shouldOpenPdfViewer, uploadedPaperStatuses, updateUploadedPaperStatus,
     navigationHandled, pendingDeepResearchQuery, isDeepSearchBarExpanded,

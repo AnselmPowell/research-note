@@ -11,7 +11,8 @@ import {
   AlertTriangle,
   X,
   Sparkles,
-  LayoutList
+  LayoutList,
+  ArrowUpDown
 } from 'lucide-react';
 import { useResearch } from '../../contexts/ResearchContext';
 import { useLibrary } from '../../contexts/LibraryContext';
@@ -72,7 +73,17 @@ export const DeepResearchView: React.FC = () => {
     (activeSearchMode === 'web' || activeSearchMode === 'deep') ? activeSearchMode : 'deep'
   );
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<SortOption>('relevant-papers');
+  
+  // ─── Separate sort states for each tab ─────────────────────────────────────
+  // Deep Research tab: 'most-relevant-notes' | 'relevant-papers' | 'newest-papers'
+  const [sortByDeep, setSortByDeep] = useState<SortOption>('relevant-papers');
+  // My Results tab: 'most-relevant-notes' | 'recent-research' | 'alphabetical'
+  const [sortByResults, setSortByResults] = useState<any>('recent-research');
+  
+  // Use correct sort state and handler based on active tab
+  const currentSort = activeTab === 'results' ? sortByResults : sortByDeep;
+  const handleSortChange = activeTab === 'results' ? setSortByResults : setSortByDeep;
+  
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [allNotesExpanded, setAllNotesExpanded] = useState(true);
   const [isNoteSelectMenuOpen, setIsNoteSelectMenuOpen] = useState(false);
@@ -164,9 +175,19 @@ export const DeepResearchView: React.FC = () => {
                     className="flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
                   >
                     <span className="truncate max-w-[120px]">
-                      {sortBy === 'most-relevant-notes' && 'Most Relevant Notes'}
-                      {sortBy === 'relevant-papers' && 'Most Relevant Papers'}
-                      {sortBy === 'newest-papers' && 'Newest Papers'}
+                      {activeTab === 'results' ? (
+                        <>
+                          {currentSort === 'most-relevant-notes' && 'Most Relevant Notes'}
+                          {currentSort === 'recent-research' && 'Recent Research'}
+                          {currentSort === 'alphabetical' && 'Alphabetical'}
+                        </>
+                      ) : (
+                        <>
+                          {currentSort === 'most-relevant-notes' && 'Most Relevant Notes'}
+                          {currentSort === 'relevant-papers' && 'Most Relevant Papers'}
+                          {currentSort === 'newest-papers' && 'Newest Papers'}
+                        </>
+                      )}
                     </span>
                     <ChevronDown size={16} className={`text-gray-400 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
                   </button>
@@ -175,19 +196,41 @@ export const DeepResearchView: React.FC = () => {
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
                       <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50 animate-fade-in">
-                        <button onClick={() => { setSortBy('most-relevant-notes'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800">
-                          <Star size={16} className={sortBy === 'most-relevant-notes' ? "text-scholar-600" : "text-gray-400"} />
-                          <span className="text-sm font-medium">Most Relevant Notes</span>
-                        </button>
-                        <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1" />
-                        <button onClick={() => { setSortBy('relevant-papers'); setAllNotesExpanded(false); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800">
-                          <Layers size={16} className={sortBy === 'relevant-papers' ? "text-scholar-600" : "text-gray-400"} />
-                          <span className="text-sm font-medium">Relevant Papers</span>
-                        </button>
-                        <button onClick={() => { setSortBy('newest-papers'); setAllNotesExpanded(false); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800">
-                          <Calendar size={16} className={sortBy === 'newest-papers' ? "text-scholar-600" : "text-gray-400"} />
-                          <span className="text-sm font-medium">Newest Papers</span>
-                        </button>
+                        {activeTab === 'results' ? (
+                          <>
+                            {/* My Results tab sorting options */}
+                            <button onClick={() => { handleSortChange('most-relevant-notes'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800">
+                              <Star size={16} className={currentSort === 'most-relevant-notes' ? "text-scholar-600" : "text-gray-400"} />
+                              <span className="text-sm font-medium">Most Relevant Notes</span>
+                            </button>
+                            <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1" />
+                            <button onClick={() => { handleSortChange('recent-research'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800">
+                              <Calendar size={16} className={currentSort === 'recent-research' ? "text-scholar-600" : "text-gray-400"} />
+                              <span className="text-sm font-medium">Recent Research</span>
+                            </button>
+                            <button onClick={() => { handleSortChange('alphabetical'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800">
+                              <ArrowUpDown size={16} className={currentSort === 'alphabetical' ? "text-scholar-600" : "text-gray-400"} />
+                              <span className="text-sm font-medium">Alphabetical</span>
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {/* Deep Research tab sorting options - unchanged */}
+                            <button onClick={() => { handleSortChange('most-relevant-notes'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800">
+                              <Star size={16} className={currentSort === 'most-relevant-notes' ? "text-scholar-600" : "text-gray-400"} />
+                              <span className="text-sm font-medium">Most Relevant Notes</span>
+                            </button>
+                            <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1" />
+                            <button onClick={() => { handleSortChange('relevant-papers'); setAllNotesExpanded(false); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800">
+                              <Layers size={16} className={currentSort === 'relevant-papers' ? "text-scholar-600" : "text-gray-400"} />
+                              <span className="text-sm font-medium">Relevant Papers</span>
+                            </button>
+                            <button onClick={() => { handleSortChange('newest-papers'); setAllNotesExpanded(false); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800">
+                              <Calendar size={16} className={currentSort === 'newest-papers' ? "text-scholar-600" : "text-gray-400"} />
+                              <span className="text-sm font-medium">Newest Papers</span>
+                            </button>
+                          </>
+                        )}
                       </div>
                     </>
                   )}
@@ -226,7 +269,7 @@ export const DeepResearchView: React.FC = () => {
             selectedNoteIds={selectedNoteIds}
             onSelectedNoteIdsChange={setSelectedNoteIds}
             onSelectNote={handleSelectNote}
-            sortBy={sortBy}
+            sortBy={currentSort}
             isSortOpen={isSortOpen}
             showFilters={showFilters}
             searchQuery={searchQuery}
@@ -235,7 +278,7 @@ export const DeepResearchView: React.FC = () => {
             isSelectMenuOpen={isSelectMenuOpen}
             isNoteSelectMenuOpen={isNoteSelectMenuOpen}
             justCopiedNotes={justCopiedNotes}
-            onSortChange={setSortBy}
+            onSortChange={handleSortChange}
             onSortOpenChange={setIsSortOpen}
             onShowFiltersChange={setShowFilters}
             onSearchQueryChange={setSearchQuery}
@@ -254,7 +297,7 @@ export const DeepResearchView: React.FC = () => {
             selectedNoteIds={selectedNoteIds}
             onSelectedNoteIdsChange={setSelectedNoteIds}
             onSelectNote={handleSelectNote}
-            sortBy={sortBy}
+            sortBy={currentSort}
             isSortOpen={isSortOpen}
             showFilters={showFilters}
             searchQuery={searchQuery}
@@ -263,7 +306,7 @@ export const DeepResearchView: React.FC = () => {
             isSelectMenuOpen={isSelectMenuOpen}
             isNoteSelectMenuOpen={isNoteSelectMenuOpen}
             justCopiedNotes={justCopiedNotes}
-            onSortChange={setSortBy}
+            onSortChange={handleSortChange}
             onSortOpenChange={setIsSortOpen}
             onShowFiltersChange={setShowFilters}
             onSearchQueryChange={setSearchQuery}

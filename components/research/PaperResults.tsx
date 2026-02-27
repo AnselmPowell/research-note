@@ -671,11 +671,13 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
   }, [currentTabCandidates, searchQuery, localFilters]);
 
   // ─── Smart Sorting for "My Results" Tab ────────────────────────────────────
-  // NEW: Track processing papers to enable dynamic reordering
-  // Papers being processed (status !== 'completed' and !== 'failed') move to top
-  // Papers with notes move above papers still being processed
+  // Supports three sort modes specific to My Results:
+  // 1. 'most-relevant-notes': Sort notes by relevance score
+  // 2. 'recent-research': Sort papers by addedToAccumulationAt timestamp (newest first)
+  // 3. 'alphabetical': Sort papers by title alphabetically (A-Z)
   const content = useMemo(() => {
     if (sortBy === 'most-relevant-notes') {
+      // Flatten all notes from all papers and sort by relevance
       const allNotes = filteredPapers.flatMap(paper =>
         (paper.notes || [])
           .filter(note => {
@@ -692,70 +694,31 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
           }))
       );
       return allNotes.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
-    } else if (sortBy === 'newest-papers') {
-      return [...filteredPapers].sort((a, b) => getSafeTimestamp(b.publishedDate) - getSafeTimestamp(a.publishedDate));
-    } else {
-      // NEW: Smart sorting for 'relevant-papers' mode  
-      // Identify "current batch" - papers added most recently (within ~30 seconds of newest)
-      // This handles the case where 3 old papers exist, then 3 new papers are added
-      
-      if (filteredPapers.length === 0) return [];
-      
-      // Find the most recent addition time
-      const mostRecentAddTime = Math.max(
-        ...filteredPapers.map(p => p.addedToAccumulationAt || 0)
+    } else if (sortBy === 'recent-research') {
+      // ✅ NEW: Sort by addedToAccumulationAt timestamp (most recent first)
+      // When papers are re-analyzed, timestamp updates to current time
+      // This keeps recently active research at the top
+      return [...filteredPapers].sort((a, b) => 
+        (b.addedToAccumulationAt || 0) - (a.addedToAccumulationAt || 0)
       );
-      
-      // Define "recent batch" as papers added within 30 seconds of the most recent
-      const RECENT_BATCH_WINDOW = 30000; // 30 seconds
-      const recentBatchStartTime = mostRecentAddTime - RECENT_BATCH_WINDOW;
-      
-      // Separate papers into batches
-      const recentBatchPapers: ArxivPaper[] = [];
-      const olderBatchPapers: ArxivPaper[] = [];
-      
-      filteredPapers.forEach(paper => {
-        const addedTime = paper.addedToAccumulationAt || 0;
-        if (addedTime >= recentBatchStartTime) {
-          recentBatchPapers.push(paper);
-        } else {
-          olderBatchPapers.push(paper);
-        }
-      });
-      
-      // Sort recent batch: processing papers first, then those with notes first
-      const sortedRecentBatch = recentBatchPapers.sort((a, b) => {
-        const isAProcessing = a.analysisStatus && ['pending', 'downloading', 'processing', 'extracting'].includes(a.analysisStatus);
-        const isBProcessing = b.analysisStatus && ['pending', 'downloading', 'processing', 'extracting'].includes(b.analysisStatus);
-        
-        const aHasNotes = (a.notes?.length || 0) > 0;
-        const bHasNotes = (b.notes?.length || 0) > 0;
-        
-        // If one is processing and the other isn't, processing comes first
-        if (isAProcessing !== isBProcessing) {
-          return isAProcessing ? -1 : 1;
-        }
-        
-        // Both are processing or both are completed
-        // Among processing papers: those with notes come first
-        if (isAProcessing && isBProcessing) {
-          if (aHasNotes !== bHasNotes) {
-            return aHasNotes ? -1 : 1;
-          }
-        }
-        
-        // For completed papers in recent batch: sort by number of notes
-        return (b.notes?.length || 0) - (a.notes?.length || 0);
-      });
-      
-      // Sort older batch: by number of notes
-      const sortedOlderBatch = olderBatchPapers.sort((a, b) => 
+    } else if (sortBy === 'alphabetical') {
+      // ✅ NEW: Sort by title alphabetically (case-insensitive, numeric aware)
+      // Example: Paper 1, Paper 2, Paper 10 (not Paper 1, Paper 10, Paper 2)
+      return [...filteredPapers].sort((a, b) => 
+        a.title.localeCompare(b.title, 'en', { numeric: true, sensitivity: 'base' })
+      );
+    } else if (sortBy === 'relevant-papers') {
+      // Fallback: Sort by number of notes (most notes first)
+      return [...filteredPapers].sort((a, b) => 
         (b.notes?.length || 0) - (a.notes?.length || 0)
       );
-      
-      // Combine: recent batch first, then older batch
-      return [...sortedRecentBatch, ...sortedOlderBatch];
+    } else if (sortBy === 'newest-papers') {
+      // Fallback: Sort by published date (shouldn't appear in My Results, but keep for safety)
+      return [...filteredPapers].sort((a, b) => 
+        getSafeTimestamp(b.publishedDate) - getSafeTimestamp(a.publishedDate)
+      );
     }
+    return filteredPapers;
   }, [filteredPapers, sortBy, localFilters.query]);
 
   // ─── Pagination ────────────────────────────────────────────────────────────────
