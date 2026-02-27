@@ -317,6 +317,34 @@ const filterRelevantPapers = async (papers: ArxivPaper[], questions: string[]) =
 11. User saves note → DatabaseContext → Neon PostgreSQL
 ```
 
+### 6. Unified Selection Pattern (NEW - Feb 27, 2026)
+Single source of truth for paper selections across all components.
+
+```typescript
+// ResearchContext - Unified state
+const [selectedPaperUris, setSelectedPaperUris] = useState<Set<string>>(new Set());
+
+// Helper functions
+const isPaperSelectedByUri = (uri?: string) => uri ? selectedPaperUris.has(uri) : false;
+const addToSelectionByUri = (uri: string) => 
+  setSelectedPaperUris(prev => new Set(prev).add(uri));
+const removeFromSelectionByUri = (uri: string) => {
+  setSelectedPaperUris(prev => {
+    const next = new Set(prev);
+    next.delete(uri);
+    return next;
+  });
+};
+
+// All 4 components use same URI check
+// SourcesPanel: isPaperSelectedByUri(paper.uri)
+// WebSearchView: isPaperSelectedByUri(source.uri)
+// DeepSearch: isPaperSelectedByUri(paper.pdfUri)
+// PaperResults: isPaperSelectedByUri(paper.pdfUri)
+
+// Result: All checkboxes reflect selection everywhere, zero duplicates in Agent context
+```
+
 ### Context Communication Flow
 ```
 User Action

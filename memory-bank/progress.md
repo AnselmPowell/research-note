@@ -44,12 +44,18 @@
 - Sources panel (max 30% width)
 - Smooth animations
 
-### ✅ Source Management (95%)
+### ✅ Source Management (98%)
 - Unified "Add to Sources" toggle
 - Real-time loading indicators
 - Hierarchical folder organization
 - Export functionality
 - Safety checks (prevent data loss)
+- 🆕 **Feb 27:** Unified Selection State
+  - Single `selectedPaperUris` Set tracks all selections across 4 components
+  - SourcesPanel, WebSearchView, DeepSearch, PaperResults see same checkbox state
+  - URI-based deduplication prevents duplicate papers in Agent context
+  - Cross-component visibility via `isPaperSelectedByUri()` helper
+  - 100 lines added across 5 files, zero breaking changes
 
 ### ✅ Authentication (95%)
 - Neon Auth + OAuth (Google, Microsoft)
@@ -80,6 +86,32 @@
   - Complete debug tracing for troubleshooting
 
 ## Recent Critical Fixes
+
+### ✅ UNIFIED SELECTION STATE (Feb 27, 2026) - DEDUPLICATION COMPLETE
+**Major Accomplishment:** Cross-component paper selection with automatic deduplication
+
+**Problem:** Same paper selectable in 4 places with isolated states → duplicates in Agent context
+**Solution:** 
+- Added `selectedPaperUris: Set<string>` to ResearchContext
+- 4 helper functions: `isPaperSelectedByUri()`, `addToSelectionByUri()`, `removeFromSelectionByUri()`, `getSelectedPaperUris()`
+- All components check same URI (SavedPaper.uri = WebSearch.uri = ArxivPaper.pdfUri)
+
+```typescript
+// ResearchContext - NEW
+const [selectedPaperUris, setSelectedPaperUris] = useState<Set<string>>(new Set());
+const isPaperSelectedByUri = (uri?: string) => uri ? selectedPaperUris.has(uri) : false;
+const addToSelectionByUri = (uri: string) => setSelectedPaperUris(prev => new Set(prev).add(uri));
+const removeFromSelectionByUri = (uri: string) => setSelectedPaperUris(prev => { const n = new Set(prev); n.delete(uri); return n; });
+
+// Components - UPDATED
+const isSelected = isPaperSelectedByUri(paper.uri); // SourcesPanel uses paper.uri
+const isSelected = isPaperSelectedByUri(source.uri); // WebSearchView uses source.uri
+const isSelected = isPaperSelectedByUri(paper.pdfUri); // DeepSearch/PaperResults use pdfUri
+```
+
+**Result:** All 4 components show same checkbox state, zero duplicates in Agent context ✅
+
+---
 
 ### ✅ AGENT RESEARCHER CRITICAL BUG FIXES (Feb 23, 2026) - PHASE 1 COMPLETE
 **Major Accomplishment:** File upload → Gemini pipeline now fully functional

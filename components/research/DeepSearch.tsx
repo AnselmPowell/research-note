@@ -71,12 +71,14 @@ interface PaperCardProps {
 const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true, activeQuery = 'all' }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isAbstractExpanded, setIsAbstractExpanded] = useState(false);
-  const { toggleArxivSelection, selectedArxivIds } = useResearch();
+  const { toggleArxivSelection, selectedArxivIds, isPaperSelectedByUri } = useResearch();
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
   const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf, failedUrlErrors, downloadingUris } = useLibrary();
   const { setColumnVisibility, openColumn: openUIColumn } = useUI();
 
-  const isSelected = isLocal ? isPdfInContext(paper.id) : selectedArxivIds.has(paper.id);
+  // ✅ Check GLOBAL selection state by pdfUri (works across all components)
+  const isGloballySelected = isPaperSelectedByUri(paper.pdfUri);
+  const isSelected = isLocal ? isPdfInContext(paper.id) : (isGloballySelected || selectedArxivIds.has(paper.id));
   const isSaved = isPaperSaved(paper.pdfUri);
 
   const isDownloading = paper.analysisStatus === 'downloading';

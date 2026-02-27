@@ -1,124 +1,76 @@
 # Active Context - Research Note
 
-## Current Work Focus (February 23, 2026)
+## Current Work Focus (February 27, 2026)
 
-### MAJOR COMPLETION: Agent Researcher Phase 1 - File Upload Pipeline ✅
+### COMPLETED: Unified Selection State with Deduplication ✅
 
-**Session (Feb 23, 2026) - Critical Bug Fixes & Complete Pipeline**
+**Session (Feb 27, 2026) - Paper Selection Across All Components**
 
-**4 CRITICAL BUGS FIXED:**
+**Problem Solved:**
+- Papers exist in 4 places (SourcesPanel, WebSearchView, DeepSearch, PaperResults) with isolated selection states
+- Same paper could be selected multiple times, appearing as duplicates in Agent context
+- Checkboxes didn't reflect selection across components
 
-1. ✅ **Infinite Loop on Startup** 
-   - useEffect auto-sync timer re-ran every 1.5s
-   - **Fix:** Disable timer, move syncFiles outside useEffect, add explicit trigger on contextPdfs.length
+**Solution: Unified Selection via URI**
+- Added `selectedPaperUris: Set<string>` to ResearchContext
+- All papers matched by URI (SavedPaper.uri = WebSearch.uri = ArxivPaper.pdfUri)
+- 4 helper functions: `isPaperSelectedByUri()`, `addToSelectionByUri()`, `removeFromSelectionByUri()`, `getSelectedPaperUris()`
 
-2. ✅ **fileUri=[object Object]** 
-   - Backend returned entire cache object instead of URI string
-   - **Fix:** Return only `.uri` property: `return cachedFile.uri;`
+**Implementation Summary:**
 
-3. ✅ **Files Never Uploaded (ROOT CAUSE)**
-   - syncFiles() was defined but never called
-   - **Fix:** Added new useEffect with `[contextPdfs.length]` dependency to auto-trigger
-   ```typescript
-   useEffect(() => {
-     if (contextPdfs.length > 0) syncFiles();
-   }, [contextPdfs.length]);
-   ```
+1. **ResearchContext.tsx** (+40 lines)
+   - Added state: `const [selectedPaperUris, setSelectedPaperUris] = useState<Set<string>>(new Set());`
+   - 4 new functions exported in context value
 
-4. ✅ **Type Error: .keys() on Object**
-   - Called `Array.from(uploadedFiles.keys())` on plain object `{}`
-   - **Fix:** Changed to `Object.keys(uploadedFiles)`
+2. **Component Updates** (+60 lines across 4 files)
+   - SourcesPanel: Checkbox uses `isPaperSelectedByUri(paper.uri)`
+   - WebSearchView: Checkbox uses `isPaperSelectedByUri(source.uri)`
+   - DeepSearch: Checkbox uses `isPaperSelectedByUri(paper.pdfUri)`
+   - PaperResults: Checkbox uses `isPaperSelectedByUri(paper.pdfUri)`
 
-**AGENT PIPELINE NOW COMPLETE:**
-- ✅ Files upload automatically when added to context
-- ✅ Stored in uploadedFiles with ACTIVE state
-- ✅ Sent to Gemini as base64 inlineData
-- ✅ Gemini analyzes PDF content
-- ✅ Citations extracted from responses
+3. **Toggle Updates** (+40 lines in 2 files)
+   - SourcesPanel: `addToSelectionByUri(uri)` when checked, `removeFromSelectionByUri(uri)` when unchecked
+   - WebSearchView: `addToSelectionByUri(source.uri)` when saved to sources
 
-**Files Modified:**
-- `components/researcherAI/AgentResearcher.tsx` - syncFiles moved outside useEffect, new contextPdfs.length watcher
-- `services/agentService.ts` - uploadPdf + sendMessage debug logging
-- `backend/services/agentService.js` - uploadFile URI return, sendMessage file lookup
-- `services/apiClient.ts` - Removed 40+ console.log statements
-- `backend/routes/agent.js` - Removed 60+ console.log statements
+**Result:**
+- ✅ Select paper in SourcesPanel → ALL 4 components show checkbox checked
+- ✅ Same paper never added twice to Agent context
+- ✅ Complete cross-component visibility
+- ✅ Zero breaking changes, backward compatible
 
-**Data Flow:**
+**Data Structure Mapping:**
 ```
-User adds PDF → contextPdfs.length changes → useEffect fires
-→ syncFiles() → agentService.uploadPdf() → uploadedFiles[uri] = file
-→ User sends message → selectedFileUris extracted
-→ sendMessage filters uploadedFiles by URI match
-→ Extracts googleFileUri for each file
-→ Backend converts to base64 inlineData
-→ Gemini receives files + processes
-→ Response returned with citations
+SavedPaper.uri (SourcesPanel) = "https://arxiv.org/pdf/2412.12345.pdf"
+SearchSource.uri (WebSearchView) = "https://arxiv.org/pdf/2412.12345.pdf"
+ArxivPaper.pdfUri (DeepSearch/PaperResults) = "https://arxiv.org/pdf/2412.12345.pdf"
+↓
+All stored in selectedPaperUris Set by same URI = Perfect deduplication
 ```
-
-**Debug Logging:**
-- Frontend: `[AgentResearcher] Syncing X PDFs`, `[uploadPdf] DEBUG`, `[sendMessage] DEBUG`
-- Backend: `[sendMessage] DEBUG: fileUris received`, `File in cache?`, `Total parts: X`
 
 ---
 
-### Primary Active Focus: Multi-Source Search Aggregation & ArXiv Precision
+## Previous: Sort Separation Feature (February 24-26, 2026)
 
-**Recent Major Accomplishments (Feb 19, 2026):**
-1. ✅ **ArXiv Search Precision Overhaul** — Replaced scattered keyword generation with focused primary+secondary keyword system using `abs:` AND queries
-2. ✅ **Multi-Source Search Aggregator** — NEW `searchAggregator.ts` runs 5 search APIs in parallel (ArXiv, OpenAlex, Google CSE, PDFVector, Google Grounding)
-3. ✅ **Academic Keyword Engine** — New LLM prompt generates 1 primary keyword + 3 single-word secondaries + AND combinations
-4. ✅ **Backend Search Proxy Routes** — NEW `backend/routes/search.js` with OpenAlex, Google CSE, PDFVector endpoints
-5. ✅ **Google Grounding Search** — NEW `searchWithGrounding()` in geminiService uses Gemini's `googleSearch` tool
+### COMPLETED: Sort Separation for "My Results" Tab ✅
 
-**Previous Accomplishments (Feb 6, 2026):**
-- ✅ Backend API Proxy Architecture
-- ✅ Embedding Model Migration (`text-embedding-004` → `gemini-embedding-001`)
-- ✅ Zero Results Bug Fix
-- ✅ Comprehensive Logging
+**Problem Solved:**
+- One sort state affected BOTH tabs (Deep Research + My Results)
+- Toggling sort in My Results would change Deep Research sorting
 
-### Latest Session Changes (Feb 19, 2026)
+**Solution:**
+- Separate sort states: `sortByDeep` and `sortByResults`
+- Tab-specific UI dropdowns (deep research shows different options than results)
+- New sort algorithms with 65% complexity reduction
+- Added `addedToAccumulationAt` timestamp for "Recent Research" sort
 
-**Overhaul: ArXiv Search Keyword Generation**
-- **Problem**: Old system generated 4 arrays of scattered terms (`exact_phrases`, `title_terms`, `abstract_terms`, `general_terms`), producing 12+ loose queries returning 200+ low-relevance papers
-- **Solution**: New academic keyword engine generates focused `primary_keyword` + `secondary_keywords` + `query_combinations` with AND logic on `abs:` field
-- **Type Change**: `ArxivSearchStructured` replaced from 4 arrays → 3 fields:
-  ```typescript
-  // OLD
-  { exact_phrases: string[], title_terms: string[], abstract_terms: string[], general_terms: string[] }
-  // NEW
-  { primary_keyword: string, secondary_keywords: string[], query_combinations: string[] }
-  ```
-- **Result**: ~6 precise queries instead of 12+ loose ones, dramatically higher relevance
+**Files Modified:** 3
+- DeepResearchView.tsx: Separate sort states + tab-specific UI
+- PaperResults.tsx: New sort algorithms (45 lines vs 130 lines)
+- ResearchContext.tsx: Added timestamp when papers added to accumulation
 
-**New: Multi-Source Search Aggregator**
-- **File**: `services/searchAggregator.ts`
-- **Purpose**: Single `searchAllSources()` function replaces direct `searchArxiv()` call in ResearchContext
-- **APIs**: ArXiv + OpenAlex + Google CSE + PDFVector + Google Grounding — all in parallel via `Promise.allSettled`
-- **Dedup**: By `pdfUri`, priority: ArXiv → OpenAlex → PDFVector → CSE → Grounding
+**Result:** Each tab maintains independent sort preference ✅
 
-**New: Backend Search Proxy Routes**
-- **File**: `backend/routes/search.js`
-- **Endpoints**: `POST /search/openalex`, `POST /search/google-cse`, `POST /search/pdfvector`
-- **Contract**: All return `{ success: true, data: [] }` on failure — never block other APIs
 
-## Current Technical State
-
-### Backend Architecture (Node.js + Express)
-```javascript
-// server.js - Port 3001
-app.use('/api/v1/gemini', geminiRoutes);    // AI operations + grounding-search
-app.use('/api/v1/database', databaseRoutes); // CRUD operations
-app.use('/api/v1/agent', agentRoutes);       // Research assistant
-app.use('/api/v1/arxiv', arxivRoutes);       // ArXiv proxy (CORS fix)
-app.use('/api/v1/search', searchRoutes);     // NEW: OpenAlex, Google CSE, PDFVector
-```
-
-### Critical Services Status
-- ✅ **Gemini AI**: `gemini-2.5-flash` for generation, `gemini-embedding-001` for embeddings
-- ✅ **Database**: Neon Serverless Postgres with user-scoped queries
-- ✅ **ArXiv**: Backend proxy + new `abs:` AND queries for precision
-- ✅ **OpenAlex**: Free academic DB, no API key required
-- ✅ **Google CSE**: 5 pages × 10 = 50 PDF results
 - ✅ **PDFVector**: Academic search with client-side relevance scoring
 - ✅ **Google Grounding**: Gemini `googleSearch` tool for PDF discovery
 - ⚠️ **OpenAI**: Fallback only (not primary)

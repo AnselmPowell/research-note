@@ -52,6 +52,7 @@
 - Hierarchical folder organization
 - Bidirectional note-to-source linking
 - localStorage auto-save + PostgreSQL persistence
+- Unified paper selection (Feb 27): Single URI-based state across 4 components (SourcesPanel, WebSearchView, DeepSearch, PaperResults) with automatic deduplication
 
 ### 4. Intelligence
 - Context-aware AI assistant

@@ -268,6 +268,11 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const abortControllerRef = useRef<AbortController | null>(null);
   const [selectedArxivIds, setSelectedArxivIds] = useState<Set<string>>(new Set());
   const [selectedWebSourceUris, setSelectedWebSourceUris] = useState<Set<string>>(new Set());
+  // ─── NEW: Unified selection state for papers by URI ─────────────────────────
+  // Tracks selected papers across ALL components (SourcesPanel, WebSearchView, DeepSearch, PaperResults)
+  // URI key: paper.uri (SavedPaper), source.uri (WebSearch), or paper.pdfUri (ArxivPaper)
+  // This enables deduplication and cross-component visibility
+  const [selectedPaperUris, setSelectedPaperUris] = useState<Set<string>>(new Set());
   const [isDeepResearching, setIsDeepResearching] = useState(false);
   const [deepResearchResults, setDeepResearchResults] = useState<DeepResearchNote[]>([]);
   const [contextNotes, setContextNotes] = useState<DeepResearchNote[]>([]);
@@ -464,6 +469,31 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const selectAllArxivPapers = useCallback((ids: string[]) => setSelectedArxivIds(new Set(ids)), []);
   const clearArxivSelection = useCallback(() => setSelectedArxivIds(new Set()), []);
+
+  // ─── NEW: Unified selection functions by URI ──────────────────────────────
+  // These functions work across ALL components using paper URI as the key
+  const isPaperSelectedByUri = useCallback((uri?: string): boolean => {
+    if (!uri) return false;
+    return selectedPaperUris.has(uri);
+  }, [selectedPaperUris]);
+
+  const addToSelectionByUri = useCallback((uri: string) => {
+    if (!uri) return;
+    setSelectedPaperUris(prev => new Set(prev).add(uri));
+  }, []);
+
+  const removeFromSelectionByUri = useCallback((uri: string) => {
+    if (!uri) return;
+    setSelectedPaperUris(prev => {
+      const next = new Set(prev);
+      next.delete(uri);
+      return next;
+    });
+  }, []);
+
+  const getSelectedPaperUris = useCallback((): string[] => {
+    return Array.from(selectedPaperUris);
+  }, [selectedPaperUris]);
 
   // NEW: Helper functions for timing tracking
   const startPhaseTimer = useCallback((phase: ResearchPhase) => {
@@ -1366,6 +1396,12 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     clearArxivSelection,
     selectedWebSourceUris,
     toggleWebSourceSelection,
+    // ─── NEW: Unified selection by URI ─────────────────────────────────────
+    selectedPaperUris,
+    isPaperSelectedByUri,
+    addToSelectionByUri,
+    removeFromSelectionByUri,
+    getSelectedPaperUris,
     isDeepResearching,
     deepResearchResults,
     contextNotes,
@@ -1415,6 +1451,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     researchPhase, gatheringStatus, arxivKeywords, arxivCandidates, filteredCandidates,
     selectedArxivIds, toggleArxivSelection, selectAllArxivPapers, clearArxivSelection,
     selectedWebSourceUris, toggleWebSourceSelection,
+    selectedPaperUris, isPaperSelectedByUri, addToSelectionByUri, removeFromSelectionByUri, getSelectedPaperUris,
     isDeepResearching, deepResearchResults, contextNotes, toggleContextNote, isNoteInContext,
     performWebSearch, performDeepResearch, performHybridResearch, performHybridAnalysis, stopDeepResearch, resetSearch,
     analyzeLoadedPdfs, analyzeArxivPapers, resetAllResearchData, processedPdfs,

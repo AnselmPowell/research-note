@@ -34,11 +34,14 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const hasAutoExpanded = useRef(false);
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
+  const { isPaperSelectedByUri, addToSelectionByUri } = useResearch();
   const { loadedPdfs, loadPdfFromUrl, togglePdfContext, setActivePdf } = useLibrary();
   const { openColumn } = useUI();
   const [viewFailed, setViewFailed] = useState(false);
 
   const isSaved = isPaperSaved(source.uri);
+  // ✅ Check GLOBAL selection state
+  const isGloballySelected = isPaperSelectedByUri(source.uri);
 
   // Sync with global toggle
   useEffect(() => {
@@ -99,7 +102,10 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
       numPages: loadedPdf ? loadedPdf.numPages : undefined
     });
 
-    // FIXED: Also add to AgentResearcher context like other workflows do
+    // ✅ Also add to GLOBAL selection for visibility across all components
+    addToSelectionByUri(source.uri);
+    
+    // Also add to AgentResearcher context like other workflows do
     togglePdfContext(source.uri, source.title);
 
     // Open the sources panel
@@ -117,11 +123,11 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
           <Loader2 size={24} className="text-scholar-600 animate-spin" />
         ) : (
           <button
-            onClick={() => onToggle(!isSelected)}
-            className={`hover:text-scholar-600 transition-colors opacity-100 sm:group-hover/result:opacity-100 ${isSelected ? 'text-scholar-600' : 'text-gray-400 sm:opacity-0'}`}
+            onClick={() => onToggle(!isGloballySelected)}
+            className={`hover:text-scholar-600 transition-colors opacity-100 sm:group-hover/result:opacity-100 ${isGloballySelected ? 'text-scholar-600' : 'text-gray-400 sm:opacity-0'}`}
             aria-label={`Select ${source.title}`}
           >
-            {isSelected ? <Check size={24} className="text-scholar-600" /> : <Square size={24} />}
+            {isGloballySelected ? <Check size={24} className="text-scholar-600" /> : <Square size={24} />}
           </button>
         )}
       </div>

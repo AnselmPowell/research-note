@@ -1,12 +1,14 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useDatabase } from '../../database/DatabaseContext';
 import { useLibrary } from '../../contexts/LibraryContext';
+import { useResearch } from '../../contexts/ResearchContext';
 import { useUI } from '../../contexts/UIContext';
 import { FileText, X, Plus, Upload, Link, Search, Loader2, AlertCircle, CheckSquare, Square, Trash2, Check, Brain } from 'lucide-react';
 
 export const SourcesPanel: React.FC = () => {
     const { savedPapers, deletePaper, savePaper } = useDatabase();
     const { setActivePdf, loadPdfFromUrl, addPdfFile, addPdfFileAndReturn, isPdfInContext, togglePdfContext, loadedPdfs, downloadingUris, removePdf } = useLibrary();
+    const { isPaperSelectedByUri, addToSelectionByUri, removeFromSelectionByUri } = useResearch();
     const { openColumn } = useUI();
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -265,24 +267,28 @@ export const SourcesPanel: React.FC = () => {
     }, [selectedPaperUris.length, filteredPapers, loadedPdfs, isPdfInContext, togglePdfContext]);
 
     const handleToggleSelect = useCallback(async (uri: string, title: string) => {
-        const isCurrentlySelected = selectedPaperUris.includes(uri);
+        // ✅ Check GLOBAL selection state
+        const isCurrentlySelected = isPaperSelectedByUri(uri);
 
         if (isCurrentlySelected) {
-            // Unchecking: Remove from both selection and AI context
-            setSelectedPaperUris(prev => prev.filter(u => u !== uri));
+            // Unchecking: Remove from GLOBAL selection and AI context
+            removeFromSelectionByUri(uri);
+            setSelectedPaperUris(prev => prev.filter(u => u !== uri));  // Local state
             if (isPdfInContext(uri)) {
                 togglePdfContext(uri, title);
             }
         } else {
-            // Checking: Add to selection and AI context
-            setSelectedPaperUris(prev => [...prev, uri]);
+            // Checking: Add to GLOBAL selection and AI context
+            addToSelectionByUri(uri);
+            setSelectedPaperUris(prev => [...prev, uri]);  // Local state
 
             // Ensure PDF is loaded before adding to context
             const isLoaded = loadedPdfs.some(p => p.uri === uri);
             if (!isLoaded) {
                 const result = await loadPdfFromUrl(uri, title);
                 if (result && !result.success) {
-                    // If loading failed, don't add to selection
+                    // If loading failed, remove from global selection
+                    removeFromSelectionByUri(uri);
                     setSelectedPaperUris(prev => prev.filter(u => u !== uri));
                     return;
                 }
@@ -293,7 +299,7 @@ export const SourcesPanel: React.FC = () => {
                 togglePdfContext(uri, title);
             }
         }
-    }, [selectedPaperUris, isPdfInContext, togglePdfContext, loadedPdfs, loadPdfFromUrl]);
+    }, [isPaperSelectedByUri, addToSelectionByUri, removeFromSelectionByUri, isPdfInContext, togglePdfContext, loadedPdfs, loadPdfFromUrl]);
 
     const handleBulkDelete = () => {
         if (selectedPaperUris.length === 0) return;
@@ -498,7 +504,9 @@ export const SourcesPanel: React.FC = () => {
                     <div className="space-y-2">
                         {filteredPapers.map(paper => {
                             const isInContext = isPdfInContext(paper.uri);
-                            const isSelected = selectedPaperUris.includes(paper.uri) || isInContext; // Show as selected if in AI context
+                            // ✅ Check GLOBAL selection state (shows checked if selected anywhere in app)
+                            const isGloballySelected = isPaperSelectedByUri(paper.uri);
+                            const isSelected = isGloballySelected || isInContext; // Show as selected if globally selected OR in AI context
                             const isDownloading = downloadingUris.has(paper.uri);
                             return (
                                 <div
