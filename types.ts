@@ -98,6 +98,8 @@ export interface ArxivPaper {
   harvardReference?: string;
   publisher?: string;
   categories?: string[];
+  // NEW: Track when paper was added to accumulation for dynamic sorting in "My Results"
+  addedToAccumulationAt?: number;
 }
 
 export interface ArxivSearchStructured {

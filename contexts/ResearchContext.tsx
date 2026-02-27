@@ -347,6 +347,27 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [accumulatedPapers.length, accumulatedNotes.length, paperResultsMetadata.lastUpdated]);
 
+  // NEW: CRITICAL FIX - Immediately save paper results when research completes
+  // This prevents notes from being lost if user refreshes before debounce fires
+  useEffect(() => {
+    if (researchPhase === 'completed' && (accumulatedPapers.length > 0 || accumulatedNotes.length > 0)) {
+      console.log('[ResearchContext] 🔒 RESEARCH COMPLETED - Saving paper results to localStorage immediately!', {
+        papers: accumulatedPapers.length,
+        notes: accumulatedNotes.length,
+        timestamp: new Date().toISOString()
+      });
+      
+      // IMMEDIATE save (no debounce) to guarantee data is persisted
+      localStorageService.savePaperResultsAccumulation({
+        accumulatedPapers,
+        accumulatedNotes,
+        paperResultsMetadata
+      });
+      
+      console.log('[ResearchContext] ✅ Paper results saved to localStorage on completion');
+    }
+  }, [researchPhase]);
+
   // NEW: Track when first note is received (check filteredCandidates where notes actually live)
   useEffect(() => {
     if (timeToFirstNotes === null && researchTimings) {
@@ -532,7 +553,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Merge new papers (combine notes if duplicate ID)
       papers.forEach(newPaper => {
         if (merged[newPaper.id]) {
-          // Paper already exists - merge notes
+          // Paper already exists - preserve existing notes unless new ones are provided
           const existingNotes = merged[newPaper.id].notes || [];
           const newNotes = newPaper.notes || [];
           
@@ -546,8 +567,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           });
           
           merged[newPaper.id] = {
-            ...merged[newPaper.id],
-            notes: Array.from(noteMap.values())
+            ...newPaper,  // 🔑 FIRST: Fresh paper with fresh timestamp (addedToAccumulationAt)
+            notes: Array.from(noteMap.values())  // 🔑 SECOND: Merged notes (preserve old + new)
           };
           console.log(`[CONTEXT-ADDTOPAPER] 🔄 Merged notes for paper ${newPaper.id}: ${Array.from(noteMap.values()).length} total notes`);
         } else {
@@ -968,6 +989,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     
     // NEW: Add papers to accumulatedPapers IMMEDIATELY (at research start)
     // Papers start with 'pending' status and empty notes, then get updated in real-time
+    // IMPORTANT: Even if papers already exist in accumulation, we update their timestamp
+    // so they appear in the "recent batch" at the top (for re-analysis)
     if (pdfs.length > 0 || arxivPapers.length > 0) {
       console.log('[ResearchContext] 📥 Adding papers to accumulatedPapers at research START');
       
@@ -985,13 +1008,15 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           references: pdf.references || [],
           harvardReference: '',
           publisher: '',
-          categories: []
+          categories: [],
+          addedToAccumulationAt: Date.now()  // NEW: Track when added (including re-analysis)
         } as ArxivPaper)),
         // Add ArXiv papers with reset status
         ...arxivPapers.map(paper => ({
           ...paper,
           analysisStatus: 'pending' as const,
-          notes: []
+          notes: [],
+          addedToAccumulationAt: Date.now()  // NEW: Track when added (including re-analysis)
         }))
       ];
       

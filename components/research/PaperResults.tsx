@@ -118,6 +118,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
   const isStopped = paper.analysisStatus === 'stopped';
 
   const getStatusText = () => {
+    if (paper.analysisStatus === 'pending') return "Waiting to be analysed...";
     if (isDownloading) return "Downloading document...";
     if (isProcessing) return "Reading pages...";
     if (isExtracting) return "Extracting notes...";
@@ -278,7 +279,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
 
             <div className="flex items-center justify-between mt-2">
               <div className="flex items-center gap-3">
-                {(isDownloading || isProcessing || isExtracting) ? (
+                {(paper.analysisStatus === 'pending' || isDownloading || isProcessing || isExtracting) ? (
                   <div className="flex items-center gap-1.5 text-xs font-medium text-scholar-600 dark:text-scholar-400">
                     <Loader2 size={12} className="animate-spin" />
                     <span className="animate-pulse">{getStatusText()}</span>
@@ -669,7 +670,10 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
     return base;
   }, [currentTabCandidates, searchQuery, localFilters]);
 
-  // ─── Filter Step 2: Sort ──────────────────────────────────────────────────────
+  // ─── Smart Sorting for "My Results" Tab ────────────────────────────────────
+  // NEW: Track processing papers to enable dynamic reordering
+  // Papers being processed (status !== 'completed' and !== 'failed') move to top
+  // Papers with notes move above papers still being processed
   const content = useMemo(() => {
     if (sortBy === 'most-relevant-notes') {
       const allNotes = filteredPapers.flatMap(paper =>
@@ -691,7 +695,66 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
     } else if (sortBy === 'newest-papers') {
       return [...filteredPapers].sort((a, b) => getSafeTimestamp(b.publishedDate) - getSafeTimestamp(a.publishedDate));
     } else {
-      return [...filteredPapers].sort((a, b) => (b.notes?.length || 0) - (a.notes?.length || 0));
+      // NEW: Smart sorting for 'relevant-papers' mode  
+      // Identify "current batch" - papers added most recently (within ~30 seconds of newest)
+      // This handles the case where 3 old papers exist, then 3 new papers are added
+      
+      if (filteredPapers.length === 0) return [];
+      
+      // Find the most recent addition time
+      const mostRecentAddTime = Math.max(
+        ...filteredPapers.map(p => p.addedToAccumulationAt || 0)
+      );
+      
+      // Define "recent batch" as papers added within 30 seconds of the most recent
+      const RECENT_BATCH_WINDOW = 30000; // 30 seconds
+      const recentBatchStartTime = mostRecentAddTime - RECENT_BATCH_WINDOW;
+      
+      // Separate papers into batches
+      const recentBatchPapers: ArxivPaper[] = [];
+      const olderBatchPapers: ArxivPaper[] = [];
+      
+      filteredPapers.forEach(paper => {
+        const addedTime = paper.addedToAccumulationAt || 0;
+        if (addedTime >= recentBatchStartTime) {
+          recentBatchPapers.push(paper);
+        } else {
+          olderBatchPapers.push(paper);
+        }
+      });
+      
+      // Sort recent batch: processing papers first, then those with notes first
+      const sortedRecentBatch = recentBatchPapers.sort((a, b) => {
+        const isAProcessing = a.analysisStatus && ['pending', 'downloading', 'processing', 'extracting'].includes(a.analysisStatus);
+        const isBProcessing = b.analysisStatus && ['pending', 'downloading', 'processing', 'extracting'].includes(b.analysisStatus);
+        
+        const aHasNotes = (a.notes?.length || 0) > 0;
+        const bHasNotes = (b.notes?.length || 0) > 0;
+        
+        // If one is processing and the other isn't, processing comes first
+        if (isAProcessing !== isBProcessing) {
+          return isAProcessing ? -1 : 1;
+        }
+        
+        // Both are processing or both are completed
+        // Among processing papers: those with notes come first
+        if (isAProcessing && isBProcessing) {
+          if (aHasNotes !== bHasNotes) {
+            return aHasNotes ? -1 : 1;
+          }
+        }
+        
+        // For completed papers in recent batch: sort by number of notes
+        return (b.notes?.length || 0) - (a.notes?.length || 0);
+      });
+      
+      // Sort older batch: by number of notes
+      const sortedOlderBatch = olderBatchPapers.sort((a, b) => 
+        (b.notes?.length || 0) - (a.notes?.length || 0)
+      );
+      
+      // Combine: recent batch first, then older batch
+      return [...sortedRecentBatch, ...sortedOlderBatch];
     }
   }, [filteredPapers, sortBy, localFilters.query]);
 
