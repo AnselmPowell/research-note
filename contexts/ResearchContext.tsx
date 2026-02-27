@@ -477,6 +477,24 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   }, []);
 
+  // NEW: Sync paper status from processing to accumulated papers
+  // Updates analysisStatus and progressively adds notes as they're extracted
+  const syncPaperStatusToAccumulated = useCallback((paperId: string, newStatus: string, newNotes?: DeepResearchNote[]) => {
+    setAccumulatedPapers(prev => prev.map(paper => {
+      if (paper.id === paperId || paper.pdfUri === paperId) {
+        const updated = { ...paper, analysisStatus: newStatus };
+        if (newNotes && newNotes.length > 0) {
+          // Merge new notes with existing, dedup by quote
+          const existingQuotes = new Set((paper.notes || []).map(n => n.quote));
+          const uniqueNewNotes = newNotes.filter(n => !existingQuotes.has(n.quote));
+          updated.notes = [...(paper.notes || []), ...uniqueNewNotes];
+        }
+        return updated;
+      }
+      return paper;
+    }));
+  }, []);
+
   // NEW: Add papers and notes to accumulation (APPEND, not replace)
   // Handles duplicate merging intelligently
   const addToPaperResults = useCallback((papers: ArxivPaper[], notes: DeepResearchNote[]) => {
@@ -732,6 +750,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const processPaper = async (paper: ArxivPaper) => {
       if (signal?.aborted) return;
       setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: 'downloading' } : p));
+      syncPaperStatusToAccumulated(paper.id, 'downloading');  // NEW: Sync to accumulated
       try {
         if (signal?.aborted) throw new Error("Aborted");
         // FIXED: Pass AbortSignal to fetchPdfBuffer for cancellation support
@@ -760,10 +779,15 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             categories: extracted.metadata.categories
           };
         }));
+        syncPaperStatusToAccumulated(paper.id, 'processing');  // NEW: Sync to accumulated
+        
         if (signal?.aborted) throw new Error("Aborted");
         const relevantPages = await findRelevantPages([{ uri: paper.pdfUri, pages: extracted.pages }], userQuestions.join("\n"), keywords);
         if (relevantPages.length > 0) {
-          const onStreamNotes = (newNotes: DeepResearchNote[]) => setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, notes: [...(p.notes || []), ...newNotes] } : p));
+          const onStreamNotes = (newNotes: DeepResearchNote[]) => {
+            setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, notes: [...(p.notes || []), ...newNotes] } : p));
+            syncPaperStatusToAccumulated(paper.id, 'extracting', newNotes);  // NEW: Sync notes AND status
+          };
           const allNotes = await extractNotesFromPages(
             relevantPages,
             userQuestions.join("\n"),
@@ -774,15 +798,19 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           );
           if (signal?.aborted) throw new Error("Aborted");
           setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: 'completed', notes: allNotes } : p));
+          syncPaperStatusToAccumulated(paper.id, 'completed', allNotes);  // NEW: Final sync
         } else {
           setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: 'completed', notes: [] } : p));
+          syncPaperStatusToAccumulated(paper.id, 'completed', []);  // NEW: Final sync
         }
       } catch (error: any) {
-        setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: (error.message === "Aborted" || signal?.aborted) ? 'stopped' : 'failed' } : p));
+        const finalStatus = (error.message === "Aborted" || signal?.aborted) ? 'stopped' : 'failed';
+        setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: finalStatus } : p));
+        syncPaperStatusToAccumulated(paper.id, finalStatus);  // NEW: Sync failure status
       }
     };
     await asyncPool(PAPER_CONCURRENCY, papers, processPaper);
-  }, []);
+  }, [syncPaperStatusToAccumulated]);
 
   const analyzeLoadedPdfs = useCallback(async (pdfs: LoadedPdf[], questions: string, signal?: AbortSignal) => {
     // CRITICAL: Store PDFs in ref immediately so they're available for append trigger
@@ -829,6 +857,12 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           });
           return updated;
         });
+        
+        // NEW: Sync notes to accumulated papers for first PDF's notes
+        if (newNotes.length > 0 && pdfs.length > 0) {
+          const pdfUri = newNotes[0].pdfUri;
+          syncPaperStatusToAccumulated(pdfUri, 'extracting', newNotes);  // NEW: Sync notes as they arrive
+        }
       };
 
       for (const pdf of pdfs) {
@@ -836,6 +870,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         try {
           // Update status to analyzing
           updateUploadedPaperStatus(pdf.uri, 'processing');
+          syncPaperStatusToAccumulated(pdf.uri, 'processing');  // NEW: Sync to accumulated
 
           const relevantPages = await findRelevantPages([{ uri: pdf.uri, pages: pdf.pages }], questions, queries);
 
@@ -843,6 +878,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             // Update status to extracting
             if (!signal?.aborted) {
               updateUploadedPaperStatus(pdf.uri, 'extracting');
+              syncPaperStatusToAccumulated(pdf.uri, 'extracting');  // NEW: Sync to accumulated
             }
 
             console.log(`\n[CONTEXT-ANALYZE-PDF] 🔄 Calling extractNotesFromPages for PDF: ${pdf.uri}`);
@@ -883,10 +919,15 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             if (allNotes && allNotes.length > 0) {
               console.log(`[CONTEXT-ANALYZE-PDF] 🎯 Calling onStreamUpdate with ${allNotes.length} notes`);
               onStreamUpdate(allNotes);
+              syncPaperStatusToAccumulated(pdf.uri, 'completed', allNotes);  // NEW: Final sync with all notes
               console.log(`[CONTEXT-ANALYZE-PDF] ✅ onStreamUpdate complete - notes should be in deepResearchResults now`);
             } else {
               console.log(`[CONTEXT-ANALYZE-PDF] ⚠️  No notes returned from extractNotesFromPages`);
+              syncPaperStatusToAccumulated(pdf.uri, 'completed', []);  // NEW: Final sync
             }
+          } else {
+            // No relevant pages - mark as completed anyway
+            syncPaperStatusToAccumulated(pdf.uri, 'completed', []);  // NEW: Sync completion
           }
 
           // Mark as completed
@@ -898,6 +939,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           console.error(e);
           if (!signal?.aborted) {
             updateUploadedPaperStatus(pdf.uri, 'failed');
+            syncPaperStatusToAccumulated(pdf.uri, 'failed');  // NEW: Sync failure
           }
         }
       }
@@ -912,7 +954,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } finally {
       setIsDeepResearching(false);
     }
-  }, [searchState.query, updateUploadedPaperStatus]);
+  }, [searchState.query, updateUploadedPaperStatus, syncPaperStatusToAccumulated]);
 
   const performHybridResearch = useCallback(async (pdfs: LoadedPdf[], arxivPapers: ArxivPaper[], questions: string[], keywords: string[]) => {
     if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -923,6 +965,40 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Must happen before phase change to avoid race condition in AgentResearcher append trigger
     console.log('[ResearchContext] 🔄 Setting processedPdfs to:', pdfs.map(p => p.uri));
     setProcessedPdfs(pdfs);
+    
+    // NEW: Add papers to accumulatedPapers IMMEDIATELY (at research start)
+    // Papers start with 'pending' status and empty notes, then get updated in real-time
+    if (pdfs.length > 0 || arxivPapers.length > 0) {
+      console.log('[ResearchContext] 📥 Adding papers to accumulatedPapers at research START');
+      
+      const initialPapers = [
+        // Add PDFs as paper objects
+        ...pdfs.map(pdf => ({
+          id: pdf.uri,
+          pdfUri: pdf.uri,
+          title: pdf.metadata.title || pdf.file.name,
+          authors: pdf.metadata.author ? [pdf.metadata.author] : [],
+          analysisStatus: 'pending' as const,
+          notes: [],
+          summary: pdf.text?.substring(0, 500) || '',
+          publishedDate: new Date().toISOString(),
+          references: pdf.references || [],
+          harvardReference: '',
+          publisher: '',
+          categories: []
+        } as ArxivPaper)),
+        // Add ArXiv papers with reset status
+        ...arxivPapers.map(paper => ({
+          ...paper,
+          analysisStatus: 'pending' as const,
+          notes: []
+        }))
+      ];
+      
+      // Call addToPaperResults to add all papers at once
+      addToPaperResults(initialPapers, []);
+      console.log('[ResearchContext] ✅ Added', initialPapers.length, 'papers to accumulatedPapers');
+    }
     
     console.log('[ResearchContext] 🔍 performHybridResearch called:', {
       pdfsCount: pdfs.length,
@@ -947,7 +1023,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setResearchPhase('completed'); // Always set completed, regardless of arxiv papers
       setGatheringStatus("Analysis complete.");
     }
-  }, [analyzeLoadedPdfs, analyzeArxivPapers, setProcessedPdfs]);
+  }, [analyzeLoadedPdfs, analyzeArxivPapers, setProcessedPdfs, addToPaperResults]);
 
   const processUserUrls = useCallback(async (urls: string[], signal?: AbortSignal): Promise<LoadedPdf[]> => {
     const userPdfs: LoadedPdf[] = [];
