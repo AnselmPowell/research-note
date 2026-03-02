@@ -182,24 +182,56 @@ async function fetchViaBrowserDirect(uri: string, signal?: AbortSignal): Promise
 }
 
 /**
- * Strategy 3: Public proxy fallback (last resort)
- * Lower success rate but catches protected PDFs
+ * Strategy 3: Dynamic Public Proxy Rotation (last resort)
+ * Rotates through multiple high-performance gateways if one fails.
+ * Bypasses CORS and site-level bot detection.
  */
+// ✅ DYNAMIC PROXY CLUSTER
+const CORS_GATEWAYS = [
+  (uri: string) => `https://corsproxy.io/?${encodeURIComponent(uri)}`,                  // Gateway 1: Stable
+  (uri: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(uri)}`,      // Gateway 2: Academic friendly
+  (uri: string) => `https://thingproxy.freeboard.io/fetch/${uri}`                        // Gateway 3: High-capacity
+];
+
 async function fetchViaProxy(uri: string, signal?: AbortSignal): Promise<ArrayBuffer> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000); // 12s timeout
+  const timeout = setTimeout(() => controller.abort(), 12000); // 12s total timeout
+
+  let lastError: any = null;
 
   try {
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(uri)}`;
-    const response = await fetch(proxyUrl, {
-      signal: signal || controller.signal
-    });
+    // Try each gateway in the cluster
+    for (const getProxyUrl of CORS_GATEWAYS) {
+      try {
+        if (signal?.aborted) throw new Error('Aborted');
+        
+        const proxyUrl = getProxyUrl(uri);
+        console.log(`[PDF Service] 🔀 Trying proxy gateway for ${uri}: ${proxyUrl.substring(0, 40)}...`);
 
-    if (!response.ok) {
-      throw new Error(`ProxyError:Status=${response.status}`);
+        const response = await fetch(proxyUrl, {
+          signal: signal || controller.signal,
+          headers: {
+            'Accept': 'application/pdf,application/octet-stream;q=0.9,*/*;q=0.8'
+          }
+        });
+
+        if (response.ok) {
+          const buffer = await response.arrayBuffer();
+          if (buffer.byteLength > 100) { // Basic sanity check
+             return buffer;
+          }
+        }
+        
+        throw new Error(`ProxyStatus_${response.status}`);
+      } catch (proxyError: any) {
+        lastError = proxyError;
+        if (proxyError.name === 'AbortError') throw proxyError;
+        console.warn(`[PDF Service] Gateway failed, rotating cluster...`);
+        // Continue to next gateway
+      }
     }
 
-    return await response.arrayBuffer();
+    throw lastError || new Error('All proxy gateways failed');
   } finally {
     clearTimeout(timeout);
   }

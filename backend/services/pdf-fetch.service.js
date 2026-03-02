@@ -3,6 +3,9 @@ const logger = require('../utils/logger');
 const MAX_PDF_SIZE = 25 * 1024 * 1024; // 25MB
 const TIMEOUT_MS = 15_000; // 15 seconds
 
+// ✅ STEALTH SIGNATURES: Mimic a real desktop browser to bypass WAFs/Bot Detection
+const REAL_BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
+
 /**
  * Server-side PDF fetch with robust error handling
  * No CORS issues (server-to-server)
@@ -18,26 +21,38 @@ async function fetchPdfBufferServer(uri) {
 
   try {
     // Validate URL format
-    let parsedUrl;
+    let url;
     try {
-      parsedUrl = new URL(uri);
+      url = new URL(uri);
     } catch {
       throw new Error('InvalidURL');
     }
 
-    // Fetch with proper headers (server-to-server, no CORS)
-    const response = await fetch(parsedUrl.toString(), {
-      headers: {
-        'Accept': 'application/pdf,application/octet-stream;q=0.9,*/*;q=0.8',
-        'User-Agent': 'Mozilla/5.0 (compatible; ResearchAssistant/1.0; +https://research-note.app)',
-        'Connection': 'keep-alive'
-      },
-      redirect: 'follow', // Follow redirects (MDPI, repositories, CDNs)
-      signal: controller.signal,
-      timeout: TIMEOUT_MS
-    });
+    const performFetch = async (targetUri) => {
+      return await fetch(targetUri, {
+        headers: {
+          'Accept': 'application/pdf,application/octet-stream;q=0.9,*/*;q=0.8',
+          'User-Agent': REAL_BROWSER_UA, // Spoof real browser
+          'Referer': url.origin,         // Spoof self-referral (bypasses ORNL/NLR/CDM)
+          'Connection': 'keep-alive'
+        },
+        redirect: 'follow', // Follow MDPI/CDM redirects
+        signal: controller.signal,
+        timeout: TIMEOUT_MS
+      });
+    };
 
-    // Check HTTP status
+    // Strategy A: Direct fetch with stealth headers
+    let response = await performFetch(uri);
+
+    // Strategy B: If failed and URL has parameters (like versioning), cleansing can bypass protection
+    if (!response.ok && uri.includes('?')) {
+      logger.info(`[PDF Fetch Server] Strategy A (Parametric) failed for ${uri}, trying cleansed URL...`);
+      const cleansedUri = uri.split('?')[0];
+      response = await performFetch(cleansedUri);
+    }
+
+    // Check HTTP status finally
     if (!response.ok) {
       throw new Error(`HTTP_${response.status}`);
     }

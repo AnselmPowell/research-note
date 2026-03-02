@@ -1439,7 +1439,7 @@ async function performSearch(query) {
       const params = new URLSearchParams({
         key: config.googleSearchKey,
         cx: config.googleSearchCx,
-        q: q.trim(), // Search with original query, keep PDF filters if user included them
+        q: `${q.trim()} filetype:pdf`, // Enforce PDF filetype
         num: '10'
       });
 
@@ -1456,10 +1456,13 @@ async function performSearch(query) {
   const resultsArrays = await Promise.all(allQueries.map(fetchSingle));
   const uniqueSourcesMap = new Map();
 
-  // Accept all valid results, not just those with "pdf" in the URL
+  // ONLY accept PDF results — our pipeline requires downloadable PDFs
   resultsArrays.flat().forEach(item => {
     const link = item.link || '';
-    if (link && !uniqueSourcesMap.has(link)) {
+    const isPdf = link.toLowerCase().endsWith('.pdf') || 
+                 (item.fileFormat && item.fileFormat.toLowerCase().includes('pdf'));
+
+    if (link && isPdf && !uniqueSourcesMap.has(link)) {
       uniqueSourcesMap.set(link, {
         title: item.title || 'Untitled',
         uri: link,

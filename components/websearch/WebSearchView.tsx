@@ -35,13 +35,16 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
   const hasAutoExpanded = useRef(false);
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
   const { isPaperSelectedByUri, addToSelectionByUri } = useResearch();
-  const { loadedPdfs, loadPdfFromUrl, togglePdfContext, setActivePdf } = useLibrary();
+  const { loadedPdfs, loadPdfFromUrl, togglePdfContext, setActivePdf, downloadingUris } = useLibrary();
   const { openColumn } = useUI();
   const [viewFailed, setViewFailed] = useState(false);
+  const [showManualInstruction, setShowManualInstruction] = useState(false);
 
   const isSaved = isPaperSaved(source.uri);
   // ✅ Check GLOBAL selection state
   const isGloballySelected = isPaperSelectedByUri(source.uri);
+
+  const isActuallyDownloading = downloadingUris.has(source.uri);
 
   // Sync with global toggle
   useEffect(() => {
@@ -68,7 +71,30 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
     }
   };
 
+  const handleToggleClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowManualInstruction(false);
 
+    // 1. If currently unselecting, just toggle off
+    if (isGloballySelected) {
+      onToggle(false);
+      return;
+    }
+
+    // 2. If selecting, we MUST verify the PDF is downloadable first
+    // This connects to the backend fetch-pdf service
+    const result = await loadPdfFromUrl(source.uri, source.title);
+
+    if (result && result.success) {
+      // PDF verified and loaded into memory
+      onToggle(true);
+    } else {
+      // Verification failed
+      setShowManualInstruction(true);
+      console.warn('[WebSearch] Failed to verify PDF for selection:', result?.error);
+    }
+  };
 
   const handleAddToSources = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -82,16 +108,18 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
     // First, ensure the PDF is loaded
     const loaded = loadedPdfs.find(p => p.uri === source.uri);
     let loadedPdf = loaded;
-    
+
     if (!loaded) {
       // Need to load the PDF first
+      setShowManualInstruction(false);
       const result = await loadPdfFromUrl(source.uri, source.title);
       // @ts-ignore
       if (result && !result.success) {
         // Failed to load PDF
+        setShowManualInstruction(true);
         return;
       }
-      
+
       // Use the PDF from the result to avoid stale closure issue
       loadedPdf = result.pdf;
     }
@@ -104,7 +132,7 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
 
     // ✅ Also add to GLOBAL selection for visibility across all components
     addToSelectionByUri(source.uri);
-    
+
     // Also add to AgentResearcher context like other workflows do
     togglePdfContext(source.uri, source.title);
 
@@ -119,11 +147,11 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
   return (
     <div className="flex items-start gap-4 mb-6 px-2 sm:px-0 group/result animate-fade-in w-full max-w-full overflow-hidden transition-colors">
       <div className="pt-1 mr-2 flex-shrink-0">
-        {isDownloading ? (
+        {isActuallyDownloading ? (
           <Loader2 size={24} className="text-scholar-600 animate-spin" />
         ) : (
           <button
-            onClick={() => onToggle(!isGloballySelected)}
+            onClick={handleToggleClick}
             className={`hover:text-scholar-600 transition-colors opacity-100 sm:group-hover/result:opacity-100 ${isGloballySelected ? 'text-scholar-600' : 'text-gray-400 sm:opacity-0'}`}
             aria-label={`Select ${source.title}`}
           >
@@ -152,10 +180,10 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
               Failed to load
 
 
-              </span>
+            </span>
           )}
 
-          
+
 
           <div className="flex items-center gap-2 ml-2 opacity-100 sm:opacity-0 sm:group-hover/result:opacity-100 transition-opacity">
             {onView && (
@@ -225,6 +253,14 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
             {source.title}
           </h3>
         </a>
+
+        {/* ✅ Simple one-line error message */}
+        {showManualInstruction && !isGloballySelected && !isSaved && (
+          <span className="flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 animate-fade-in mt-1">
+            <AlertCircle size={12} />
+            Download failed. Please download manually and upload.
+          </span>
+        )}
 
         <div className="text-sm text-[#4d5156] dark:text-gray-300 leading-relaxed line-clamp-3 mb-2">
           {source.snippet}

@@ -73,17 +73,17 @@ export const DeepResearchView: React.FC = () => {
     (activeSearchMode === 'web' || activeSearchMode === 'deep') ? activeSearchMode : 'deep'
   );
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
-  
+
   // ─── Separate sort states for each tab ─────────────────────────────────────
   // Deep Research tab: 'most-relevant-notes' | 'relevant-papers' | 'newest-papers'
   const [sortByDeep, setSortByDeep] = useState<SortOption>('relevant-papers');
   // My Results tab: 'most-relevant-notes' | 'recent-research' | 'alphabetical'
   const [sortByResults, setSortByResults] = useState<any>('recent-research');
-  
+
   // Use correct sort state and handler based on active tab
   const currentSort = activeTab === 'results' ? sortByResults : sortByDeep;
   const handleSortChange = activeTab === 'results' ? setSortByResults : setSortByDeep;
-  
+
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [allNotesExpanded, setAllNotesExpanded] = useState(true);
   const [isNoteSelectMenuOpen, setIsNoteSelectMenuOpen] = useState(false);
@@ -247,11 +247,11 @@ export const DeepResearchView: React.FC = () => {
           <div className="space-y-6">
             {webSearchSources.length > 0 ? (
               webSearchSources.map((source, idx) => (
-                <WebSearchView 
-                  key={`${source.url}-${idx}`} 
+                <WebSearchView
+                  key={`${source.url}-${idx}`}
                   source={source}
                   isSelected={selectedWebSourceUris.has(source.uri)}
-                  onToggle={() => toggleWebSourceSelection(source.uri)}
+                  onToggle={(checked) => toggleWebSourceSelection(source.uri, checked)}
                 />
               ))
             ) : (
