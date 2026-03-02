@@ -31,6 +31,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     updateSearchBar,
     clearSearchBar,
     researchPhase,
+    isPaperSelectedByUri, // New: check selection
+    addToSelectionByUri, // New: add to selection
     searchHistory, // New
     removeFromHistory, // New
     clearHistory, // New
@@ -45,7 +47,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   } = useResearch();
 
   const { setColumnVisibility, openColumn } = useUI();
-  const { addPdfFile, loadPdfFromUrl, isPdfLoaded, addLoadedPdf, failedUrlErrors } = useLibrary();
+  const { addPdfFile, addLocalPdf, loadPdfFromUrl, addRemotePdf, isPdfLoaded, addLoadedPdf, failedUrlErrors } = useLibrary();
 
   const [mode, setMode] = useState<SearchMode>(initialMode || activeSearchMode);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -228,21 +230,33 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === 'application/pdf') {
-      await addPdfFile(file);
-      // FIXED: Don't switch setActiveSearchMode to 'deep' here. Stay in 'upload' mode.
-      setColumnVisibility(prev => ({ ...prev, left: true, right: true, middle: false }));
-      // Reset input so same file can be selected again if needed
-      e.target.value = '';
+      const result = await addLocalPdf(file);
+      if (result.success && result.pdf) {
+        // Automatically select for ongoing research
+        addToSelectionByUri(result.pdf.uri);
+
+        // Open viewer and clear input
+        setColumnVisibility(prev => ({ ...prev, right: true, middle: false }));
+        openColumn('right');
+        e.target.value = '';
+      } else {
+        flashError("Failed to process file");
+      }
     }
   };
 
   const handleUrlUpload = async () => {
     const url = searchBarState.mainInput.trim();
     if (url) {
-      const result = await loadPdfFromUrl(url);
-      if (result.success) {
+      const result = await addRemotePdf(url);
+      if (result.success && result.pdf) {
+        // Automatically select for ongoing research
+        addToSelectionByUri(result.pdf.uri);
+
         updateSearchBar({ mainInput: '' });
-        setColumnVisibility(prev => ({ ...prev, left: true, right: true, middle: false }));
+        // Switch into upload-compatible layout
+        setColumnVisibility(prev => ({ ...prev, right: true, middle: false }));
+        openColumn('right'); // Ensure it's active
       } else {
         if (result.error) {
           flashError(`${result.error.reason}: ${result.error.actionableMsg.split('.')[0]}`);

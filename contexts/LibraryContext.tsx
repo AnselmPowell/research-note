@@ -15,6 +15,8 @@ interface LibraryContextType {
 
   setSearchHighlight: (highlight: { text: string; fallbackPage?: number } | null) => void;
   loadPdfFromUrl: (uri: string, title?: string, author?: string) => Promise<{ success: boolean, pdf?: LoadedPdf, error?: { reason: string, actionableMsg: string } }>;
+  addRemotePdf: (url: string) => Promise<{ success: boolean, pdf?: LoadedPdf, error?: { reason: string, actionableMsg: string } }>;
+  addLocalPdf: (file: File) => Promise<{ success: boolean, pdf?: LoadedPdf, error?: string }>;
   addPdfFile: (file: File) => Promise<void>;
   addPdfFileAndReturn: (file: File) => Promise<LoadedPdf>; // New: returns the PDF object directly
   addLoadedPdf: (pdf: LoadedPdf) => void; // New: directly add processed PDF
@@ -32,7 +34,7 @@ interface LibraryContextType {
 const LibraryContext = createContext<LibraryContextType | undefined>(undefined);
 
 export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { savedPapers, isPaperSaved } = useDatabase();
+  const { savedPapers, isPaperSaved, savePaper } = useDatabase();
 
   const [loadedPdfs, setLoadedPdfs] = useState<LoadedPdf[]>([]);
   const [activePdfUri, setActivePdfUri] = useState<string | null>(null);
@@ -154,6 +156,86 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  /**
+   * Unified function to download a PDF from URL, save to database, and add to AI context.
+   */
+  const addRemotePdf = async (url: string): Promise<{ success: boolean, pdf?: LoadedPdf, error?: { reason: string, actionableMsg: string } }> => {
+    const result = await loadPdfFromUrl(url.trim());
+
+    if (result.success && result.pdf) {
+      const loadedPdf = result.pdf;
+
+      // Create paper data for persistence
+      const paperData = {
+        uri: loadedPdf.uri,
+        pdfUri: loadedPdf.uri,
+        title: loadedPdf.metadata?.title || 'Untitled Document',
+        authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
+        abstract: loadedPdf.metadata?.subject || '',
+        summary: loadedPdf.metadata?.subject || '',
+        publishedDate: loadedPdf.metadata?.publishedDate || null,
+        harvardReference: loadedPdf.metadata?.harvardReference || null,
+        publisher: loadedPdf.metadata?.publisher || null,
+        categories: [],
+        numPages: loadedPdf.numPages
+      };
+
+      try {
+        // Save to database/localStorage
+        await savePaper(paperData);
+
+        // Add to AI context automatically
+        if (!contextUris.has(loadedPdf.uri)) {
+          setContextUris(prev => new Set(prev).add(loadedPdf.uri));
+        }
+
+        return result;
+      } catch (err) {
+        console.error("[LibraryContext] Failed to save remote paper:", err);
+        return { success: false, error: { reason: "Save Failed", actionableMsg: "PDF downloaded but could not be saved to your library." } };
+      }
+    }
+
+    return result;
+  };
+
+  /**
+   * Unified function to add a local file to the library, save to DB, and add to AI context.
+   */
+  const addLocalPdf = async (file: File): Promise<{ success: boolean, pdf?: LoadedPdf, error?: string }> => {
+    try {
+      const loadedPdf = await addPdfFileAndReturn(file);
+
+      // Create paper data for persistence
+      const paperData = {
+        uri: loadedPdf.uri,
+        pdfUri: loadedPdf.uri,
+        title: loadedPdf.metadata?.title || file.name.replace('.pdf', ''),
+        authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
+        abstract: loadedPdf.metadata?.subject || '',
+        summary: loadedPdf.metadata?.subject || '',
+        publishedDate: loadedPdf.metadata?.publishedDate || null,
+        harvardReference: loadedPdf.metadata?.harvardReference || null,
+        publisher: loadedPdf.metadata?.publisher || null,
+        categories: [],
+        numPages: loadedPdf.numPages
+      };
+
+      // Save to database/localStorage
+      await savePaper(paperData);
+
+      // Add to AI context automatically
+      if (!contextUris.has(loadedPdf.uri)) {
+        setContextUris(prev => new Set(prev).add(loadedPdf.uri));
+      }
+
+      return { success: true, pdf: loadedPdf };
+    } catch (err) {
+      console.error("[LibraryContext] Failed to save local paper:", err);
+      return { success: false, error: "Failed to process local PDF" };
+    }
+  };
+
   const addPdfFile = async (file: File) => {
     await addPdfFileAndReturn(file);
   };
@@ -249,6 +331,8 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
       contextUris,
       setSearchHighlight,
       loadPdfFromUrl,
+      addRemotePdf,
+      addLocalPdf,
       addPdfFile,
       addPdfFileAndReturn,
       addLoadedPdf,

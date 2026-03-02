@@ -7,7 +7,7 @@ import { FileText, X, Plus, Upload, Link, Search, Loader2, AlertCircle, CheckSqu
 
 export const SourcesPanel: React.FC = () => {
     const { savedPapers, deletePaper, savePaper } = useDatabase();
-    const { setActivePdf, loadPdfFromUrl, addPdfFile, addPdfFileAndReturn, isPdfInContext, togglePdfContext, loadedPdfs, downloadingUris, removePdf } = useLibrary();
+    const { setActivePdf, loadPdfFromUrl, addRemotePdf, addLocalPdf, addPdfFile, addPdfFileAndReturn, isPdfInContext, togglePdfContext, loadedPdfs, downloadingUris, removePdf } = useLibrary();
     const { isPaperSelectedByUri, addToSelectionByUri, removeFromSelectionByUri } = useResearch();
     const { openColumn } = useUI();
 
@@ -110,30 +110,12 @@ export const SourcesPanel: React.FC = () => {
                     currentFileName: file.name
                 });
 
-                // Load PDF into memory and get the result directly
-                const loadedPdf = await addPdfFileAndReturn(file);
+                // Use unified local upload function
+                const result = await addLocalPdf(file);
 
-                if (loadedPdf) {
-                    // Create paper data using the returned PDF (eliminates stale closure issue)
-                    const paperData = {
-                        uri: loadedPdf.uri,
-                        pdfUri: loadedPdf.uri,
-                        title: loadedPdf.metadata?.title || file.name.replace('.pdf', ''),
-                        authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
-                        abstract: loadedPdf.metadata?.subject || '',
-                        summary: loadedPdf.metadata?.subject || '',
-                        publishedDate: loadedPdf.metadata?.publishedDate || null,
-                        harvardReference: loadedPdf.metadata?.harvardReference || null,
-                        publisher: loadedPdf.metadata?.publisher || null,
-                        categories: [],
-                        numPages: loadedPdf.numPages
-                    };
-
-                    // Save to database/localStorage
-                    await savePaper(paperData);
-
-                    // FIXED: Also add to AgentResearcher context for consistency
-                    togglePdfContext(paperData.uri, paperData.title);
+                if (result.success && result.pdf) {
+                    // Sync with research selection
+                    addToSelectionByUri(result.pdf.uri);
                 }
             }
 
@@ -156,31 +138,10 @@ export const SourcesPanel: React.FC = () => {
         setIsLoading(true);
         setUploadError(null);
         try {
-            const result = await loadPdfFromUrl(urlInput.trim());
+            const result = await addRemotePdf(urlInput.trim());
             if (result.success && result.pdf) {
-                // Use the PDF object directly from the result (eliminates stale closure issue)
-                const loadedPdf = result.pdf;
-
-                // Create paper data using the returned PDF
-                const paperData = {
-                    uri: loadedPdf.uri,
-                    pdfUri: loadedPdf.uri,
-                    title: loadedPdf.metadata?.title || 'Untitled Document',
-                    authors: loadedPdf.metadata?.author ? [loadedPdf.metadata.author] : [],
-                    abstract: loadedPdf.metadata?.subject || '',
-                    summary: loadedPdf.metadata?.subject || '',
-                    publishedDate: loadedPdf.metadata?.publishedDate || null,
-                    harvardReference: loadedPdf.metadata?.harvardReference || null,
-                    publisher: loadedPdf.metadata?.publisher || null,
-                    categories: [],
-                    numPages: loadedPdf.numPages
-                };
-
-                // Save to database/localStorage
-                await savePaper(paperData);
-
-                // FIXED: Also add to AgentResearcher context for consistency
-                togglePdfContext(paperData.uri, paperData.title);
+                // Unified selection sync
+                addToSelectionByUri(result.pdf.uri);
 
                 setUrlInput('');
                 setUploadMode('search');

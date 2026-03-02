@@ -189,7 +189,7 @@ function convertMatchToSearchResult(
 }
 
 export const PdfWorkspace: React.FC = () => {
-    const { loadedPdfs, activePdfUri, loadPdfFromUrl, addPdfFile, removePdf, setActivePdf, searchHighlight, setSearchHighlight, failedUrlErrors } = useLibrary();
+    const { loadedPdfs, activePdfUri, loadPdfFromUrl, addRemotePdf, addLocalPdf, addPdfFile, removePdf, setActivePdf, searchHighlight, setSearchHighlight, failedUrlErrors } = useLibrary();
 
     const [internalPdfs, setInternalPdfs] = useState<InternalPdf[]>([]);
     const [pdfjsLib, setPdfjsLib] = useState<any>(null);
@@ -251,7 +251,7 @@ export const PdfWorkspace: React.FC = () => {
         const file = event.target.files?.[0];
         if (file) {
             setIsLoading(true);
-            addPdfFile(file).finally(() => {
+            addLocalPdf(file).finally(() => {
                 setIsLoading(false);
                 setIsAddMenuOpen(false);
             });
@@ -265,7 +265,7 @@ export const PdfWorkspace: React.FC = () => {
         if (internalPdfs.length >= 10) { alert('Limit of open PDFs reached.'); return; }
         setUploadError(null);
         setIsLoading(true);
-        const result = await loadPdfFromUrl(url);
+        const result = await addRemotePdf(url);
         setIsLoading(false);
         if (result.success) {
             setIsAddMenuOpen(false);
@@ -554,7 +554,7 @@ export const PdfWorkspace: React.FC = () => {
                     <PdfUploader
                         onFileChange={(f) => {
                             setIsLoading(true);
-                            addPdfFile(f).finally(() => setIsLoading(false));
+                            addLocalPdf(f).finally(() => setIsLoading(false));
                         }}
                         onUrlSubmit={handleUrlSubmit}
                         error={uploadError}
