@@ -712,6 +712,22 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     console.log('[ResearchContext] ✅ Cleared all paper results and removed from database');
   }, [accumulatedPapers]);
 
+  // ✅ NEW: Complete reset of accumulated data (called on successful migration)
+  // Clears React state to match what's now in the database (not localStorage)
+  const resetAccumulatedDataForMigration = useCallback(() => {
+    console.log('[ResearchContext] 🔄 Resetting accumulated data for migration...');
+    
+    // Reset ref to prevent pending debounces from writing back cleared data
+    hasAppendedResultsRef.current = false;
+    
+    // Clear React state completely
+    setAccumulatedPapers([]);
+    setAccumulatedNotes([]);
+    setPaperResultsMetadata({});
+    
+    console.log('[ResearchContext] ✅ Accumulated data reset for migration');
+  }, []);
+
   // NEW: Remove a single paper from results
   const removePaperFromResults = useCallback((paperId: string) => {
     setAccumulatedPapers(prev => prev.filter(p => p.id !== paperId));
@@ -1444,7 +1460,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     paperResultsMetadata,
     addToPaperResults,
     clearPaperResults,
-    removePaperFromResults
+    removePaperFromResults,
+    resetAccumulatedDataForMigration
   }), [
     activeSearchMode, searchState, searchBarState, updateSearchBar, clearSearchBar,
     searchHistory, addToHistory, removeFromHistory, clearHistory,
@@ -1460,7 +1477,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     researchTimings, timeToFirstNotes, timeToFirstPaper, searchMetrics,
     // NEW: Accumulated results
     accumulatedPapers, accumulatedNotes, paperResultsMetadata,
-    addToPaperResults, clearPaperResults, removePaperFromResults
+    addToPaperResults, clearPaperResults, removePaperFromResults, resetAccumulatedDataForMigration
   ]);
 
   return (

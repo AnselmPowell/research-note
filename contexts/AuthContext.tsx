@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authClient } from '../auth/neonAuth';
 import { dataMigrationService } from '../utils/dataMigrationService';
+import { localStorageService } from '../utils/localStorageService';
 import { signInWithMicrosoft as customMicrosoftSignIn } from '../auth/microsoftAuth';
 import { dbService } from '../database/db';
 
@@ -69,7 +70,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('[Auth] Signing in user:', email);
       
-      // Check if there's localStorage data to migrate
       const hasDataToMigrate = dataMigrationService.hasLocalDataToMigrate();
       
       const result = await authClient.signIn.email({ email, password });
@@ -100,16 +100,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         setUser(sessionResult.data.user);
         
-        // Offer to migrate localStorage data if exists
+        // ✅ NEW: Migrate localStorage data if exists
         if (hasDataToMigrate) {
-          console.log('[Auth] Found local data, migrating to account...');
-          const migrationResult = await dataMigrationService.migrateAnonymousDataToUser(sessionResult.data.user.id);
+          console.log('[Auth] 🔄 Starting data migration...');
           
-          if (migrationResult.success) {
-            console.log('[Auth] Data migration successful');
-          } else {
-            console.warn('[Auth] Data migration failed:', migrationResult.error);
-            // Don't fail the signin, just warn
+          try {
+            const migrationResult = await dataMigrationService.migrateAnonymousDataToUser(
+              sessionResult.data.user.id
+            );
+            
+            if (migrationResult.success) {
+              console.log('[Auth] ✅ Data migration successful:', migrationResult);
+              // Clear "My Results" localStorage
+              localStorageService.clearPaperResultsAfterMigration();
+            } else {
+              console.warn('[Auth] ⚠️ Data migration failed:', migrationResult.error);
+            }
+          } catch (migrationError) {
+            console.error('[Auth] ❌ Migration error:', migrationError);
           }
         }
       } else {
@@ -134,6 +142,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Check if there's localStorage data to migrate
       const hasDataToMigrate = dataMigrationService.hasLocalDataToMigrate();
+      const migrationPreview = dataMigrationService.getMigrationPreview();
+      
+      if (hasDataToMigrate) {
+        console.log('[Auth] 📊 Migration preview:', migrationPreview);
+      }
       
       const result = await authClient.signUp.email({ email, password, name });
       
@@ -147,16 +160,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('[Auth] Sign up successful');
         setUser(sessionResult.data.user);
         
-        // Migrate localStorage data to user account if exists
+        // ✅ NEW: Migrate localStorage data to user account if exists
         if (hasDataToMigrate) {
-          console.log('[Auth] Migrating anonymous data to new account...');
-          const migrationResult = await dataMigrationService.migrateAnonymousDataToUser(sessionResult.data.user.id);
+          console.log('[Auth] 🔄 Starting data migration...');
           
-          if (migrationResult.success) {
-            console.log('[Auth] Data migration successful');
-          } else {
-            console.warn('[Auth] Data migration failed:', migrationResult.error);
-            // Don't fail the signup, just warn
+          try {
+            const migrationResult = await dataMigrationService.migrateAnonymousDataToUser(
+              sessionResult.data.user.id
+            );
+            
+            if (migrationResult.success) {
+              console.log('[Auth] ✅ Data migration successful');
+              console.log('[Auth] 📊 Migrated:', {
+                papers: migrationResult.migratedPapers,
+                notes: migrationResult.migratedNotes,
+                folders: migrationResult.migratedFolders,
+                accumulatedPapers: migrationResult.migratedAccumulatedPapers,
+                accumulatedNotes: migrationResult.migratedAccumulatedNotes
+              });
+              
+              // Clear the "My Results" localStorage now that data is in database
+              localStorageService.clearPaperResultsAfterMigration();
+              
+            } else {
+              console.warn('[Auth] ⚠️ Data migration failed:', migrationResult.error);
+              // Continue anyway - don't fail signup if migration fails
+            }
+          } catch (migrationError) {
+            console.error('[Auth] ❌ Migration error:', migrationError);
+            // Log but don't fail signup
           }
         }
       } else {
@@ -239,15 +271,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('[Auth] Google sign in successful');
         setUser(sessionResult.data.user);
         
-        // Migrate localStorage data if exists
+        // ✅ NEW: Migrate localStorage data if exists
         if (hasDataToMigrate) {
-          console.log('[Auth] Migrating anonymous data...');
-          const migrationResult = await dataMigrationService.migrateAnonymousDataToUser(sessionResult.data.user.id);
+          console.log('[Auth] 🔄 Starting data migration...');
           
-          if (migrationResult.success) {
-            console.log('[Auth] Data migration successful');
-          } else {
-            console.warn('[Auth] Data migration failed:', migrationResult.error);
+          try {
+            const migrationResult = await dataMigrationService.migrateAnonymousDataToUser(
+              sessionResult.data.user.id
+            );
+            
+            if (migrationResult.success) {
+              console.log('[Auth] ✅ Data migration successful:', migrationResult);
+              localStorageService.clearPaperResultsAfterMigration();
+            } else {
+              console.warn('[Auth] ⚠️ Data migration failed:', migrationResult.error);
+            }
+          } catch (migrationError) {
+            console.error('[Auth] ❌ Migration error:', migrationError);
           }
         }
       } else {

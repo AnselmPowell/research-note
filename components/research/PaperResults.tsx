@@ -95,20 +95,20 @@ interface PaperCardProps {
   forceExpanded?: boolean;
   activeQuery?: string;
   onRemovePaper?: (id: string) => void;
+  isSelected?: boolean;
+  onToggleSelection?: (paperId: string) => void;
 }
 
 // ─── PaperCard Component ───────────────────────────────────────────────────────
-const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true, activeQuery = 'all', onRemovePaper }) => {
+const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true, activeQuery = 'all', onRemovePaper, isSelected: propIsSelected, onToggleSelection }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isAbstractExpanded, setIsAbstractExpanded] = useState(false);
-  const { toggleArxivSelection, selectedArxivIds, isPaperSelectedByUri } = useResearch();
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
   const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf, failedUrlErrors, downloadingUris } = useLibrary();
   const { setColumnVisibility, openColumn: openUIColumn } = useUI();
 
-  // ✅ Check GLOBAL selection state by pdfUri (works across all components)
-  const isGloballySelected = isPaperSelectedByUri(paper.pdfUri);
-  const isSelected = isLocal ? isPdfInContext(paper.id) : (isGloballySelected || selectedArxivIds.has(paper.id));
+  // ✅ Use prop-based selection (local to PaperResults) when available, otherwise default to false
+  const isSelected = propIsSelected !== undefined ? propIsSelected : false;
   const isSaved = isPaperSaved(paper.pdfUri);
 
   // NOTE: Use analysisStatus property consistently (not status)
@@ -142,10 +142,11 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
 
   const handleSelectionToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isLocal) {
+    // ✅ Use local selection callback if provided (PaperResults mode), otherwise toggle context
+    if (onToggleSelection) {
+      onToggleSelection(paper.id);
+    } else if (isLocal) {
       togglePdfContext(paper.id, paper.title);
-    } else {
-      toggleArxivSelection(paper.id);
     }
   };
 
@@ -332,7 +333,8 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     prevProps.forceExpanded === nextProps.forceExpanded &&
     prevProps.activeQuery === nextProps.activeQuery &&
     prevProps.isLocal === nextProps.isLocal &&
-    prevProps.onRemovePaper === nextProps.onRemovePaper
+    prevProps.onRemovePaper === nextProps.onRemovePaper &&
+    prevProps.isSelected === nextProps.isSelected
   );
 });
 
@@ -930,6 +932,19 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
     });
   }, [removePaperFromResults]);
 
+  // ✅ NEW: Toggle selection in local accumulation state (isolated to PaperResults tab)
+  const handleToggleAccumulatedSelection = useCallback((paperId: string) => {
+    setAccumulatedSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(paperId)) {
+        next.delete(paperId);
+      } else {
+        next.add(paperId);
+      }
+      return next;
+    });
+  }, []);
+
   const handleResetFilters = useCallback(() => {
     onSearchQueryChange('');
     onLocalFiltersChange({ paper: 'all', query: 'all', hasNotes: false });
@@ -1264,6 +1279,8 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
                   isLocal={false}
                   activeQuery={localFilters.query}
                   onRemovePaper={handleRemovePaper}
+                  isSelected={accumulatedSelectedIds.has(paper.id)}
+                  onToggleSelection={handleToggleAccumulatedSelection}
                 />
               ));
             })()

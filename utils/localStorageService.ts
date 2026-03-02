@@ -270,6 +270,36 @@ export const localStorageService = {
     }
   },
 
+  // ✅ NEW: Clear ONLY library data (papers, notes, folders, assignments)
+  // Preserves "My Results" accumulation data during migration
+  // This prevents race condition where debounce fires AFTER clearing
+  clearLibraryDataOnly: (): void => {
+    try {
+      console.log('[LocalStorage] 🧹 Clearing LIBRARY DATA ONLY (preserving My Results)');
+      localStorage.removeItem('anonymous_papers');
+      localStorage.removeItem('anonymous_notes');
+      localStorage.removeItem('anonymous_folders');
+      localStorage.removeItem('anonymous_note_assignments');
+      // ✅ NOT removing 'paper_results_accumulation' - preserved during migration
+      
+      console.log('[LocalStorage] ✅ Library data cleared, My Results preserved');
+    } catch (error) {
+      console.error('[LocalStorage] Failed to clear library data:', error);
+    }
+  },
+
+  // ✅ NEW: Clear "My Results" accumulation after successful migration verification
+  // Called AFTER DatabaseContext confirms data is in database
+  clearPaperResultsAfterMigration: (): void => {
+    try {
+      console.log('[LocalStorage] 🗑️ Clearing paper results after successful migration');
+      localStorage.removeItem('paper_results_accumulation');
+      console.log('[LocalStorage] ✅ Paper results cleared');
+    } catch (error) {
+      console.error('[LocalStorage] Failed to clear paper results:', error);
+    }
+  },
+
   // Web Search Results Persistence
   saveWebSearchResults: (query: string, results: any): void => {
     try {
