@@ -109,6 +109,13 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   }, [columnVisibility]);
 
+  // Auto-close left column when both middle and right are closed (unless left is locked)
+  useEffect(() => {
+    if (!columnVisibility.middle && !columnVisibility.right && columnVisibility.left && !columnLocks.left) {
+      setColumnVisibility(prev => ({ ...prev, left: false }));
+    }
+  }, [columnVisibility.middle, columnVisibility.right, columnVisibility.left, columnLocks.left]);
+
   const toggleDarkMode = useCallback(() => setDarkMode(prev => !prev), []);
 
   const toggleLock = useCallback((col: ColumnKey) => {
@@ -145,6 +152,12 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         newState.middle = true;
       }
 
+      // RULE: Opening 'middle' (Deep Research) also opens 'left' (Sources)
+      // UNLESS 'right' (Paper View) is already open
+      if (col === 'middle' && !prev.right) {
+        newState.left = true;
+      }
+
       // If library is currently open, close it when opening left/middle/right
       if (prev.library && (col === 'left' || col === 'middle' || col === 'right')) {
         newState.library = false;
@@ -157,6 +170,10 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           if (key === 'middle' && (col === 'left' || newState.left) && !newState.right) {
             return; // Skip closing middle
           }
+          // Don't close 'left' if 'middle' is being opened or is already open (and right is not open)
+          if (key === 'left' && (col === 'middle' || newState.middle) && !newState.right) {
+            return; // Skip closing left
+          }
           newState[key] = false;
         }
       });
@@ -164,14 +181,18 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       return newState;
     });
 
-    // Ensure the middle column is locked when it becomes visible.
-    // This covers both: direct opening of middle, and opening left which auto-opens middle.
+    // Ensure columns are locked when they become visible.
+    // Sources (left) and Deep Research (middle) are always locked together.
     setColumnLocks(prev => {
       const next = { ...prev };
       if (col === 'left') {
         next.left = true;
       }
-      if (col === 'middle' || (col === 'left' && !columnVisibility.right)) {
+      if (col === 'middle') {
+        next.middle = true;
+        next.left = true;  // Lock left when middle opens
+      }
+      if (col === 'left' && !columnVisibility.right) {
         next.middle = true;
       }
       return next;
