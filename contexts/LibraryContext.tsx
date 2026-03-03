@@ -184,9 +184,13 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // Save to database/localStorage
         await savePaper(paperData);
 
-        // Add to AI context automatically
-        if (!contextUris.has(loadedPdf.uri)) {
-          setContextUris(prev => new Set(prev).add(loadedPdf.uri));
+        // ✅ Add to AI context automatically WITH duplicate check
+        const isAlreadyInContext = contextUris.has(loadedPdf.uri);
+        const titleToSync = loadedPdf.metadata?.title || 'Untitled Document';
+
+        if (!isAlreadyInContext) {
+          // Safely toggle/add to context (deduplicates by title internally)
+          togglePdfContext(loadedPdf.uri, titleToSync);
         }
 
         return result;
@@ -224,9 +228,13 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // Save to database/localStorage
       await savePaper(paperData);
 
-      // Add to AI context automatically
-      if (!contextUris.has(loadedPdf.uri)) {
-        setContextUris(prev => new Set(prev).add(loadedPdf.uri));
+      // ✅ Add to AI context automatically WITH duplicate check
+      const isAlreadyInContext = contextUris.has(loadedPdf.uri);
+      const titleToSync = paperData.title;
+
+      if (!isAlreadyInContext) {
+        // Safely toggle/add to context (deduplicates by title internally)
+        togglePdfContext(loadedPdf.uri, titleToSync);
       }
 
       return { success: true, pdf: loadedPdf };
@@ -302,6 +310,44 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return next;
       });
     } else {
+      // ✅ Duplicate detection logic (URI + Title)
+      // 1. Determine title of incoming paper
+      let incomingTitle = title;
+      if (!incomingTitle) {
+        const loaded = loadedPdfs.find(p => p.uri === uri);
+        incomingTitle = loaded?.metadata?.title;
+        if (!incomingTitle) {
+          const saved = savedPapers.find(p => p.uri === uri);
+          incomingTitle = saved?.title;
+        }
+      }
+
+      // 2. Check if a paper with this title is already in context
+      if (incomingTitle) {
+        const normalizedIncoming = incomingTitle.toLowerCase().trim();
+        const genericTitles = ['untitled document', 'document', 'pdf document', 'untitled', 'unknown'];
+
+        if (normalizedIncoming && !genericTitles.includes(normalizedIncoming)) {
+          // Look for existing papers in context with same title
+          const existingTitleMatch = Array.from(contextUris).find(cUri => {
+            let existingTitle = '';
+            const loaded = loadedPdfs.find(p => p.uri === cUri);
+            if (loaded?.metadata?.title) existingTitle = loaded.metadata.title;
+            else {
+              const saved = savedPapers.find(p => p.uri === cUri);
+              if (saved?.title) existingTitle = saved.title;
+            }
+
+            return existingTitle && existingTitle.toLowerCase().trim() === normalizedIncoming;
+          });
+
+          if (existingTitleMatch) {
+            console.warn(`[LibraryContext] Duplicate paper detected by title: "${incomingTitle}". Already in context via URI: ${existingTitleMatch}`);
+            return; // Skip adding duplicate title
+          }
+        }
+      }
+
       setContextUris(prev => new Set(prev).add(uri));
     }
   };

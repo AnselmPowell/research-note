@@ -959,17 +959,17 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
     <>
       {/* ── Header Controls (Selection, Bulk Copy, Filters, Collapse) ─────────── */}
       {!isBlurred && (currentTabCandidates.length > 0 || totalNotes > 0) && (
-        <div className="flex items-center justify-between mb-4 px-1 animate-fade-in">
+        <div className="relative z-40 flex items-center justify-between mb-4 px-1 animate-fade-in">
           
           {/* LEFT: Selection + Bulk actions */}
           <div className="flex items-center gap-2">
             
             {/* Paper Selection Dropdown */}
             {sortBy !== 'most-relevant-notes' && currentTabCandidates.length > 0 && (
-              <div className="relative">
+              <div className="relative z-30" style={{ overflow: 'visible' }}>
                 <button
                   onClick={() => onSelectMenuOpenChange(!isSelectMenuOpen)}
-                  className="flex items-center gap-1 p-2 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  className="flex items-center gap-1 p-2 opacity-100 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all "
                   title="Selection options"
                 >
                   <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${accumulatedSelectedIds.size === selectableTotalCount ? 'bg-scholar-600 border-scholar-600' :
@@ -983,8 +983,8 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
 
                 {isSelectMenuOpen && (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => onSelectMenuOpenChange(false)} />
-                    <div className="absolute left-0 top-full mt-2 w-64 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 py-1.5 animate-fade-in">
+                    <div className="fixed inset-0 z-40 pointer-events-none" onClick={() => onSelectMenuOpenChange(false)} />
+                    <div className="absolute left-0 top-full mt-2 w-64 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 py-1.5 animate-fade-in pointer-events-auto" style={{ overflow: 'visible' }}>
                       <button
                         onClick={handleSelectPage}
                         className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -1015,10 +1015,10 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
 
             {/* Note Selection Dropdown (Most Relevant Notes mode) */}
             {sortBy === 'most-relevant-notes' && selectableNotesTotalCount > 0 && (
-              <div className="relative">
+              <div className="relative z-30" style={{ overflow: 'visible' }}>
                 <button
                   onClick={() => onNoteSelectMenuOpenChange(!isNoteSelectMenuOpen)}
-                  className="flex items-center gap-1 p-2 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  className="flex items-center gap-1 p-2 opacity-100 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all "
                   title="Select notes options"
                 >
                   <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${selectedNoteIds.length === selectableNotesTotalCount ? 'bg-scholar-600 border-scholar-600' :
@@ -1032,8 +1032,8 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
 
                 {isNoteSelectMenuOpen && (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => onNoteSelectMenuOpenChange(false)} />
-                    <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 py-1.5 animate-fade-in">
+                    <div className="fixed inset-0 z-40 pointer-events-none" onClick={() => onNoteSelectMenuOpenChange(false)} />
+                    <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 py-1.5 animate-fade-in pointer-events-auto" style={{ overflow: 'visible' }}>
                       <button
                         onClick={handleSelectNotesPage}
                         className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -1123,7 +1123,7 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
 
       {/* ── Filter Panel ────────────────────────────────────────────────────── */}
       {showFilters && !isBlurred && (
-        <div className="relative bg-white/80 dark:bg-gray-950/90 backdrop-blur-xl border border-gray-100 dark:border-gray-800 rounded-2xl p-5 pt-2 sm:p-7 pb-1 sm:pb-2 mb-6 shadow-xl animate-fade-in ring-1 ring-black/5 dark:ring-white/5">
+        <div className="relative z-30 bg-white/80 dark:bg-gray-950/90 backdrop-blur-xl border border-gray-100 dark:border-gray-800 rounded-2xl p-5 pt-2 sm:p-7 pb-1 sm:pb-2 mb-6 shadow-xl animate-fade-in ring-1 ring-black/5 dark:ring-white/5">
           <button
             onClick={() => onShowFiltersChange(false)}
             className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all z-10"

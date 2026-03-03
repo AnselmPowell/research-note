@@ -35,7 +35,7 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
   const hasAutoExpanded = useRef(false);
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
   const { isPaperSelectedByUri, addToSelectionByUri } = useResearch();
-  const { loadedPdfs, loadPdfFromUrl, togglePdfContext, setActivePdf, downloadingUris } = useLibrary();
+  const { loadedPdfs, loadPdfFromUrl, togglePdfContext, isPdfInContext, setActivePdf, downloadingUris } = useLibrary();
   const { openColumn } = useUI();
   const [viewFailed, setViewFailed] = useState(false);
   const [showManualInstruction, setShowManualInstruction] = useState(false);
@@ -79,6 +79,10 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
     // 1. If currently unselecting, just toggle off
     if (isGloballySelected) {
       onToggle(false);
+      // Sync: Also remove from AI context if present
+      if (isPdfInContext(source.uri)) {
+        togglePdfContext(source.uri);
+      }
       return;
     }
 
@@ -89,6 +93,10 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
     if (result && result.success) {
       // PDF verified and loaded into memory
       onToggle(true);
+      // Sync: Also add to AI context if not present
+      if (!isPdfInContext(source.uri)) {
+        togglePdfContext(source.uri, source.title);
+      }
     } else {
       // Verification failed
       setShowManualInstruction(true);
@@ -102,6 +110,7 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
 
     if (isSaved) {
       deletePaper(source.uri);
+      // Optional: keep it in context if it's globally selected (checked), but remove if not
       return;
     }
 
@@ -133,8 +142,10 @@ export const WebSearchView: React.FC<WebSearchdProps> = ({
     // ✅ Also add to GLOBAL selection for visibility across all components
     addToSelectionByUri(source.uri);
 
-    // Also add to AgentResearcher context like other workflows do
-    togglePdfContext(source.uri, source.title);
+    // Sync: Also add to AI context if not present
+    if (!isPdfInContext(source.uri)) {
+      togglePdfContext(source.uri, source.title);
+    }
 
     // Open the sources panel
     openColumn('left');

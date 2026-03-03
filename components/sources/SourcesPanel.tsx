@@ -8,7 +8,7 @@ import { FileText, X, Plus, Upload, Link, Search, Loader2, AlertCircle, CheckSqu
 export const SourcesPanel: React.FC = () => {
     const { savedPapers, deletePaper, savePaper } = useDatabase();
     const { setActivePdf, loadPdfFromUrl, addRemotePdf, addLocalPdf, addPdfFile, addPdfFileAndReturn, isPdfInContext, togglePdfContext, loadedPdfs, downloadingUris, removePdf } = useLibrary();
-    const { isPaperSelectedByUri, addToSelectionByUri, removeFromSelectionByUri } = useResearch();
+    const { isPaperSelectedByUri, addToSelectionByUri, removeFromSelectionByUri, selectedArxivIds, arxivCandidates, filteredCandidates } = useResearch();
     const { openColumn } = useUI();
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -216,7 +216,7 @@ export const SourcesPanel: React.FC = () => {
         } else {
             // Select all: Add ALL filtered papers to selection
             setSelectedPaperUris(filteredPapers.map(p => p.uri));
-            
+
             // Add already-loaded papers to AI context
             for (const paper of filteredPapers) {
                 const isLoaded = loadedPdfs.some(p => p.uri === paper.uri);
@@ -239,6 +239,25 @@ export const SourcesPanel: React.FC = () => {
                 togglePdfContext(uri, title);
             }
         } else {
+            // ✅ Cross-context deduplication check (blocking)
+            // Prevent selecting a local PDF if a version with the same title is already selected via ArXiv
+            const normalizedTitle = title.toLowerCase().trim();
+            const genericTitles = ['untitled document', 'document', 'pdf document', 'untitled', 'unknown'];
+
+            if (normalizedTitle && !genericTitles.includes(normalizedTitle)) {
+                const isDuplicateInArxivContext = Array.from(selectedArxivIds).some(id => {
+                    const ap = [...arxivCandidates, ...filteredCandidates].find(p => p.id === id);
+                    return ap?.title && ap.title.toLowerCase().trim() === normalizedTitle;
+                });
+
+                if (isDuplicateInArxivContext) {
+                    console.warn(`[SourcesPanel] Selection blocked: "${title}" is already active via ArXiv context.`);
+                    // Optional: You could allow selection for bulk actions but block the togglePdfContext part,
+                    // but for now, blocking selection is the simplest way to prevent duplicates.
+                    return;
+                }
+            }
+
             // Checking: Add to GLOBAL selection and AI context
             addToSelectionByUri(uri);
             setSelectedPaperUris(prev => [...prev, uri]);  // Local state
@@ -260,7 +279,7 @@ export const SourcesPanel: React.FC = () => {
                 togglePdfContext(uri, title);
             }
         }
-    }, [isPaperSelectedByUri, addToSelectionByUri, removeFromSelectionByUri, isPdfInContext, togglePdfContext, loadedPdfs, loadPdfFromUrl]);
+    }, [isPaperSelectedByUri, addToSelectionByUri, removeFromSelectionByUri, isPdfInContext, togglePdfContext, loadedPdfs, loadPdfFromUrl, selectedArxivIds, arxivCandidates, filteredCandidates]);
 
     const handleBulkDelete = () => {
         if (selectedPaperUris.length === 0) return;
@@ -401,7 +420,7 @@ export const SourcesPanel: React.FC = () => {
                 </div>
             </div>
 
-            {/* Select All Row + Action Bar */}
+            {/* Select All Row + Action Bar
             {filteredPapers.length > 0 && (
                 <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                     <div className="flex items-center justify-between">
@@ -439,7 +458,7 @@ export const SourcesPanel: React.FC = () => {
                         )}
                     </div>
                 </div>
-            )}
+            )} */}
 
             {/* Papers List - Always Accessible */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-3">
@@ -465,9 +484,14 @@ export const SourcesPanel: React.FC = () => {
                     <div className="space-y-2">
                         {filteredPapers.map(paper => {
                             const isInContext = isPdfInContext(paper.uri);
-                            // ✅ Check GLOBAL selection state (shows checked if selected anywhere in app)
+                            const normalizedTitle = (paper.title || '').toLowerCase().trim();
+                            const isArxivSelected = Array.from(selectedArxivIds).some(id => {
+                                const ap = [...arxivCandidates, ...filteredCandidates].find(p => p.id === id);
+                                return ap?.title.toLowerCase().trim() === normalizedTitle;
+                            });
+
                             const isGloballySelected = isPaperSelectedByUri(paper.uri);
-                            const isSelected = isGloballySelected || isInContext; // Show as selected if globally selected OR in AI context
+                            const isSelected = isGloballySelected || isInContext || isArxivSelected; // Show as selected if globally selected, in AI context, OR matched by title in ArXiv
                             const isDownloading = downloadingUris.has(paper.uri);
                             return (
                                 <div
@@ -501,7 +525,7 @@ export const SourcesPanel: React.FC = () => {
                                             )}
                                         </div>
 
-                                        
+
                                         <div className="flex-1 min-w-0">
                                             <h3 className="text-xs font-medium text-gray-900 dark:text-white line-clamp-2 leading-tight mb-1">
                                                 {paper.title}

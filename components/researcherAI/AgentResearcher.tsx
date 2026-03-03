@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Sparkles, MessageSquareText, X, BookOpenText, Plus, Loader2, FileText, Play, Search, ArrowRight, Library, AlertCircle, ChevronUp, ChevronDown, Trash2, Square } from 'lucide-react';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useResearch } from '../../contexts/ResearchContext';
@@ -74,11 +74,35 @@ export const AgentResearcher: React.FC = () => {
     // Calculate total selected items for Deep Research
     const selectedArxivPapers = filteredCandidates.filter(p => selectedArxivIds.has(p.id));
 
-    // Unified Context Items List
-    const contextItems = [
-        ...contextPdfs.map(p => ({ id: p.uri, title: p.metadata.title || p.file.name, type: 'pdf' as const })),
-        ...selectedArxivPapers.map(p => ({ id: p.id, title: p.title, type: 'arxiv' as const }))
-    ];
+    // Unified Context Items List (DEDUPLICATED BY TITLE)
+    const contextItems = useMemo(() => {
+        const items = [
+            ...contextPdfs.map(p => ({ id: p.uri, title: (p.metadata.title || p.file.name).trim(), type: 'pdf' as const })),
+            ...selectedArxivPapers.map(p => ({ id: p.id, title: p.title.trim(), type: 'arxiv' as const }))
+        ];
+
+        // Unique items by normalized title
+        const seenTitles = new Set<string>();
+        const genericTitles = ['untitled document', 'document', 'pdf document', 'untitled', 'unknown'];
+        const deduplicated: typeof items = [];
+
+        for (const item of items) {
+            const normalized = item.title.toLowerCase().trim();
+            const isGeneric = genericTitles.includes(normalized);
+
+            if (!isGeneric && seenTitles.has(normalized)) {
+                // Duplicate detected - skip adding this version
+                continue;
+            }
+
+            if (!isGeneric) {
+                seenTitles.add(normalized);
+            }
+            deduplicated.push(item);
+        }
+
+        return deduplicated;
+    }, [contextPdfs, selectedArxivPapers]);
 
     const hasContext = contextItems.length > 0;
 
@@ -152,15 +176,17 @@ export const AgentResearcher: React.FC = () => {
         setIsProcessing(true);
 
         try {
-            // CRITICAL: Pass ONLY selected PDF URIs to backend
-            const selectedFileUris = contextPdfs.map(p => p.uri);
+            // ✅ CRITICAL: Only send PDFs that are in the deduplicated contextItems
+            const selectedFileUris = contextPdfs
+                .filter(p => contextItems.some(item => item.id === p.uri && item.type === 'pdf'))
+                .map(p => p.uri);
 
-            console.log(`[Chat] Sending message with ${selectedFileUris.length} selected PDFs`);
+            console.log(`[Chat] Sending message with ${selectedFileUris.length} unique PDFs`);
 
             const response = await agentService.sendMessage(
                 text,
                 contextNotes,
-                selectedFileUris  // ← Only selected PDFs, not all loaded PDFs
+                selectedFileUris
             );
 
             const aiMsg: ChatMessage = {
@@ -204,10 +230,14 @@ export const AgentResearcher: React.FC = () => {
 
         if (currentQuestions.length === 0 || !hasContext) return;
 
-        console.log(`[AgentResearcher] 🔬 Starting Hybrid Analysis on ${contextPdfs.length} Checked PDFs and ${selectedArxivPapers.length} ArXiv papers.`);
+        // ✅ CRITICAL: Only analyze papers that are in the deduplicated contextItems
+        const uniquePdfs = contextPdfs.filter(p => contextItems.some(item => item.id === p.uri && item.type === 'pdf'));
+        const uniqueArxivPapers = selectedArxivPapers.filter(p => contextItems.some(item => item.id === p.id && item.type === 'arxiv'));
+
+        console.log(`[AgentResearcher] 🔬 Starting Hybrid Analysis on ${uniquePdfs.length} unique PDFs and ${uniqueArxivPapers.length} unique ArXiv papers.`);
 
         // Use performHybridAnalysis for Agent-selected papers (WITH accumulation to "My Results")
-        performHybridAnalysis(contextPdfs, selectedArxivPapers, currentQuestions, arxivKeywords);
+        performHybridAnalysis(uniquePdfs, uniqueArxivPapers, currentQuestions, arxivKeywords);
 
         // Open middle column and switch to results tab
         setColumnVisibility(prev => ({ ...prev, middle: true }));
@@ -226,13 +256,28 @@ export const AgentResearcher: React.FC = () => {
         }
     };
 
-    const removeItem = (item: { id: string, type: 'pdf' | 'arxiv' }) => {
-        if (item.type === 'pdf') {
-            // Removing from context only (uncheck), not deleting the file
-            togglePdfContext(item.id);
-        } else {
-            toggleArxivSelection(item.id);
-        }
+    const removeItem = (item: { id: string, title: string, type: 'pdf' | 'arxiv' }) => {
+        // ✅ Unified removal: Remove ANY paper matching this title (handles duplicates)
+        const normalizedTitle = item.title.toLowerCase().trim();
+
+        // 1. Remove from local PDF context
+        contextPdfs.forEach(p => {
+            const pTitle = (p.metadata.title || p.file.name).toLowerCase().trim();
+            if (pTitle === normalizedTitle) {
+                togglePdfContext(p.uri);
+            }
+        });
+
+        // 2. Remove from ArXiv selection
+        selectedArxivPapers.forEach(p => {
+            if (p.title.toLowerCase().trim() === normalizedTitle) {
+                toggleArxivSelection(p.id);
+            }
+        });
+
+        // 3. Fallback: ensure the specific ID is removed even if title matching failed
+        if (item.type === 'pdf' && isPdfInContext(item.id)) togglePdfContext(item.id);
+        else if (item.type === 'arxiv' && selectedArxivIds.has(item.id)) toggleArxivSelection(item.id);
     };
 
     const clearAllDocuments = () => {

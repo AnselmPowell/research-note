@@ -73,12 +73,20 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
   const [isAbstractExpanded, setIsAbstractExpanded] = useState(false);
   const { toggleArxivSelection, selectedArxivIds, isPaperSelectedByUri } = useResearch();
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
-  const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf, failedUrlErrors, downloadingUris } = useLibrary();
+  const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf, failedUrlErrors, downloadingUris, contextUris } = useLibrary();
   const { setColumnVisibility, openColumn: openUIColumn } = useUI();
 
   // ✅ Check GLOBAL selection state by pdfUri (works across all components)
   const isGloballySelected = isPaperSelectedByUri(paper.pdfUri);
-  const isSelected = isLocal ? isPdfInContext(paper.id) : (isGloballySelected || selectedArxivIds.has(paper.id));
+
+  // ✅ Check if title exists in PDF context (deduplication check)
+  const normalizedTitle = paper.title.toLowerCase().trim();
+  const isInPdfContext = Array.from(contextUris).some(uri => {
+    const lp = loadedPdfs.find(p => p.uri === uri);
+    return (lp?.metadata?.title || lp?.file?.name || '').toLowerCase().trim() === normalizedTitle;
+  });
+
+  const isSelected = isLocal ? isPdfInContext(paper.id) : (isGloballySelected || selectedArxivIds.has(paper.id) || isInPdfContext);
   const isSaved = isPaperSaved(paper.pdfUri);
 
   const isDownloading = paper.analysisStatus === 'downloading';
@@ -110,6 +118,21 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
 
   const handleSelectionToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
+
+    // ✅ Cross-context deduplication check (blocking)
+    const normalizedTitle = (paper.title || '').toLowerCase().trim();
+    const isDuplicateInPdfContext = Array.from(contextUris).some(uri => {
+      const lp = loadedPdfs.find(p => p.uri === uri);
+      const lpTitle = (lp?.metadata?.title || lp?.file?.name || '').toLowerCase().trim();
+      return lpTitle && lpTitle === normalizedTitle;
+    });
+
+    if (!isSelected && isDuplicateInPdfContext) {
+      console.warn(`[DeepSearch] Selection blocked: "${paper.title}" is already active via Library context.`);
+      // Optional: Trigger a notification if available
+      return;
+    }
+
     if (isLocal) {
       togglePdfContext(paper.id, paper.title);
     } else {
@@ -673,7 +696,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
     return base;
   }, [currentTabCandidates, searchQuery, localFilters]);
 
-   // ─── Filter Step 2: Sort ──────────────────────────────────────────────────────
+  // ─── Filter Step 2: Sort ──────────────────────────────────────────────────────
   const content = useMemo(() => {
     if (sortBy === 'most-relevant-notes') {
       const allNotes = filteredPapers.flatMap(paper =>
@@ -700,7 +723,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
   }, [filteredPapers, sortBy, localFilters.query]);
 
 
-    // ─── Pagination ────────────────────────────────────────────────────────────────
+  // ─── Pagination ────────────────────────────────────────────────────────────────
   const totalPages = useMemo(() => Math.max(1, Math.ceil(content.length / ITEMS_PER_PAGE)), [content]);
   const paginatedContent = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -713,11 +736,11 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
   const handleSelectPage = useCallback(() => {
     const pagePaperIds = sortBy === 'most-relevant-notes'
       ? Array.from(new Set(
-          paginatedContent
-            .map(n => (n as any).sourcePaper)
-            .filter(p => p.analysisStatus !== 'failed')
-            .map(p => p.id)
-        ))
+        paginatedContent
+          .map(n => (n as any).sourcePaper)
+          .filter(p => p.analysisStatus !== 'failed')
+          .map(p => p.id)
+      ))
       : (paginatedContent as ArxivPaper[])
         .filter(p => p.analysisStatus !== 'failed')
         .map(p => p.id);
@@ -744,7 +767,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
       : (content as ArxivPaper[])
         .filter(p => p.analysisStatus !== 'failed')
         .map(p => p.id);
-    
+
     const allIds = Array.from(new Set(selectableContent));
     selectAllArxivPapers(allIds);
     onSelectMenuOpenChange(false);
@@ -791,11 +814,11 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
 
     if (notesToCopy) {
       navigator.clipboard.writeText(notesToCopy);
-      onBulkCopyNotes(); 
+      onBulkCopyNotes();
     }
   }, [selectedNoteIds, content, onBulkCopyNotes]);
 
-  
+
 
 
 
@@ -900,17 +923,17 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
     <>
       {/* ── Header Controls (Selection, Bulk Copy, Filters, Collapse) ─────────── */}
       {!isBlurred && (currentTabCandidates.length > 0 || totalNotes > 0) && (
-        <div className="flex items-center justify-between mb-4 px-1 animate-fade-in">
-          
+        <div className="relative z-40 flex items-center justify-between mb-4 px-1 animate-fade-in">
+
           {/* LEFT: Selection + Bulk actions */}
           <div className="flex items-center gap-2">
-            
+
             {/* Paper Selection Dropdown */}
             {sortBy !== 'most-relevant-notes' && currentTabCandidates.length > 0 && (
-              <div className="relative">
+              <div className="relative z-30" style={{ overflow: 'visible' }}>
                 <button
                   onClick={() => onSelectMenuOpenChange(!isSelectMenuOpen)}
-                  className="flex items-center gap-1 p-2 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  className="flex items-center gap-1 p-2 opacity-100 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all "
                   title="Selection options"
                 >
                   <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${selectedArxivIds.size === content.length ? 'bg-scholar-600 border-scholar-600' :
@@ -924,8 +947,8 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
 
                 {isSelectMenuOpen && (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => onSelectMenuOpenChange(false)} />
-                    <div className="absolute left-0 top-full mt-2 w-64 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 py-1.5 animate-fade-in">
+                    <div className="fixed inset-0 z-40 pointer-events-none" onClick={() => onSelectMenuOpenChange(false)} />
+                    <div className="absolute left-0 top-full mt-2 w-64 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 py-1.5 animate-fade-in pointer-events-auto" style={{ overflow: 'visible' }}>
                       <button
                         onClick={handleSelectPage}
                         className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -940,7 +963,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
                         <Layers size={16} className="text-gray-400" />
                         <span className="text-sm font-medium text-gray-700 dark:text-white">Select All Total ({selectableTotalCount})</span>
                       </button>
-                    
+
                       <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1" />
 
                       <button
@@ -959,10 +982,10 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
 
             {/* Note Selection Dropdown (Most Relevant Notes mode) */}
             {sortBy === 'most-relevant-notes' && selectableNotesTotalCount > 0 && (
-              <div className="relative">
+              <div className="relative z-30" style={{ overflow: 'visible' }}>
                 <button
                   onClick={() => onNoteSelectMenuOpenChange(!isNoteSelectMenuOpen)}
-                  className="flex items-center gap-1 p-2 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                  className="flex items-center gap-1 p-2 opacity-100 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
                   title="Select notes options"
                 >
                   <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${selectedNoteIds.length === selectableNotesTotalCount ? 'bg-scholar-600 border-scholar-600' :
@@ -976,8 +999,8 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
 
                 {isNoteSelectMenuOpen && (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => onNoteSelectMenuOpenChange(false)} />
-                    <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 py-1.5 animate-fade-in">
+                    <div className="fixed inset-0 z-40 pointer-events-none" onClick={() => onNoteSelectMenuOpenChange(false)} />
+                    <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 py-1.5 animate-fade-in pointer-events-auto" style={{ overflow: 'visible' }}>
                       <button
                         onClick={handleSelectNotesPage}
                         className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -1010,11 +1033,10 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
             {sortBy === 'most-relevant-notes' && selectedNoteIds.length > 0 && (
               <button
                 onClick={handleBulkCopyNotes}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg shadow-sm transition-all ${
-                  justCopiedNotes
-                    ? 'bg-scholar-500 dark:bg-scholar-400 text-white hover:bg-scholar-500 dark:hover:bg-scholar-400'
-                    : 'text-white bg-scholar-600 dark:bg-scholar-700 hover:bg-scholar-700 dark:hover:bg-scholar-600'
-                }`}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg shadow-sm transition-all ${justCopiedNotes
+                  ? 'bg-scholar-500 dark:bg-scholar-400 text-white hover:bg-scholar-500 dark:hover:bg-scholar-400'
+                  : 'text-white bg-scholar-600 dark:bg-scholar-700 hover:bg-scholar-700 dark:hover:bg-scholar-600'
+                  }`}
                 title={justCopiedNotes ? `Copied! ${selectedNoteIds.length} Notes` : `Copy ${selectedNoteIds.length} selected notes`}
               >
                 {justCopiedNotes ? <Check size={16} className="stroke-[3]" /> : <Copy size={16} />}
@@ -1067,7 +1089,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
 
       {/* ── Filter Panel ────────────────────────────────────────────────────── */}
       {showFilters && !isBlurred && (
-        <div className="relative bg-white/80 dark:bg-gray-950/90 backdrop-blur-xl border border-gray-100 dark:border-gray-800 rounded-2xl p-5 pt-2 sm:p-7 pb-1 sm:pb-2 mb-6 shadow-xl animate-fade-in ring-1 ring-black/5 dark:ring-white/5">
+        <div className="relative z-30 bg-white/80 dark:bg-gray-950/90 backdrop-blur-xl border border-gray-100 dark:border-gray-800 rounded-2xl p-5 pt-2 sm:p-7 pb-1 sm:pb-2 mb-6 shadow-xl animate-fade-in ring-1 ring-black/5 dark:ring-white/5">
           <button
             onClick={() => onShowFiltersChange(false)}
             className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-all z-10"
@@ -1136,7 +1158,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
                     className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${localFilters.hasNotes
                       ? 'bg-scholar-600 text-white shadow-md'
                       : 'bg-white/80 dark:bg-gray-900/50 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800'
-                    }`}
+                      }`}
                   >
                     With Notes
                   </button>
