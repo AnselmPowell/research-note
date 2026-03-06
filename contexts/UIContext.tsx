@@ -56,8 +56,9 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   });
 
   // NEW: Initialize locks. Right column (Workspace) is locked by default.
+  // Left column is NOT locked by default, so it can auto-close when middle and right are closed.
   const [columnLocks, setColumnLocks] = useState({
-    left: true,
+    left: false,
     middle: false,
     library: false,
     right: true
@@ -185,13 +186,13 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     // Sources (left) and Deep Research (middle) are always locked together.
     setColumnLocks(prev => {
       const next = { ...prev };
-      if (col === 'left') {
-        next.left = true;
-      }
+      // Left column is never locked - always set to false
+      next.left = false;
+      // Lock middle when it opens
       if (col === 'middle') {
         next.middle = true;
-        next.left = true;  // Lock left when middle opens
       }
+      // If left opens and right is not open, lock middle
       if (col === 'left' && !columnVisibility.right) {
         next.middle = true;
       }

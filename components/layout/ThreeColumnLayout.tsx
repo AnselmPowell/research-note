@@ -244,21 +244,26 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         <Icon size={20} className="flex-shrink-0" /> {title}
       </span>
       <div className="flex items-center gap-1.5">
-        <button
-          onClick={() => onToggleLock(colKey)}
-          title={isLocked ? "Unlock column (it will close automatically when other columns open)" : "Lock column (it will stay open even if other columns are opened)"}
-          className={`transition-all p-1.5 rounded-md ${isLocked ? 'text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30' : 'text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400'}`}
-        >
-          {isLocked ? <Lock size={16} /> : <Unlock size={16} />}
-        </button>
+        {/* Only show lock/maximize buttons for non-Sources columns */}
+        {colKey !== 'left' && (
+          <>
+            <button
+              onClick={() => onToggleLock(colKey)}
+              title={isLocked ? "Unlock column (it will close automatically when other columns open)" : "Lock column (it will stay open even if other columns are opened)"}
+              className={`transition-all p-1.5 rounded-md ${isLocked ? 'text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30' : 'text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400'}`}
+            >
+              {isLocked ? <Lock size={16} /> : <Unlock size={16} />}
+            </button>
 
-        {activeColumnCount > 1 && (
-          <button
-            onClick={() => onExpand(colKey)}
-            className="text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 transition-all p-1.5 rounded-md hover:bg-scholar-50 dark:hover:bg-scholar-900/30"
-          >
-            <Maximize2 size={18} />
-          </button>
+            {activeColumnCount > 1 && (
+              <button
+                onClick={() => onExpand(colKey)}
+                className="text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 transition-all p-1.5 rounded-md hover:bg-scholar-50 dark:hover:bg-scholar-900/30"
+              >
+                <Maximize2 size={18} />
+              </button>
+            )}
+          </>
         )}
 
         <button

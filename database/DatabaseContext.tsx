@@ -150,7 +150,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const toggleStar = async (noteId: number, state: boolean) => {
     if (user && isAuthenticated) {
-      await dbService.toggleStarNote(noteId, state);
+      await dbService.toggleStar(noteId, state);
     } else {
       localStorageService.toggleStar(noteId, state);
     }
@@ -159,7 +159,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const toggleFlag = async (noteId: number, state: boolean) => {
     if (user && isAuthenticated) {
-      await dbService.toggleFlagNote(noteId, state);
+      await dbService.toggleFlag(noteId, state);
     } else {
       localStorageService.toggleFlag(noteId, state);
     }
