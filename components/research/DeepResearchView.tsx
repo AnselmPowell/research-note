@@ -135,7 +135,7 @@ export const DeepResearchView: React.FC = () => {
     <div className="flex flex-col h-full bg-cream dark:bg-dark-card animate-in fade-in duration-700">
 
       {/* ── STICKY HEADER ────────────────────────────────────────────────────── */}
-      {!isBlurred && (
+      {(
         <div className="sticky top-0 z-30 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-0 mb-3 px-3 sm:px-6 shadow-sm">
           <div className="flex items-center justify-between py-3 gap-4">
             <div className="flex items-center -mb-px">
@@ -245,7 +245,20 @@ export const DeepResearchView: React.FC = () => {
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-60 xs:px-4 py-4 custom-scrollbar">
         {activeTab === 'web' ? (
           <div className="space-y-6">
-            {webSearchSources.length > 0 ? (
+            {searchState?.isLoading && (!webSearchSources || webSearchSources.length === 0) ? (
+              <div className="flex flex-col items-center justify-center h-screen min-h-[400px] p-8 space-y-6 animate-fade-in">
+                <div className="relative">
+                  <div className="w-20 h-20 border-4 border-scholar-100 dark:border-scholar-900 border-t-scholar-600 dark:border-t-scholar-500 rounded-full animate-spin"></div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Search size={24} className="text-scholar-600 dark:text-scholar-500 animate-pulse" />
+                  </div>
+                </div>
+                <div className="text-center space-y-3 max-w-md mx-auto">
+                  <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Searching the Web</h3>
+                  <p className="text-gray-500 dark:text-gray-400 leading-relaxed animate-pulse">Finding relevant sources...</p>
+                </div>
+              </div>
+            ) : webSearchSources.length > 0 ? (
               webSearchSources.map((source, idx) => (
                 <WebSearchView
                   key={`${source.url}-${idx}`}

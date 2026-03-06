@@ -1176,7 +1176,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
       )}
 
       {/* ── Main Results ─────────────────────────────────────────────────────── */}
-      <div className={`space-y-6 transition-all duration-500 ${isBlurred ? 'blur-sm opacity-50 pointer-events-none select-none overflow-hidden h-screen' : 'blur-0 opacity-100'}`}>
+      <div className={`space-y-6 transition-all duration-500 ${isBlurred ? 'blur-sm opacity-75 pointer-events-none select-none' : 'blur-0 opacity-100'}`}>
 
         {/* Results count + stop button */}
         {!isBlurred && currentTabCandidates.length > 0 && (
@@ -1304,6 +1304,42 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
           </div>
         )}
       </div>
+
+      {/* ── PERSISTENT LOADING MODAL (During Filtering & Extracting) ────── */}
+      {isBlurred && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+          <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl p-8 border border-gray-200 dark:border-gray-700 max-w-sm animate-in fade-in zoom-in-95 pointer-events-auto">
+            <div className="flex flex-col items-center space-y-6">
+              {/* Spinner */}
+              <div className="relative">
+                <div className="w-24 h-24 border-4 border-scholar-100 dark:border-scholar-900 border-t-scholar-600 dark:border-t-scholar-500 rounded-full animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <BookOpenText size={28} className="text-scholar-600 dark:text-scholar-500 animate-pulse" />
+                </div>
+              </div>
+
+              {/* Status Text */}
+              <div className="text-center space-y-2">
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">
+                  {researchPhase === 'extracting' ? 'Extracting Notes' : 'Filtering Papers'}
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 animate-pulse">
+                  {status || (researchPhase === 'filtering' ? 'Analyzing relevance...' : 'Processing documents...')}
+                </p>
+              </div>
+
+              {/* Progress Info (if available) */}
+              {currentTabCandidates.length > 0 && researchPhase === 'extracting' && (
+                <div className="bg-scholar-50 dark:bg-scholar-900/20 rounded-lg px-4 py-2 border border-scholar-100 dark:border-scholar-800">
+                  <p className="text-xs sm:text-sm font-medium text-scholar-700 dark:text-scholar-300">
+                    {currentTabCandidates.filter(p => p.analysisStatus === 'completed').length} of {currentTabCandidates.length} papers completed
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
