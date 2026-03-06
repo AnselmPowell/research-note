@@ -1154,7 +1154,7 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
 
             {/* Paper Filter */}
             <div className="space-y-2">
-              <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">Source Paper</label>
+              <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">Papers</label>
               <select
                 value={localFilters.paper}
                 onChange={(e) => onLocalFiltersChange({ ...localFilters, paper: e.target.value })}
@@ -1169,7 +1169,7 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
 
             {/* Query Filter */}
             <div className="space-y-2">
-              <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">Research Query</label>
+              <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">Queries</label>
               <select
                 value={localFilters.query}
                 onChange={(e) => onLocalFiltersChange({ ...localFilters, query: e.target.value })}

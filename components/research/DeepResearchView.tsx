@@ -58,7 +58,6 @@ export const DeepResearchView: React.FC = () => {
   // Derive web sources from searchState
   const webSearchSources = searchState?.data?.sources || [];
 
-  // Determine candidates based on research phase
   const currentTabCandidates = useMemo(() => {
     return researchPhase === 'extracting' || researchPhase === 'completed'
       ? filteredCandidates
@@ -136,7 +135,7 @@ export const DeepResearchView: React.FC = () => {
 
       {/* ── STICKY HEADER ────────────────────────────────────────────────────── */}
       {(
-        <div className="sticky top-0 z-30 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-0 mb-3 px-3 sm:px-6 shadow-sm">
+        <div className="sticky top-0 z-30 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-0 mb-3 px-4 sm:px-6 shadow-sm">
           <div className="flex items-center justify-between py-3 gap-4">
             <div className="flex items-center -mb-px">
               <button
@@ -242,7 +241,8 @@ export const DeepResearchView: React.FC = () => {
       )}
 
       {/* ── TAB CONTENT ─────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-60 xs:px-4 py-4 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 custom-scrollbar">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         {activeTab === 'web' ? (
           <div className="space-y-6">
             {searchState?.isLoading && (!webSearchSources || webSearchSources.length === 0) ? (
@@ -333,6 +333,7 @@ export const DeepResearchView: React.FC = () => {
             generatedKeywords={[]} // Handled by context
           />
         )}
+        </div>
       </div>
 
       {/* ── CLEAR MODAL ─────────────────────────────────────────────────────── */}
