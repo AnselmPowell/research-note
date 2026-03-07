@@ -66,12 +66,21 @@ async function apiCall<T>(endpoint: string, method: string = 'GET', body?: any, 
     clearTimeout(timeoutId);
     const totalDuration = (performance.now() - startTime).toFixed(0);
     
+    let errorMessage = error.message || 'Unknown error';
+    
     if (error.name === 'AbortError') {
-      console.error(`[API-${callId}] ❌ ABORTED: ${totalDuration}ms - ${error.message}\n`);
+      console.error(`[API-${callId}] ❌ ABORTED: ${totalDuration}ms - Request took too long\n`);
+      errorMessage = 'Request timeout - server may be unavailable';
+    } else if (error instanceof TypeError) {
+      console.error(`[API-${callId}] ❌ NETWORK: ${totalDuration}ms - ${error.message}\n`);
+      errorMessage = 'Connection failed - please check your internet';
     } else {
       console.error(`[API-${callId}] ❌ FAILED: ${totalDuration}ms - ${error.message}\n`);
     }
-    throw error;
+    
+    const customError = new Error(errorMessage);
+    (customError as any).originalError = error;
+    throw customError;
   }
 }
 

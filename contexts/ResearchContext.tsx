@@ -5,6 +5,7 @@ import { performSearch, generateArxivSearchTerms, filterRelevantPapers, findRele
 import { extractPdfData, fetchPdfBuffer } from '../services/pdfService';
 import { searchAllSources } from '../services/searchAggregator';
 import { localStorageService } from '../utils/localStorageService';
+import { toastService } from '../services/toastService';
 
 // Debounce utility function
 function debounce<T extends (...args: any[]) => any>(func: T, wait: number) {
@@ -830,6 +831,10 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       localStorageService.saveWebSearchResults(query, data);
     } catch (error) {
       setSearchState(prev => ({ ...prev, isLoading: false, error: "Search failed. Please try again." }));
+      toastService.error('Search failed. Please check your connection and try again.', 6000, {
+        label: 'Try Again',
+        onClick: () => performWebSearch(query)
+      });
     }
   }, [addToHistory]);
 
@@ -1063,6 +1068,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           updateUploadedPaperStatus(pdf.uri, 'failed');
         }
       });
+      
+      toastService.error('PDF analysis could not complete. Please check your connection.', null);
     } finally {
       setIsDeepResearching(false);
     }
@@ -1416,7 +1423,13 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       });
       if (!signal.aborted) {
         setGatheringStatus("Research failed.");
-        setResearchPhase('failed');
+        setResearchPhase('idle'); // Reset to idle so spinner stops
+        
+        // Show toast with retry option
+        toastService.error('Research could not complete. Please check your connection and try again.', null, {
+          label: 'Try Again',
+          onClick: () => performDeepResearch(query)
+        });
       }
     }
   }, [addToHistory, processUserUrls, performHybridResearch]);

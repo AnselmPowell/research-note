@@ -10,6 +10,7 @@ import { LayoutControls } from './components/layout/LayoutControls';
 import { NotesManagerSidebar } from './components/library/NotesManagerSidebar';
 import { NotesManager } from './components/library/NotesManager';
 import { SourcesPanel } from './components/sources/SourcesPanel';
+import { ToastContainer } from './components/ui/Toast';
 import { useUI } from './contexts/UIContext';
 import { useResearch } from './contexts/ResearchContext';
 import { useLibrary } from './contexts/LibraryContext';
@@ -250,6 +251,8 @@ const App: React.FC = () => {
   return (
     <div className="h-screen flex flex-col bg-cream dark:bg-dark-bg font-sans transition-colors duration-300 overflow-hidden">
 
+      <ToastContainer />
+      
       <NotesManagerSidebar
         onShowAuthModal={() => setShowAuthModal(true)}
         resetCallbacks={[resetUI, resetAllResearchData, resetLibrary]}
