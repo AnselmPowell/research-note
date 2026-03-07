@@ -265,6 +265,11 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [arxivKeywords, setArxivKeywords] = useState<string[]>([]);
   const [arxivCandidates, setArxivCandidates] = useState<ArxivPaper[]>([]);
   const [filteredCandidates, setFilteredCandidates] = useState<ArxivPaper[]>([]);
+  // NEW: Top 10 filtered papers for loading box display (real-time relevance scores)
+  const [topFilteredPapers, setTopFilteredPapers] = useState<Array<{
+    title: string;
+    relevanceScore: number;
+  }>>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [selectedArxivIds, setSelectedArxivIds] = useState<Set<string>>(new Set());
   const [selectedWebSourceUris, setSelectedWebSourceUris] = useState<Set<string>>(new Set());
@@ -778,6 +783,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setResearchPhase('idle');
     setArxivCandidates([]);
     setFilteredCandidates([]);
+    setTopFilteredPapers([]);  // Clear top 10 papers
     setDeepResearchResults([]);
     setSelectedArxivIds(new Set());
     setProcessedPdfs([]); // Clear processed PDFs
@@ -1343,6 +1349,12 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         const filtered = await filterRelevantPapers(candidates, query.questions, displayKeywords);
 
+        // ✅ Extract top 10 papers with highest relevance scores
+        const topTenPapers = filtered.slice(0, 10).map(p => ({
+          title: p.title,
+          relevanceScore: p.relevanceScore || 0
+        }));
+
         const filterDuration = (performance.now() - filterStartTime).toFixed(0);
         console.log('[ResearchContext] ✅ Filtering COMPLETE:', {
           durationMs: filterDuration,
@@ -1352,11 +1364,25 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           firstFilteredTitle: filtered[0]?.title
         });
 
+        // ✅ Log top 10 for debugging
+        console.log('[ResearchContext] 📊 Top 10 Filtered Papers:', {
+          count: topTenPapers.length,
+          papers: topTenPapers.map((p, i) => ({
+            rank: i + 1,
+            title: p.title.substring(0, 50),
+            score: Math.round((p.relevanceScore || 0) * 100) + '%'
+          }))
+        });
+
         if (signal.aborted) return;
+        
+        // ✅ CRITICAL: Set data BEFORE changing phase
+        setFilteredCandidates(filtered);
+        setTopFilteredPapers(topTenPapers);
+
         endPhaseTimer('filtering');
         setResearchPhase('extracting');
         startPhaseTimer('extracting');
-        setFilteredCandidates(filtered);
 
         const totalSources = userPdfs.length + filtered.length;
         setGatheringStatus(`Found ${totalSources} relevant sources. Gathering notes...`);
@@ -1434,6 +1460,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     arxivKeywords,
     arxivCandidates,
     filteredCandidates,
+    topFilteredPapers,  // ← NEW: Top 10 papers for loading box
     selectedArxivIds,
     toggleArxivSelection,
     selectAllArxivPapers,
@@ -1493,7 +1520,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }), [
     activeSearchMode, searchState, searchBarState, updateSearchBar, clearSearchBar,
     searchHistory, addToHistory, removeFromHistory, clearHistory,
-    researchPhase, gatheringStatus, arxivKeywords, arxivCandidates, filteredCandidates,
+    researchPhase, gatheringStatus, arxivKeywords, arxivCandidates, filteredCandidates, topFilteredPapers,
     selectedArxivIds, toggleArxivSelection, selectAllArxivPapers, clearArxivSelection,
     selectedWebSourceUris, toggleWebSourceSelection,
     selectedPaperUris, isPaperSelectedByUri, addToSelectionByUri, removeFromSelectionByUri, getSelectedPaperUris,

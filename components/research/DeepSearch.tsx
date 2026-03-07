@@ -4,6 +4,7 @@ import { useResearch } from '../../contexts/ResearchContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
 import { useDatabase } from '../../database/DatabaseContext';
+import { DynamicLoadingBox } from './DynamicLoadingBox';
 import {
   Loader2,
   FileText,
@@ -629,6 +630,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
     candidates,
     filteredCandidates,
     arxivCandidates,
+    topFilteredPapers,  // ← NEW: Top 10 papers for loading box
     selectedArxivIds,
     isDeepResearching,
     deepResearchResults,
@@ -647,6 +649,22 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
       ? filteredCandidates
       : arxivCandidates;
   }, [researchPhase, filteredCandidates, arxivCandidates]);
+
+  // Calculate lightweight paper data (titles + relevance scores) for dynamic loading box
+  // During filtering phase, use top 10 papers from ResearchContext; other phases use appropriate source
+  const paperDataList = useMemo(() => {
+    if (researchPhase === 'filtering') {
+      // ✅ Use real-time top 10 papers (with relevance scores calculated by backend)
+      return topFilteredPapers;
+    } else if (researchPhase === 'searching') {
+      // Show papers as they're found during search phase
+      return arxivCandidates.slice(0, 10).map(p => ({
+        title: p.title,
+        relevanceScore: p.relevanceScore || 0
+      }));
+    }
+    return [];
+  }, [topFilteredPapers, arxivCandidates, researchPhase]);  // ← FIXED: Full arrays, not .length
 
   // handleViewPdf — replicated here, no longer needs to come from App.tsx as a prop
   const handleViewPdf = useCallback((paper: ArxivPaper) => {
@@ -1250,22 +1268,6 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
           )}
         </div>
 
-        {/* Loading state */}
-        {isSearching && (
-          <div className="flex flex-col items-center justify-center h-full min-h-[400px] p-8 space-y-6 animate-fade-in">
-            <div className="relative">
-              <div className="w-20 h-20 border-4 border-scholar-100 dark:border-scholar-900 border-t-scholar-600 dark:border-t-scholar-500 rounded-full animate-spin"></div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <BookOpenText size={24} className="text-scholar-600 dark:text-scholar-500 animate-pulse" />
-              </div>
-            </div>
-            <div className="text-center space-y-3 max-w-md mx-auto">
-              <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Deep Research in Progress</h3>
-              <p className="text-gray-500 dark:text-gray-400 leading-relaxed animate-pulse">{status || "Analysing topics..."}</p>
-            </div>
-          </div>
-        )}
-
         {/* Empty state — idle */}
         {currentTabCandidates.length === 0 && researchPhase === 'idle' && (
           <div className="py-24 flex flex-col items-center justify-center text-center opacity-40">
@@ -1305,40 +1307,15 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
         )}
       </div>
 
-      {/* ── PERSISTENT LOADING MODAL (During Filtering & Extracting) ────── */}
-      {isBlurred && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-          <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl p-8 border border-gray-200 dark:border-gray-700 max-w-sm animate-in fade-in zoom-in-95 pointer-events-auto">
-            <div className="flex flex-col items-center space-y-6">
-              {/* Spinner */}
-              <div className="relative">
-                <div className="w-24 h-24 border-4 border-scholar-100 dark:border-scholar-900 border-t-scholar-600 dark:border-t-scholar-500 rounded-full animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <BookOpenText size={28} className="text-scholar-600 dark:text-scholar-500 animate-pulse" />
-                </div>
-              </div>
-
-              {/* Status Text */}
-              <div className="text-center space-y-2">
-                <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">
-                  {researchPhase === 'extracting' ? 'Extracting Notes' : 'Filtering Papers'}
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 animate-pulse">
-                  {status || (researchPhase === 'filtering' ? 'Analyzing relevance...' : 'Processing documents...')}
-                </p>
-              </div>
-
-              {/* Progress Info (if available) */}
-              {currentTabCandidates.length > 0 && researchPhase === 'extracting' && (
-                <div className="bg-scholar-50 dark:bg-scholar-900/20 rounded-lg px-4 py-2 border border-scholar-100 dark:border-scholar-800">
-                  <p className="text-xs sm:text-sm font-medium text-scholar-700 dark:text-scholar-300">
-                    {currentTabCandidates.filter(p => p.analysisStatus === 'completed').length} of {currentTabCandidates.length} papers completed
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      {/* ── DYNAMIC LOADING BOX (Phases: initializing, searching, filtering) ──── */}
+      {(researchPhase === 'initializing' || 
+        researchPhase === 'searching' || 
+        researchPhase === 'filtering') && (
+        <DynamicLoadingBox 
+          researchPhase={researchPhase}
+          paperData={paperDataList}
+          gatheringStatus={status}
+        />
       )}
     </>
   );
