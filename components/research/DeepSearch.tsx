@@ -714,6 +714,13 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
     return base;
   }, [currentTabCandidates, searchQuery, localFilters]);
 
+  // ─── Helper: Status Priority for Sorting ──────────────────────────────────────
+  const getStatusPriority = (status?: string): number => {
+    if (status === 'failed') return 0;           // Bottom (failed papers)
+    if (status === 'pending') return 1;          // Middle (waiting to be processed)
+    return 2;                                     // Top (all others: extracting, completed, downloading, processing, stopped)
+  };
+
   // ─── Filter Step 2: Sort ──────────────────────────────────────────────────────
   const content = useMemo(() => {
     if (sortBy === 'most-relevant-notes') {
@@ -732,11 +739,25 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
             uniqueId: getNoteId(paper.id, note.pageNumber, idx)
           }))
       );
-      return allNotes.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+      // Sort by: status priority first, then relevance score
+      return allNotes.sort((a, b) => {
+        const priorityDiff = getStatusPriority(b.sourcePaper.analysisStatus) - getStatusPriority(a.sourcePaper.analysisStatus);
+        if (priorityDiff !== 0) return priorityDiff;
+        return (b.relevanceScore || 0) - (a.relevanceScore || 0);
+      });
     } else if (sortBy === 'newest-papers') {
-      return [...filteredPapers].sort((a, b) => getSafeTimestamp(b.publishedDate) - getSafeTimestamp(a.publishedDate));
+      return [...filteredPapers].sort((a, b) => {
+        const priorityDiff = getStatusPriority(b.analysisStatus) - getStatusPriority(a.analysisStatus);
+        if (priorityDiff !== 0) return priorityDiff;
+        return getSafeTimestamp(b.publishedDate) - getSafeTimestamp(a.publishedDate);
+      });
     } else {
-      return [...filteredPapers].sort((a, b) => (b.notes?.length || 0) - (a.notes?.length || 0));
+      // 'relevant-papers' default: sort by status priority first, then notes count
+      return [...filteredPapers].sort((a, b) => {
+        const priorityDiff = getStatusPriority(b.analysisStatus) - getStatusPriority(a.analysisStatus);
+        if (priorityDiff !== 0) return priorityDiff;
+        return (b.notes?.length || 0) - (a.notes?.length || 0);
+      });
     }
   }, [filteredPapers, sortBy, localFilters.query]);
 

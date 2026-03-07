@@ -242,7 +242,7 @@ export const DeepResearchView: React.FC = () => {
 
       {/* ── TAB CONTENT ─────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 custom-scrollbar">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
         {activeTab === 'web' ? (
           <div className="space-y-6">
             {searchState?.isLoading && (!webSearchSources || webSearchSources.length === 0) ? (

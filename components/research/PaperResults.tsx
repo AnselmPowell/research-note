@@ -674,6 +674,13 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
     return base;
   }, [currentTabCandidates, searchQuery, localFilters]);
 
+  // ─── Helper: Status Priority for Sorting ──────────────────────────────────────
+  const getStatusPriority = (status?: string): number => {
+    if (status === 'failed') return 0;           // Bottom (failed papers)
+    if (status === 'pending') return 1;          // Middle (waiting to be processed)
+    return 2;                                     // Top (all others: extracting, completed, downloading, processing, stopped)
+  };
+
   // ─── Smart Sorting for "My Results" Tab ────────────────────────────────────
   // Supports three sort modes specific to My Results:
   // 1. 'most-relevant-notes': Sort notes by relevance score
@@ -697,30 +704,40 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
             uniqueId: getNoteId(paper.id, note.pageNumber, idx)
           }))
       );
-      return allNotes.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+      // Sort by: status priority first, then relevance score
+      return allNotes.sort((a, b) => {
+        const priorityDiff = getStatusPriority(b.sourcePaper.analysisStatus) - getStatusPriority(a.sourcePaper.analysisStatus);
+        if (priorityDiff !== 0) return priorityDiff;
+        return (b.relevanceScore || 0) - (a.relevanceScore || 0);
+      });
     } else if (sortBy === 'recent-research') {
-      // ✅ NEW: Sort by addedToAccumulationAt timestamp (most recent first)
-      // When papers are re-analyzed, timestamp updates to current time
-      // This keeps recently active research at the top
-      return [...filteredPapers].sort((a, b) => 
-        (b.addedToAccumulationAt || 0) - (a.addedToAccumulationAt || 0)
-      );
+      // ✅ Sort by status priority first, then addedToAccumulationAt timestamp (most recent first)
+      return [...filteredPapers].sort((a, b) => {
+        const priorityDiff = getStatusPriority(b.analysisStatus) - getStatusPriority(a.analysisStatus);
+        if (priorityDiff !== 0) return priorityDiff;
+        return (b.addedToAccumulationAt || 0) - (a.addedToAccumulationAt || 0);
+      });
     } else if (sortBy === 'alphabetical') {
-      // ✅ NEW: Sort by title alphabetically (case-insensitive, numeric aware)
-      // Example: Paper 1, Paper 2, Paper 10 (not Paper 1, Paper 10, Paper 2)
-      return [...filteredPapers].sort((a, b) => 
-        a.title.localeCompare(b.title, 'en', { numeric: true, sensitivity: 'base' })
-      );
+      // ✅ Sort by status priority first, then title alphabetically (case-insensitive, numeric aware)
+      return [...filteredPapers].sort((a, b) => {
+        const priorityDiff = getStatusPriority(b.analysisStatus) - getStatusPriority(a.analysisStatus);
+        if (priorityDiff !== 0) return priorityDiff;
+        return a.title.localeCompare(b.title, 'en', { numeric: true, sensitivity: 'base' });
+      });
     } else if (sortBy === 'relevant-papers') {
-      // Fallback: Sort by number of notes (most notes first)
-      return [...filteredPapers].sort((a, b) => 
-        (b.notes?.length || 0) - (a.notes?.length || 0)
-      );
+      // Fallback: Sort by status priority first, then notes count
+      return [...filteredPapers].sort((a, b) => {
+        const priorityDiff = getStatusPriority(b.analysisStatus) - getStatusPriority(a.analysisStatus);
+        if (priorityDiff !== 0) return priorityDiff;
+        return (b.notes?.length || 0) - (a.notes?.length || 0);
+      });
     } else if (sortBy === 'newest-papers') {
-      // Fallback: Sort by published date (shouldn't appear in My Results, but keep for safety)
-      return [...filteredPapers].sort((a, b) => 
-        getSafeTimestamp(b.publishedDate) - getSafeTimestamp(a.publishedDate)
-      );
+      // Fallback: Sort by status priority first, then published date
+      return [...filteredPapers].sort((a, b) => {
+        const priorityDiff = getStatusPriority(b.analysisStatus) - getStatusPriority(a.analysisStatus);
+        if (priorityDiff !== 0) return priorityDiff;
+        return getSafeTimestamp(b.publishedDate) - getSafeTimestamp(a.publishedDate);
+      });
     }
     return filteredPapers;
   }, [filteredPapers, sortBy, localFilters.query]);

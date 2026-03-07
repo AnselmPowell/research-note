@@ -223,6 +223,12 @@ export const AgentResearcher: React.FC = () => {
             return;
         }
 
+        // ✅ NEW: Prevent starting if Main Deep Research is running
+        const isMainDeepResearchRunning = researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed';
+        if (isMainDeepResearchRunning) {
+            return; // Main research is active - button is disabled so this shouldn't be reached, but safety check
+        }
+
         const currentQuestions = [...deepQuestions];
         if (deepInput.trim()) {
             currentQuestions.push(deepInput.trim());
@@ -476,23 +482,47 @@ export const AgentResearcher: React.FC = () => {
                                     <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1"></div>
                                     <button
                                         onClick={handleStartDeepResearch}
-                                        disabled={(!isDeepResearchLoading && (deepQuestions.length === 0 && !deepInput.trim())) || !hasContext}
+                                        disabled={
+                                            (!isDeepResearchLoading && (deepQuestions.length === 0 && !deepInput.trim())) || 
+                                            !hasContext ||
+                                            (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed' && !isDeepResearchLoading)
+                                        }
                                         className={`
                                 flex items-center gap-2 px-4 py-1.5 rounded-lg font-semibold text-xs transition-all shadow-sm
                                 ${isDeepResearchLoading
                                                 ? 'bg-white text-gray-800 border border-gray-300 hover:text-red-600 hover:border-red-300'
-                                                : 'bg-scholar-600 hover:bg-scholar-700 text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-300'
+                                                : (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed' && !isDeepResearchLoading)
+                                                    ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                                    : 'bg-scholar-600 hover:bg-scholar-700 text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-300'
                                             }
                              `}
+                                        title={
+                                            isDeepResearchLoading ? "Stop Hybrid Analysis" :
+                                            (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed' && !isDeepResearchLoading) ? "Main Deep Research in progress. Stop it first." :
+                                            "Start Hybrid Analysis"
+                                        }
                                     >
                                         {isDeepResearchLoading ? (
                                             <>
                                                 <Square size={12} fill="currentColor" className="opacity-50" />
-                                                Stop
+                                                Stop Research
+                                            </>
+                                        ) : (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed' && !isDeepResearchLoading) ? (
+                                            <>
+                                                <Loader2 size={12} className="animate-spin opacity-50" />
+                                                <span>Main Research...</span>
                                             </>
                                         ) : 'Start Research'}
                                     </button>
                                 </div>
+                            ) : isDeepResearchLoading ? (
+                                <button
+                                    onClick={handleStartDeepResearch}
+                                    className="p-2 bg-red-600 hover:bg-red-700 rounded-full text-white shadow-sm transition-all flex-shrink-0 animate-pulse"
+                                    title="Stop Hybrid Analysis"
+                                >
+                                    <Square size={16} fill="currentColor" />
+                                </button>
                             ) : (
                                 <div className="pr-1">
                                     <button className="p-2 bg-scholar-600 rounded-full text-white shadow-sm">
