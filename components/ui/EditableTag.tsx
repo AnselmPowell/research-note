@@ -1,6 +1,6 @@
 
 import React, { useRef, useEffect, useState } from 'react';
-import { X, Check, AlertCircle, Loader2, File, Edit2 } from 'lucide-react';
+import { X, Check, AlertCircle, Loader2, File, Edit2, CornerDownLeft } from 'lucide-react';
 import { TagData } from '../../types';
 
 interface EditableTagProps {
@@ -27,6 +27,7 @@ export const EditableTag: React.FC<EditableTagProps> = ({
   onStartEdit
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [showEditHint, setShowEditHint] = useState(false);
 
   // Focus input when entering edit mode
@@ -36,6 +37,22 @@ export const EditableTag: React.FC<EditableTagProps> = ({
       inputRef.current.select();
     }
   }, [isEditing]);
+
+  // Click-outside detection to save edits
+  useEffect(() => {
+    if (!isEditing) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      // If click is outside the tag container, save the edit
+      if (containerRef.current && !containerRef.current.contains(target)) {
+        onEditFinish();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isEditing, onEditFinish]);
 
   const getValue = () => typeof tag === 'string' ? tag : tag.value;
   const getStatus = () => typeof tag === 'object' ? tag.status : undefined;
@@ -82,18 +99,28 @@ export const EditableTag: React.FC<EditableTagProps> = ({
 
   if (isEditing) {
     return (
-      <div className={`relative flex items-center  font-medium rounded-full px-3 py-1.5 text-sm ring-2 ring-scholar-600/30 transition-all duration-200 transform`}>
+      <div 
+        ref={containerRef}
+        className={`relative flex items-center gap-1 font-medium rounded-full px-3 py-1.5 text-sm ring-2 ring-scholar-600 border-scholar-500 transition-all duration-200 transform bg-white dark:bg-gray-900 border border-scholar-500`}
+      >
         <input
           ref={inputRef}
           type="text"
           value={editingValue}
           onChange={(e) => onEditChange(e.target.value)}
-         
           onKeyDown={handleKeyDown}
-          // Dynamic width based on characters + buffer. 'ch' unit is approximately width of '0'
           style={{ width: `${Math.max(editingValue.length, 1) + 2}ch` }}
-          className="bg-transparent border-none focus:outline-none text-sm min-w-[60px] max-w-[300px]"
+          className="bg-transparent border-none focus:outline-none text-sm min-w-[60px] max-w-[300px] text-gray-900 dark:text-white"
         />
+        
+        {/* Colored Enter Icon - indicates to press Enter to save */}
+        <button
+          onClick={() => onEditFinish()}
+          className="p-0.5 text-scholar-600 dark:text-scholar-400 hover:text-scholar-700 dark:hover:text-scholar-300 hover:bg-scholar-50 dark:hover:bg-scholar-900/30 rounded transition-colors flex-shrink-0"
+          title="Save changes (press Enter)"
+        >
+          <CornerDownLeft size={14} />
+        </button>
       </div>
     );
   }
