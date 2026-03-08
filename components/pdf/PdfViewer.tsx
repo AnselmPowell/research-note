@@ -49,6 +49,32 @@ interface PdfViewerProps {
     onScrollActivity?: () => void;
 }
 
+/**
+ * HELPER: Waits for container to be fully measured before proceeding
+ * Prevents rendering at wrong scale on first page load
+ */
+const waitForContainerMeasurement = async (
+    canvas: HTMLCanvasElement,
+    maxRetries: number = 50,
+    delayMs: number = 10
+): Promise<number> => {
+    for (let i = 0; i < maxRetries; i++) {
+        const parentElement = canvas.parentElement?.parentElement?.parentElement;
+        const width = parentElement?.clientWidth ?? 0;
+        
+        // Container must be measured (width > 0) and reasonable size (> 300px)
+        if (width > 300) {
+            return width;
+        }
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+    
+    // Fallback: use window width as last resort
+    return Math.min(window.innerWidth - 40, 1200);
+};
+
 const regroupSpansByVisualLayout = (container: HTMLElement, spans: HTMLElement[], textItems: any[]) => {
     // SIMPLIFIED APPROACH: Preserve the original PDF.js span order
     // 
@@ -335,6 +361,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
     const isInteractingWithUi = useRef(false);
     const controlBarRef = useRef<HTMLDivElement>(null);
     const [controlBarStyle, setControlBarStyle] = useState<React.CSSProperties | null>(null);
+    const firstRenderRef = useRef(true);
 
     const [selectionDetails, setSelectionDetails] = useState<{
         visible: boolean;
@@ -609,17 +636,39 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
 
             const dpr = window.devicePixelRatio || 1;
             const pageViewport = page.getViewport({ scale: 1 });
-            const containerWidth = Math.min(canvas.parentElement?.parentElement?.parentElement?.clientWidth || 800, 1200);
+            
+            // FIX 1: Wait for container to be measured before calculating scale
+            // This prevents rendering at wrong scale on first page load
+            let containerWidth: number;
+            if (firstRenderRef.current) {
+                firstRenderRef.current = false;
+                containerWidth = await waitForContainerMeasurement(canvas);
+            } else {
+                // On subsequent pages, container is already measured
+                containerWidth = Math.min(canvas.parentElement?.parentElement?.parentElement?.clientWidth || 1200, 1200);
+            }
+            
             const baseScale = containerWidth / pageViewport.width;
             const finalScale = baseScale * zoomLevel;
 
             const scaledViewport = page.getViewport({ scale: finalScale * dpr });
             const cssViewport = page.getViewport({ scale: finalScale });
 
+            // FIX 2: Set BOTH canvas and text layer dimensions BEFORE any rendering starts
+            // This ensures they are in sync from the beginning
             canvas.width = scaledViewport.width;
             canvas.height = scaledViewport.height;
             canvas.style.width = `${cssViewport.width}px`;
             canvas.style.height = `${cssViewport.height}px`;
+            
+            // Pre-size text layer IMMEDIATELY (before canvas render starts)
+            textLayer.style.width = `${cssViewport.width}px`;
+            textLayer.style.height = `${cssViewport.height}px`;
+            (textLayer as HTMLElement).style.setProperty('--scale-factor', cssViewport.scale.toString());
+
+            // FIX 3: Clear text layer BEFORE canvas rendering starts
+            textDivsRef.current = [];
+            textLayer.innerHTML = '';
 
             const renderContext = {
                 canvasContext: ctx,
@@ -630,15 +679,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
             renderTaskRef.current = task;
 
             try {
-                // Clear previous spans early to avoid ghost highlighting during transition
-                textDivsRef.current = [];
-                if (textLayerRef.current) textLayerRef.current.innerHTML = '';
-
+                // Wait for canvas render to complete
                 await task.promise;
-                textLayer.style.width = `${cssViewport.width}px`;
-                textLayer.style.height = `${cssViewport.height}px`;
-                (textLayer as HTMLElement).style.setProperty('--scale-factor', cssViewport.scale.toString());
 
+                // FIX 4: Only NOW get text content and render text layer
+                // This ensures canvas is fully rendered before text layer processing starts
                 const textContent = await page.getTextContent();
                 const textDivs: HTMLElement[] = [];
                 textDivsRef.current = textDivs;
