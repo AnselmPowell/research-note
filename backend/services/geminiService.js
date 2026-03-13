@@ -622,7 +622,7 @@ async function getBatchEmbeddings(texts, taskType) {
 
   await asyncPool(3, batches, async (batch) => {
     const requests = batch.texts.map(t => ({
-      model: 'models/gemini-embedding-001',
+      model: 'models/gemini-embedding-2-preview',
       content: { parts: [{ text: t }] },
       taskType
     }));
@@ -630,7 +630,7 @@ async function getBatchEmbeddings(texts, taskType) {
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents?key=${config.geminiApiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2-preview:batchEmbedContents?key=${config.geminiApiKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -644,7 +644,7 @@ async function getBatchEmbeddings(texts, taskType) {
             status: response.status,
             statusText: response.statusText,
             error: errorText,
-            model: 'gemini-embedding-001',
+            model: 'gemini-embedding-2-preview',
             attempt: attempt + 1
           });
 
@@ -724,6 +724,15 @@ async function selectTopPapersWithLLM(papers, userQuestions, keywords, topN) {
     title: p.title,
     abstract: p.summary.split(/\s+/).slice(0, 200).join(' ') // First 200 words for token efficiency
   }));
+
+  // ── DIAGNOSTIC: Abstract size distribution ──────────────────────────────
+  const wordCounts = papers.map(p => (p.summary || '').split(/\s+/).length);
+  const totalWords = wordCounts.reduce((a, b) => a + b, 0);
+  const avgWords = Math.round(totalWords / papers.length);
+  const maxWords = Math.max(...wordCounts);
+  console.log(`   📝 [LLM-SELECT] Abstracts: ${papers.length} papers | avg=${avgWords} words | max=${maxWords} words | total=${totalWords} words`);
+  console.log(`   📝 [LLM-SELECT] Note: abstracts are capped at 200 words per paper in the prompt`);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const systemPrompt = `You are an expert research assistant helping to identify the most relevant academic papers for a user's research query. To help them write there assignment, you have been given a list of papers with their titles and abstracts. Your task is to perform a deeper semantic analysis to select the TOP ${topN} most relevant papers title and abstract in relation to the user's research questions and topic.
 
@@ -814,10 +823,14 @@ REMEMBER YOU ARE A STUDENT RESEARCH ASSISSTANT, YOUR GOAL IS TO HELP THE USER SE
 
     console.log(`   📏 [LLM-SELECT] Prompt sizes: systemPrompt=${systemPrompt.length} chars, userPrompt=${userPrompt.length} chars, total=${systemPrompt.length + userPrompt.length} chars`);
     console.log(`   📏 [LLM-SELECT] Papers in prompt: ${paperSummaries.length}, topN requested: ${topN}`);
-    console.log(`   ⏱️  [LLM-SELECT] Calling generateContent at ${new Date().toISOString()}...`);
+    // Rough pre-call estimate: ~4 chars per token for English text
+    const estInputTokens = Math.round((systemPrompt.length + userPrompt.length) / 4);
+    console.log(`   🔢 [LLM-SELECT] Est. input tokens (pre-call): ~${estInputTokens.toLocaleString()} | Sending to Gemini...`);
+
+    const callStart = Date.now();
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash-lite', // Fastest Gemini: no thinking by default, ideal for ranking/selection
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0.1 // Lower temperature for consistent selection
@@ -833,14 +846,14 @@ REMEMBER YOU ARE A STUDENT RESEARCH ASSISSTANT, YOUR GOAL IS TO HELP THE USER SE
       'Gemini Paper Selection'
     );
 
-    console.log(`   ⏱️  [LLM-SELECT] generateContent returned at ${new Date().toISOString()}`);
+    console.log(`   ⏱️  [LLM-SELECT] Gemini responded in ${Date.now() - callStart}ms`);
 
     const response = await result.response;
     const usage = response.usageMetadata;
     if (usage) {
-      const inputCost = (usage.promptTokenCount / 1000000) * 0.10;
-      const outputCost = (usage.candidatesTokenCount / 1000000) * 0.40;
-      console.log(`   💰 [LLM-SELECT] Usage: ${usage.promptTokenCount} in, ${usage.candidatesTokenCount} out. Est Cost: $${(inputCost + outputCost).toFixed(4)}`);
+      const inputCost = (usage.promptTokenCount / 1_000_000) * 0.10;
+      const outputCost = (usage.candidatesTokenCount / 1_000_000) * 0.40;
+      console.log(`   🔢 [LLM-SELECT] ACTUAL Tokens IN: ${usage.promptTokenCount?.toLocaleString()} | Tokens OUT: ${usage.candidatesTokenCount?.toLocaleString()} | Total: ${(usage.promptTokenCount + usage.candidatesTokenCount)?.toLocaleString()} | Est. Cost: $${(inputCost + outputCost).toFixed(4)}`);
     }
     console.log(`   ⏱️  [LLM-SELECT] response.text() ready at ${new Date().toISOString()}`);
     const parsed = JSON.parse(cleanJson(response.text()));
@@ -995,7 +1008,7 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
     console.log('\n📐 STAGE 1: Cosine Similarity Pre-Filter');
     console.log('   Creating embeddings for all', papers.length, 'papers...');
 
-    const userIntentText = 'Does the paper directly relate to any of the following? Questions:\n ' + userQuestions.join('\n') + '\nKeywords: ' + keywords.join(', ');
+    const userIntentText = 'Does the Academic paper directly relate to any of the following Questions:\n ' + userQuestions.join('\n') + '\nKeywords: ' + keywords.join(', ');
     const targetVector = await getEmbedding(userIntentText, 'RETRIEVAL_QUERY');
 
     if (targetVector.length === 0) {

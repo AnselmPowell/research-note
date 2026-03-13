@@ -103,7 +103,7 @@ POST /api/v1/search/pdfvector   // 40 over-fetched, full fields for scoring, 65s
 ```
 
 ### Phase 3: Semantic Distillation
-Vector similarity filtering with **relevance threshold: 0.48** (lowered from 0.48).
+Vector similarity filtering with **relevance threshold: 0.48** 
 
 ```typescript
 const filterRelevantPapers = async (papers: ArxivPaper[], questions: string[]) => {

@@ -305,7 +305,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                 ) : (
                   <div className="flex items-center gap-1.5 text-xs font-medium text-scholar-600 dark:text-scholar-400">
                     <Check size={12} className="text-success-600" />
-                    <span>Ready to analyze</span>
+                    <span>Waiting to be analyzed</span>
                   </div>
                 )}
               </div>
@@ -753,16 +753,16 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
   const handleSelectPage = useCallback(() => {
     const pagePaperIds = sortBy === 'most-relevant-notes'
       ? Array.from(new Set(
-          paginatedContent
-            .map(n => (n as any).sourcePaper)
-            .filter(p => p.analysisStatus !== 'failed')
-            .map(p => p.id)
-        ))
+        paginatedContent
+          .map(n => (n as any).sourcePaper)
+          .filter(p => p.analysisStatus !== 'failed')
+          .map(p => p.id)
+      ))
       : (paginatedContent as ArxivPaper[])
         .filter(p => p.analysisStatus !== 'failed')
         .map(p => p.id);
 
-    const allPageSelected = (pagePaperIds as string[]).every(id => 
+    const allPageSelected = (pagePaperIds as string[]).every(id =>
       accumulatedSelectedIds.has(id)
     );
 
@@ -788,12 +788,12 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
       : (content as ArxivPaper[])
         .filter(p => p.analysisStatus !== 'failed')
         .map(p => p.id);
-    
+
     const allIds = Array.from(new Set(selectableContent));
-    
+
     // Check if all are selected
     const allSelected = allIds.every(id => accumulatedSelectedIds.has(id));
-    
+
     if (allSelected) {
       setAccumulatedSelectedIds(new Set());
     } else {
@@ -843,7 +843,7 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
 
     if (notesToCopy) {
       navigator.clipboard.writeText(notesToCopy);
-      onBulkCopyNotes(); 
+      onBulkCopyNotes();
     }
   }, [selectedNoteIds, content, onBulkCopyNotes]);
 
@@ -977,10 +977,10 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
       {/* ── Header Controls (Selection, Bulk Copy, Filters, Collapse) ─────────── */}
       {!isBlurred && (currentTabCandidates.length > 0 || totalNotes > 0) && (
         <div className="relative z-40 flex items-center justify-between mb-4 px-1 animate-fade-in">
-          
+
           {/* LEFT: Selection + Bulk actions */}
           <div className="flex items-center gap-2">
-            
+
             {/* Paper Selection Dropdown */}
             {sortBy !== 'most-relevant-notes' && currentTabCandidates.length > 0 && (
               <div className="relative z-30" style={{ overflow: 'visible' }}>
@@ -1083,11 +1083,10 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
             {sortBy === 'most-relevant-notes' && selectedNoteIds.length > 0 && (
               <button
                 onClick={handleBulkCopyNotes}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg shadow-sm transition-all ${
-                  justCopiedNotes
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg shadow-sm transition-all ${justCopiedNotes
                     ? 'bg-scholar-500 dark:bg-scholar-400 text-white hover:bg-scholar-500 dark:hover:bg-scholar-400'
                     : 'text-white bg-scholar-600 dark:bg-scholar-700 hover:bg-scholar-700 dark:hover:bg-scholar-600'
-                }`}
+                  }`}
                 title={justCopiedNotes ? `Copied! ${selectedNoteIds.length} Notes` : `Copy ${selectedNoteIds.length} selected notes`}
               >
                 {justCopiedNotes ? <Check size={16} className="stroke-[3]" /> : <Copy size={16} />}
@@ -1209,7 +1208,7 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
                     className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${localFilters.hasNotes
                       ? 'bg-scholar-600 text-white shadow-md'
                       : 'bg-white/80 dark:bg-gray-900/50 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800'
-                    }`}
+                      }`}
                   >
                     With Notes
                   </button>

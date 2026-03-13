@@ -280,7 +280,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                 ) : (
                   <div className="flex items-center gap-1.5 text-xs font-medium text-scholar-600 dark:text-scholar-400">
                     <Check size={12} className="text-success-600" />
-                    <span>Ready to analyze</span>
+                    <span>Waiting to be analyzed</span>
                   </div>
                 )}
               </div>
@@ -1329,15 +1329,15 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
       </div>
 
       {/* ── DYNAMIC LOADING BOX (Phases: initializing, searching, filtering) ──── */}
-      {(researchPhase === 'initializing' || 
-        researchPhase === 'searching' || 
+      {(researchPhase === 'initializing' ||
+        researchPhase === 'searching' ||
         researchPhase === 'filtering') && (
-        <DynamicLoadingBox 
-          researchPhase={researchPhase}
-          paperData={paperDataList}
-          gatheringStatus={status}
-        />
-      )}
+          <DynamicLoadingBox
+            researchPhase={researchPhase}
+            paperData={paperDataList}
+            gatheringStatus={status}
+          />
+        )}
     </>
   );
 };
