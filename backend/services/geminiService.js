@@ -254,7 +254,7 @@ async function generateArxivSearchTerms(topics, questions) {
 
   const userQuery = [...safeTopics, ...safeQuestions].join('. ');
 
-    const systemPrompt = `You are an academic keyword generation engine.
+  const systemPrompt = `You are an academic keyword generation engine.
 
 Your sole task is to convert a user's natural-language research question into high-quality academic search keywords suitable for abstract-only searches in academic paper databases.
 
@@ -454,7 +454,7 @@ User query:
 
 "${userQuery}" `
 
-;
+    ;
 
   // TIER 3: Basic fallback - just use topics/questions as-is
   const basicFallback = {
@@ -513,7 +513,7 @@ User query:
     const response = await result.response;
     const parsed = JSON.parse(cleanJson(response.text()));
     const validated = processResult(parsed, basicFallback);
-    
+
     console.log('[ArxivSearchTerms] ✅ Tier 1 Success (Gemini Flash):', validated);
     return validated;
 
@@ -526,7 +526,7 @@ User query:
     // TIER 2: Fallback to GPT-4o Mini (ultra-fast, reliable) with timeout
     try {
       console.log('[ArxivSearchTerms] Tier 2: Attempting GPT-4o Mini fallback...');
-      
+
       const gptPrompt = `You are an academic keyword generation engine.
 
 Your sole task is to convert a user's natural-language research question into high-quality academic search keywords.
@@ -673,7 +673,7 @@ async function getBatchEmbeddings(texts, taskType) {
         }
 
         const data = await response.json();
-        
+
         // SAFETY: Validate response structure before processing
         if (!data.embeddings || !Array.isArray(data.embeddings)) {
           console.error('[getBatchEmbeddings] Invalid response structure:', {
@@ -684,7 +684,7 @@ async function getBatchEmbeddings(texts, taskType) {
           });
           throw new Error('Invalid embeddings response: missing or invalid embeddings field');
         }
-        
+
         const embeddings = data.embeddings.map(e => e.values || []);
 
         embeddings.forEach((emb, i) => {
@@ -913,12 +913,12 @@ REMEMBER YOU ARE A STUDENT RESEARCH ASSISSTANT, YOUR GOAL IS TO HELP THE USER SE
       isTimeout: error.message.includes('timeout'),
       geminiAvailable: !!genAI
     });
-    
+
     console.log('[selectTopPapersWithLLM] 🔄 Attempting OpenAI fallback...');
 
     try {
       const openaiPrompt = `${systemPrompt}\n\n${userPrompt}`;
-      
+
       console.log('[selectTopPapersWithLLM] Calling OpenAI API...');
       const parsed = await callOpenAI(openaiPrompt);
       const selections = parsed.selections || [];
@@ -992,7 +992,7 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
       acc[api] = (acc[api] || 0) + 1;
       return acc;
     }, {});
-    
+
     console.log('[FILTER-PAPERS] 📊 Paper Sources:', {
       arxiv: apiCounts.arxiv || 0,
       openalex: apiCounts.openalex || 0,
@@ -1022,13 +1022,13 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
     }
 
     console.log('   ✅ Target vector created, length:', targetVector.length);
-    
+
     const paperTexts = papers.map(p => 'Title: ' + p.title + '\nAbstract: ' + p.summary);
     console.log('   📋 Paper texts prepared, count:', paperTexts.length);
-    
+
     const paperEmbeddings = await getBatchEmbeddings(paperTexts, 'RETRIEVAL_DOCUMENT');
     console.log('   ✅ Batch embeddings complete, got', paperEmbeddings.length, 'embeddings');
-    
+
     const nullEmbeddingCount = paperEmbeddings.filter(e => !e || e.length === 0).length;
     console.log('   ⚠️  Papers with missing embeddings:', nullEmbeddingCount, '/', paperEmbeddings.length);
 
@@ -1153,49 +1153,49 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
     combined.forEach(p => {
       if (p && p.id && !seenFinalIds.has(p.id)) {
         seenFinalIds.add(p.id);
-      finalSelection.push(p);
-    }
-  });
-
-  // ═══════════════════════════════════════════════════════════════
-  // STAGE 4: RESCUE FALLBACK
-  // If LLM was overly strict and selected < 30 papers, 
-  // take the next top 10 highest-scored papers that were not selected.
-  // ═══════════════════════════════════════════════════════════════
-  if (finalSelection.length < 30) {
-    console.log(`\n🆘 STAGE 4: Rescue Fallback (Current count: ${finalSelection.length})`);
-    
-    // top100 is already sorted by cosine score from Stage 1
-    const rescuePapers = top100
-      .filter(p => !seenFinalIds.has(p.id)) // Only those NOT picked by LLM in Stages 2/3
-      .slice(0, 10); // Take the top 10 next-best matches
-
-    rescuePapers.forEach(p => {
-      seenFinalIds.add(p.id);
-      finalSelection.push(p);
+        finalSelection.push(p);
+      }
     });
 
-    console.log(`   ✅ Rescued ${rescuePapers.length} additional papers based on cosine score`);
-  }
+    // ═══════════════════════════════════════════════════════════════
+    // STAGE 4: RESCUE FALLBACK
+    // If LLM was overly strict and selected < 30 papers, 
+    // take the next top 10 highest-scored papers that were not selected.
+    // ═══════════════════════════════════════════════════════════════
+    if (finalSelection.length < 30) {
+      console.log(`\n🆘 STAGE 4: Rescue Fallback (Current count: ${finalSelection.length})`);
 
-  console.log('\n╔════════════════════════════════════════════════════════════════╗');
-  console.log('║ FINAL SELECTION COMPLETE                                       ║');
-  console.log('╚════════════════════════════════════════════════════════════════╝');
-  console.log('📊 Total papers selected:', finalSelection.length);
-  console.log('   From Stage 2 (top 100):', stage2Selected.length);
-  console.log('   From Stage 3 (leftover):', stage3Selected.length);
-  const rescuedCount = finalSelection.length - (stage2Selected.length + stage3Selected.length);
-  if (rescuedCount > 0) {
-    console.log('   From Stage 4 (rescue):  ', rescuedCount);
-  }
-  if (finalSelection.length > 0) {
-    console.log('   Average relevance score:', (
-      finalSelection.reduce((sum, p) => sum + (p.relevanceScore || 0), 0) / finalSelection.length
-    ).toFixed(3));
-  }
-  console.log('\n');
+      // top100 is already sorted by cosine score from Stage 1
+      const rescuePapers = top100
+        .filter(p => !seenFinalIds.has(p.id)) // Only those NOT picked by LLM in Stages 2/3
+        .slice(0, 10); // Take the top 10 next-best matches
 
-  return finalSelection;
+      rescuePapers.forEach(p => {
+        seenFinalIds.add(p.id);
+        finalSelection.push(p);
+      });
+
+      console.log(`   ✅ Rescued ${rescuePapers.length} additional papers based on cosine score`);
+    }
+
+    console.log('\n╔════════════════════════════════════════════════════════════════╗');
+    console.log('║ FINAL SELECTION COMPLETE                                       ║');
+    console.log('╚════════════════════════════════════════════════════════════════╝');
+    console.log('📊 Total papers selected:', finalSelection.length);
+    console.log('   From Stage 2 (top 100):', stage2Selected.length);
+    console.log('   From Stage 3 (leftover):', stage3Selected.length);
+    const rescuedCount = finalSelection.length - (stage2Selected.length + stage3Selected.length);
+    if (rescuedCount > 0) {
+      console.log('   From Stage 4 (rescue):  ', rescuedCount);
+    }
+    if (finalSelection.length > 0) {
+      console.log('   Average relevance score:', (
+        finalSelection.reduce((sum, p) => sum + (p.relevanceScore || 0), 0) / finalSelection.length
+      ).toFixed(3));
+    }
+    console.log('\n');
+
+    return finalSelection;
   } catch (err) {
     const elapsed = Date.now() - startTime;
     console.error('\n❌ [filterRelevantPapers] CRITICAL ERROR:', {
@@ -1254,7 +1254,7 @@ CRITICAL INSTRUCTIONS - BE VERY STRICT:
 1. ONLY extract content that DIRECTLY answers the user's specific queries
 2. Do NOT extract content that is only remotely relevant
 3. If nothing in the pages DIRECTLY answers the user's queries, return an empty array
-4. Extract the EXACT text from the page that answers the user's queries
+4. Extract the EXACT text from the page that answers the user's queries word for word
 5. Include sufficient surrounding text to maintain context
 6. Keep ALL citation references found in the text (like [1] or [Smith et al., 2020])
 7. ALWAYS include the correct page number for each extraction
@@ -1263,11 +1263,13 @@ CRITICAL INSTRUCTIONS - BE VERY STRICT:
 JUSTIFICATION REQUIREMENT:
 - You MUST explain in detail what the extracted text is talking about in the broader context of the full academic paper
 - You MUST explain what the user is asking for and WHY the text you extracted relates to the user's query
-- You MUST explain WHY it answers what they are looking for
-- If your justification does not DIRECTLY show how the text answers the user's question, DO NOT include it in the output
+- You MUST explain WHY it answers what they are looking for including evidence from the text
+- If your justification does not DIRECTLY show how the text answers the user's question,State this in the justification be clear and honest.
+- The justification should not mislead the Student/user about the broader context of the academic paper/article purpose and findings.
+- If the user asks about X and the text in the page is about X, But the academic paper is about Y, then let that be known in the justification. 
 
 CITATION INSTRUCTIONS:
-1. Include any citation references (like "[1]" or "[Smith et al., 2020]") found in the extracted text
+1. Include any citation references (like "[1]" or "[Smith et al., 2020]") found in the extracted text word for word
 2. Keep citations in the extracted text exactly as they appear
 3. IMPORTANT: Match inline citations to the REFERENCE LIST provided at the top of the prompt
 4. For each inline citation found in the extracted text, look up the full reference from the REFERENCE LIST
@@ -1459,8 +1461,8 @@ async function performSearch(query) {
   // ONLY accept PDF results — our pipeline requires downloadable PDFs
   resultsArrays.flat().forEach(item => {
     const link = item.link || '';
-    const isPdf = link.toLowerCase().endsWith('.pdf') || 
-                 (item.fileFormat && item.fileFormat.toLowerCase().includes('pdf'));
+    const isPdf = link.toLowerCase().endsWith('.pdf') ||
+      (item.fileFormat && item.fileFormat.toLowerCase().includes('pdf'));
 
     if (link && isPdf && !uniqueSourcesMap.has(link)) {
       uniqueSourcesMap.set(link, {
@@ -1473,7 +1475,7 @@ async function performSearch(query) {
 
   const sources = Array.from(uniqueSourcesMap.values());
   console.log('[performSearch] Found', sources.length, 'results for query:', query);
-  
+
   return {
     summary: sources.length === 0 ? 'No results found.' : 'Found ' + sources.length + ' relevant sources.',
     sources,

@@ -496,6 +496,7 @@ export const SourcesPanel: React.FC = () => {
                             return (
                                 <div
                                     key={paper.uri}
+                                    title={paper.title}
                                     className={`p-2.5 bg-cream dark:bg-dark-card rounded-lg border transition-all duration-200 group cursor-pointer hover:z-[9999] hover:relative hover:shadow-xl hover:scale-[1.02] ${isSelected
                                         ? 'border-scholar-500 ring-1 ring-scholar-500 shadow-sm '
                                         : isInContext
