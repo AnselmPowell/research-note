@@ -49,6 +49,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (result.data?.session && result.data?.user) {
           console.log('[Auth] User session found:', result.data.user.email);
           setUser(result.data.user);
+
+          // Migrate any anonymous localStorage data — this covers the post-Google-redirect
+          // case where migration could not run inside signInWithGoogle (redirect-based flow).
+          const hasDataToMigrate = dataMigrationService.hasLocalDataToMigrate();
+          if (hasDataToMigrate) {
+            console.log('[Auth] 🔄 Migrating anonymous data after session restore...');
+            try {
+              const migrationResult = await dataMigrationService.migrateAnonymousDataToUser(
+                result.data.user.id
+              );
+              if (migrationResult.success) {
+                console.log('[Auth] ✅ Post-redirect migration successful:', migrationResult);
+                localStorageService.clearPaperResultsAfterMigration();
+              } else {
+                console.warn('[Auth] ⚠️ Post-redirect migration failed:', migrationResult.error);
+              }
+            } catch (migrationError) {
+              console.error('[Auth] ❌ Migration error on init:', migrationError);
+            }
+          }
         } else {
           console.log('[Auth] No active session found');
         }
@@ -252,55 +272,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       console.log('[Auth] Signing in with Google...');
-      
-      // Check if there's localStorage data to migrate
-      const hasDataToMigrate = dataMigrationService.hasLocalDataToMigrate();
-      
+
+      // signIn.social triggers a full-page redirect to Google's consent screen.
+      // We must NOT call getSession() here — there is no session yet at this point.
+      // The session will be read by initAuth on the next page load (post-redirect).
+      // Migration of anonymous data is also handled in initAuth for this reason.
       const result = await authClient.signIn.social({ 
         provider: 'google',
         redirectTo: window.location.origin 
       });
-      
+
+      // If an error is returned BEFORE the redirect (e.g. misconfigured provider),
+      // surface it to the user and reset loading state.
       if (result.error) {
         throw new Error(result.error.message);
       }
 
-      // Get session after successful sign in
-      const sessionResult = await authClient.getSession();
-      if (sessionResult.data?.user) {
-        console.log('[Auth] Google sign in successful');
-        setUser(sessionResult.data.user);
-        
-        // ✅ NEW: Migrate localStorage data if exists
-        if (hasDataToMigrate) {
-          console.log('[Auth] 🔄 Starting data migration...');
-          
-          try {
-            const migrationResult = await dataMigrationService.migrateAnonymousDataToUser(
-              sessionResult.data.user.id
-            );
-            
-            if (migrationResult.success) {
-              console.log('[Auth] ✅ Data migration successful:', migrationResult);
-              localStorageService.clearPaperResultsAfterMigration();
-            } else {
-              console.warn('[Auth] ⚠️ Data migration failed:', migrationResult.error);
-            }
-          } catch (migrationError) {
-            console.error('[Auth] ❌ Migration error:', migrationError);
-          }
-        }
-      } else {
-        throw new Error('Failed to get user session after Google sign in');
-      }
+      // If we reach here the redirect is in flight — do nothing further.
+      // isLoading will reset naturally when the page reloads after OAuth.
     } catch (err) {
+      // Only a true pre-redirect failure ends up here.
       const errorMessage = err instanceof Error ? err.message : 'Google sign in failed';
       console.error('[Auth] Google sign in error:', errorMessage);
       setError(errorMessage);
+      setIsLoading(false); // Reset loading on real error only
       throw err;
-    } finally {
-      setIsLoading(false);
     }
+    // No finally block — we intentionally leave isLoading=true while the
+    // browser is navigating to Google. Resetting it here would cause a
+    // flicker/error state that the user incorrectly sees as a failure.
   }, []);
 
   const signInWithMicrosoft = useCallback(async () => {
