@@ -206,11 +206,8 @@ Return JSON array of strings.`;
 
     // TIER 2: Try GPT with timeout
     try {
-      const gptPrompt = `Generate 5 additional, distinct search queries for: "${originalQuery}".
-Return ONLY a JSON array of strings. Example: ["query1", "query2", "query3", "query4", "query5"]`;
-
       const parsed = await withTimeout(
-        callOpenAI(gptPrompt),
+        callOpenAI(prompt),
         80000, // 80 seconds
         'GPT Search Variations'
       );
@@ -527,23 +524,8 @@ User query:
     try {
       console.log('[ArxivSearchTerms] Tier 2: Attempting GPT-4o Mini fallback...');
 
-      const gptPrompt = `You are an academic keyword generation engine.
-
-Your sole task is to convert a user's natural-language research question into high-quality academic search keywords.
-
-OBJECTIVE: Generate one primary keyword, three secondary keywords, and query combinations.
-
-CRITICAL: Return ONLY valid JSON in this exact format:
-{
-  "primary_keyword": "string",
-  "secondary_keywords": ["string", "string", "string"],
-  "query_combinations": ["primary AND secondary", "primary AND secondary"]
-}
-
-User query: "${userQuery}" `;
-
       const gptResult = await withTimeout(
-        callOpenAI(gptPrompt),
+        callOpenAI(systemPrompt),
         30000,
         'GPT-4o Mini ArxivSearchTerms'
       );
@@ -574,7 +556,7 @@ async function getEmbedding(text, taskType) {
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-embedding-2-preview' });
       const result = await model.embedContent({
         content: { parts: [{ text }] },
         taskType
@@ -587,7 +569,7 @@ async function getEmbedding(text, taskType) {
       console.error('[getEmbedding] Error on attempt', attempt + 1, ':', {
         status: error?.status,
         message: error?.message,
-        model: 'gemini-embedding-001'
+        model: 'gemini-embedding-2-preview'
       });
 
       if (error?.status === 429 && attempt < 2) {
@@ -1013,7 +995,7 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
     console.log('\n📐 STAGE 1: Cosine Similarity Pre-Filter');
     console.log('   Creating embeddings for all', papers.length, 'papers...');
 
-    const userIntentText = 'Questions: ' + userQuestions.join('\n') + '\nKeywords: ' + keywords.join(', ');
+    const userIntentText = 'Does the paper directly relate to any of the following? Questions:\n ' + userQuestions.join('\n') + '\nKeywords: ' + keywords.join(', ');
     const targetVector = await getEmbedding(userIntentText, 'RETRIEVAL_QUERY');
 
     if (targetVector.length === 0) {
@@ -1023,7 +1005,7 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
 
     console.log('   ✅ Target vector created, length:', targetVector.length);
 
-    const paperTexts = papers.map(p => 'Title: ' + p.title + '\nAbstract: ' + p.summary);
+    const paperTexts = papers.map(p => '#Academic paper\nTitle: ' + p.title + '\nAbstract: ' + p.summary);
     console.log('   📋 Paper texts prepared, count:', paperTexts.length);
 
     const paperEmbeddings = await getBatchEmbeddings(paperTexts, 'RETRIEVAL_DOCUMENT');
@@ -1577,18 +1559,8 @@ INSTRUCTIONS:
 
     // TIER 2: Try GPT fallback
     try {
-      const gptPrompt = `You are a specialized Academic Search Engine.
-User Query: "${query}"
-
-Find the top 10 academic papers/PDFs and return as JSON:
-{
-  "results": [
-    {"title": "...", "uri": "...", "summary": "...", "isPdf": true}
-  ]
-}`;
-
       const parsed = await withTimeout(
-        callOpenAI(gptPrompt),
+        callOpenAI(prompt),
         80000, // 80 seconds
         'GPT Grounding Search'
       );
@@ -1642,12 +1614,8 @@ async function generateInsightQueries(userQuestions, contextQuery) {
 
     // TIER 2: Try GPT with timeout
     try {
-      const gptPrompt = `Context: The user has papers regarding "${contextQuery}".
-Goal: Answer these questions: "${userQuestions}".
-Generate 5 semantic search phrases as a JSON array.`;
-
       const parsed = await withTimeout(
-        callOpenAI(gptPrompt),
+        callOpenAI(prompt),
         80000, // 80 seconds
         'GPT Insight Queries'
       );
