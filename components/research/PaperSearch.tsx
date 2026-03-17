@@ -49,8 +49,6 @@ interface PaperSearchProps {
   selectedNoteIds: string[];
   onSelectedNoteIdsChange: (ids: string[]) => void;
   onSelectNote: (id: string) => void;
-  sortBy: SortOption;
-  isSortOpen: boolean;
   showFilters: boolean;
   searchQuery: string;
   localFilters: { paper: string; query: string; hasNotes: boolean };
@@ -58,8 +56,6 @@ interface PaperSearchProps {
   isSelectMenuOpen: boolean;
   isNoteSelectMenuOpen: boolean;
   justCopiedNotes: boolean;
-  onSortChange: (sort: SortOption) => void;
-  onSortOpenChange: (open: boolean) => void;
   onShowFiltersChange: (show: boolean) => void;
   onSearchQueryChange: (q: string) => void;
   onLocalFiltersChange: (filters: { paper: string; query: string; hasNotes: boolean }) => void;
@@ -590,8 +586,6 @@ export const PaperSearch: React.FC<PaperSearchProps> = ({
   selectedNoteIds,
   onSelectedNoteIdsChange,
   onSelectNote,
-  sortBy,
-  isSortOpen,
   showFilters,
   searchQuery,
   localFilters,
@@ -599,8 +593,6 @@ export const PaperSearch: React.FC<PaperSearchProps> = ({
   isSelectMenuOpen,
   isNoteSelectMenuOpen,
   justCopiedNotes,
-  onSortChange,
-  onSortOpenChange,
   onShowFiltersChange,
   onSearchQueryChange,
   onLocalFiltersChange,
@@ -621,6 +613,11 @@ export const PaperSearch: React.FC<PaperSearchProps> = ({
 
   const { setActivePdf } = useLibrary();
   const { openColumn } = useUI();
+
+  // ─── Local Sort State ─────────────────────────────────────────────────────────
+  type SortOptionResults = 'most-relevant-notes' | 'recent-research' | 'alphabetical';
+  const [sortBy, setSortBy] = useState<SortOptionResults>('recent-research');
+  const [isSortOpen, setIsSortOpen] = useState(false);
 
   // NEW: Independent selection state for this tab (not tied to global selections)
   const [accumulatedSelectedIds, setAccumulatedSelectedIds] = useState<Set<string>>(new Set());
@@ -1122,6 +1119,42 @@ export const PaperSearch: React.FC<PaperSearchProps> = ({
               <Filter size={20} />
               <span>Filters</span>
             </button>
+
+            {/* Sort Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setIsSortOpen(!isSortOpen)}
+                className="flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+              >
+                <span className="truncate max-w-[140px]">
+                  {sortBy === 'most-relevant-notes' && 'Most Relevant Notes'}
+                  {sortBy === 'recent-research' && 'Recent Research'}
+                  {sortBy === 'alphabetical' && 'Alphabetical'}
+                </span>
+                <ChevronDown size={16} className={`text-gray-400 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isSortOpen && (
+                <>
+                  <div className="fixed inset-0 z-40 pointer-events-none" onClick={() => setIsSortOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50 animate-fade-in pointer-events-auto">
+                    <button onClick={() => { setSortBy('most-relevant-notes'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                      <Star size={16} className={sortBy === 'most-relevant-notes' ? "text-scholar-600" : "text-gray-400"} />
+                      <span className="text-sm font-medium">Most Relevant Notes</span>
+                    </button>
+                    <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1" />
+                    <button onClick={() => { setSortBy('recent-research'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                      <Calendar size={16} className={sortBy === 'recent-research' ? "text-scholar-600" : "text-gray-400"} />
+                      <span className="text-sm font-medium">Recent Research</span>
+                    </button>
+                    <button onClick={() => { setSortBy('alphabetical'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                      <ArrowUpDown size={16} className={sortBy === 'alphabetical' ? "text-scholar-600" : "text-gray-400"} />
+                      <span className="text-sm font-medium">Alphabetical</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
             {sortBy !== 'most-relevant-notes' && currentTabCandidates.some(p => p.notes && p.notes.length > 0) && (
               <button

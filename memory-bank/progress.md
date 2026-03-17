@@ -56,6 +56,10 @@
   - URI-based deduplication prevents duplicate papers in Agent context
   - Cross-component visibility via `isPaperSelectedByUri()` helper
   - 100 lines added across 5 files, zero breaking changes
+- 🆕 **Mar 17:** Sort UI Decentralization
+  - Moved generic sorting state out of parent `ResearchView`
+  - Encapsulated sort algorithms and dropdown logic into `DeepSearch` and `PaperSearch` natively
+  - Eliminated unnecessary prop-drilling
 
 ### ✅ Authentication (95%)
 - Neon Auth + OAuth (Google, Microsoft)
@@ -86,6 +90,17 @@
   - Complete debug tracing for troubleshooting
 
 ## Recent Critical Fixes
+
+### ✅ SORT UI DECENTRALIZATION (Mar 17, 2026) - UI ENCAPSULATION
+**Major Accomplishment:** Eliminated prop-drilling by migrating sort state into native components
+
+**Problem:** `ResearchView` managed the `sortBy` state and dropdown UI for its child components (`DeepSearch` and `PaperSearch`), coupling the views together and causing unnecessary prop drilling.
+**Solution:**
+- Encapsulated `sortBy` and `isSortOpen` state into `DeepSearch` and `PaperSearch`.
+- Recreated the Sort Dropdown UI immediately to the right of the existing 'Filters' button in both tabs.
+- Cleaned up parent component.
+
+---
 
 ### ✅ UNIFIED SELECTION STATE (Feb 27, 2026) - DEDUPLICATION COMPLETE
 **Major Accomplishment:** Cross-component paper selection with automatic deduplication

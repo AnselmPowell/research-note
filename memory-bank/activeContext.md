@@ -1,6 +1,18 @@
 # Active Context - Research Note
 
-## Current Work Focus (February 27, 2026)
+## Current Work Focus (March 17, 2026)
+
+### COMPLETED: Sort UI Decentralization ✅
+
+**Session (Mar 17, 2026) - Sort UI and State Moved to Child Components**
+
+**Problem Solved:**
+- `ResearchView.tsx` handled generic sorting states and UI dropdowns, causing unnecessary prop-drilling to `DeepSearch.tsx` and `PaperSearch.tsx`.
+
+**Solution:**
+- Encapsulated sort state (`sortBy`, `isSortOpen`) and dropdown UI logic directly into `DeepSearch.tsx` and `PaperSearch.tsx`.
+- Placed sort dropdowns directly next to the local Filter buttons in the respective components.
+- Eliminated all sort-related prop-drilling from `ResearchView.tsx`.
 
 ### COMPLETED: Unified Selection State with Deduplication ✅
 
