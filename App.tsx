@@ -2,20 +2,23 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { ThreeColumnLayout } from './components/layout/ThreeColumnLayout';
 import { SearchBar } from './components/search/SearchBar';
-import { WebSearchView } from './components/websearch/WebSearchView';
-import { DeepResearchView } from './components/research/DeepResearchView';
+import { WebSearch } from './components/research/WebSearch';
+import { SourcesPanel } from './components/sources/SourcesPanel';
+import { ResearchView } from './components/research/ResearchView';
 import { PdfWorkspace } from './components/pdf/PdfWorkspace';
 import { AgentResearcher } from './components/researcherAI/AgentResearcher';
 import { LayoutControls } from './components/layout/LayoutControls';
 import { NotesManagerSidebar } from './components/library/NotesManagerSidebar';
 import { NotesManager } from './components/library/NotesManager';
-import { SourcesPanel } from './components/sources/SourcesPanel';
+
 import { ToastContainer } from './components/ui/Toast';
+
 import { useUI } from './contexts/UIContext';
 import { useResearch } from './contexts/ResearchContext';
 import { useLibrary } from './contexts/LibraryContext';
 import { useAuth } from './contexts/AuthContext';
 import { AuthModal } from './components/auth/AuthModal';
+
 import { Globe, Check, Library, ChevronsDown, ChevronsUp, AlertTriangle, User, LogOut, Settings, Sun, Moon, X, Search } from 'lucide-react';
 
 // Import configuration to validate on app start
@@ -118,7 +121,7 @@ const App: React.FC = () => {
 
   // Stable callback for opening a paper in the PDF viewer.
   // Extracted here so middleContent useMemo does NOT depend on openColumn/loadPdfFromUrl/setActivePdf
-  // directly — those can change reference and would cause DeepResearchView to remount, resetting activeTab.
+  // directly — those can change reference and would cause ResearchView to remount, resetting activeTab.
   const handleViewPdf = useCallback((paper: any) => {
     setActivePdf(paper.pdfUri);
     openColumn('right');
@@ -134,7 +137,7 @@ const App: React.FC = () => {
   const middleContent = useMemo(() => {
     if (showDeepResearch) {
       return (
-        <DeepResearchView
+        <ResearchView
           researchPhase={researchPhase}
           status={gatheringStatus}
           candidates={researchPhase === 'extracting' || researchPhase === 'completed' ? filteredCandidates : arxivCandidates}
@@ -252,7 +255,7 @@ const App: React.FC = () => {
     <div className="h-screen flex flex-col bg-cream dark:bg-dark-bg font-sans transition-colors duration-300 overflow-hidden">
 
       <ToastContainer />
-      
+
       <NotesManagerSidebar
         onShowAuthModal={() => setShowAuthModal(true)}
         resetCallbacks={[resetUI, resetAllResearchData, resetLibrary]}

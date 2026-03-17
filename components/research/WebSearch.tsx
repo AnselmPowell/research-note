@@ -20,7 +20,7 @@ interface WebSearchdProps {
   onView?: () => void;
 }
 
-export const WebSearchView: React.FC<WebSearchdProps> = ({
+export const WebSearch: React.FC<WebSearchdProps> = ({
   source,
   isSelected,
   isDownloading,

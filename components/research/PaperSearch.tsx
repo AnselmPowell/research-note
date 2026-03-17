@@ -43,7 +43,7 @@ import { ExternalLinkIcon } from '../ui/icons';
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type SortOption = 'most-relevant-notes' | 'relevant-papers' | 'newest-papers';
 
-interface PaperResultsProps {
+interface PaperSearchProps {
   allNotesExpanded: boolean;
   onAllNotesExpandedChange: (expanded: boolean) => void;
   selectedNoteIds: string[];
@@ -584,7 +584,7 @@ const ResearchCardNote: React.FC<{
 });
 
 // ─── PaperResults Main Component ───────────────────────────────────────────────
-export const PaperResults: React.FC<PaperResultsProps> = ({
+export const PaperSearch: React.FC<PaperSearchProps> = ({
   allNotesExpanded,
   onAllNotesExpandedChange,
   selectedNoteIds,

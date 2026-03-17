@@ -18,14 +18,14 @@ import { useResearch } from '../../contexts/ResearchContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
 // import { useDatabase } from '../../contexts/DatabaseContext';
-import { WebSearchView } from '../websearch/WebSearchView';
+import { WebSearch } from './WebSearch';
 import { DeepSearch } from './DeepSearch';
-import { PaperResults } from './PaperResults';
+import { PaperSearch } from './PaperSearch';
 
 type TabType = 'web' | 'deep' | 'results';
 type SortOption = 'relevant-papers' | 'newest-papers' | 'most-relevant-notes';
 
-export const DeepResearchView: React.FC = () => {
+export const ResearchView: React.FC = () => {
   const {
     researchPhase,
     status,
@@ -261,7 +261,7 @@ export const DeepResearchView: React.FC = () => {
                 </div>
               ) : webSearchSources.length > 0 ? (
                 webSearchSources.map((source, idx) => (
-                  <WebSearchView
+                  <WebSearch
                     key={`${source.url}-${idx}`}
                     source={source}
                     isSelected={selectedWebSourceUris.has(source.uri)}
@@ -277,7 +277,7 @@ export const DeepResearchView: React.FC = () => {
               )}
             </div>
           ) : activeTab === 'results' ? (
-            <PaperResults
+            <PaperSearch
               allNotesExpanded={allNotesExpanded}
               onAllNotesExpandedChange={setAllNotesExpanded}
               selectedNoteIds={selectedNoteIds}
