@@ -249,8 +249,8 @@ export const AgentResearcher: React.FC = () => {
         openColumn('library');
         setLibraryActiveView('research');
         
-        // Ensure other research views are closed to avoid confusion
-        setColumnVisibility(prev => ({ ...prev, middle: false }));
+        // Ensure middle view stays open alongside the library for splitscreen
+        setColumnVisibility(prev => ({ ...prev, middle: true }));
 
         setIsBarExpanded(false);
         setActiveTool(null);

@@ -60,6 +60,10 @@
   - Moved generic sorting state out of parent `ResearchView`
   - Encapsulated sort algorithms and dropdown logic into `DeepSearch` and `PaperSearch` natively
   - Eliminated unnecessary prop-drilling
+- 🆕 **Mar 17:** UI Behavior Refinement
+  - Removed auto-opening of Sources Panel (left column) when adding papers to library/sources
+  - Improved user focus by maintaining current column state during document collection
+  - Enforced Persistent Splitscreen: Middle column (Research/Results) now stays open when viewing PDFs from all search views.
 
 ### ✅ Authentication (95%)
 - Neon Auth + OAuth (Google, Microsoft)

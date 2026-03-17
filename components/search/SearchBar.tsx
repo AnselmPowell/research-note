@@ -236,8 +236,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         addToSelectionByUri(result.pdf.uri);
 
         // Open viewer and clear input
-        setColumnVisibility(prev => ({ ...prev, right: true, middle: false }));
-        openColumn('right');
+        setColumnVisibility(prev => ({ ...prev, right: true, middle: true }));
         e.target.value = '';
       } else {
         flashError("Failed to process file");
@@ -255,8 +254,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 
         updateSearchBar({ mainInput: '' });
         // Switch into upload-compatible layout
-        setColumnVisibility(prev => ({ ...prev, right: true, middle: false }));
-        openColumn('right'); // Ensure it's active
+        setColumnVisibility(prev => ({ ...prev, right: true, middle: true }));
       } else {
         if (result.error) {
           flashError(`${result.error.reason}: ${result.error.actionableMsg.split('.')[0]}`);

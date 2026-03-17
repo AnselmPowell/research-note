@@ -130,7 +130,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     }
     if (isLocal) {
       setActivePdf(paper.id);
-      openUIColumn('right');
+      setColumnVisibility(prev => ({ ...prev, middle: true, right: true }));
     } else if (onView) {
       onView();
     }
@@ -148,7 +148,6 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
       pdfUri: paper.pdfUri
     };
     savePaper(paperData);
-    openUIColumn('left');
   };
 
   return (
@@ -402,7 +401,7 @@ const ResearchCardNote: React.FC<{
     loadPdfFromUrl(note.pdfUri, sourceTitle);
     setActivePdf(note.pdfUri);
     setSearchHighlight({ text: cleanedQuote, fallbackPage: note.pageNumber });
-    openUIColumn('right');
+    setColumnVisibility(prev => ({ ...prev, middle: true, right: true }));
   };
 
   const resolvedPaper: ArxivPaper | null =
@@ -952,8 +951,8 @@ export const PaperSearch: React.FC = () => {
 
   const handleViewPdf = useCallback((paper: ArxivPaper) => {
     setActivePdf(paper.pdfUri);
-    openColumn('right');
-  }, [setActivePdf, openColumn]);
+    setColumnVisibility(prev => ({ ...prev, middle: true, right: true }));
+  }, [setActivePdf, setColumnVisibility]);
 
   return (
     <>

@@ -149,7 +149,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     }
     if (isLocal) {
       setActivePdf(paper.id);
-      openUIColumn('right');
+      setColumnVisibility(prev => ({ ...prev, middle: true, right: true }));
     } else if (onView) {
       onView();
     }
@@ -167,7 +167,6 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
       pdfUri: paper.pdfUri
     };
     savePaper(paperData);
-    openUIColumn('left');
   };
 
 
@@ -411,7 +410,7 @@ const ResearchCardNote: React.FC<{
     loadPdfFromUrl(note.pdfUri, sourceTitle);
     setActivePdf(note.pdfUri);
     setSearchHighlight({ text: cleanedQuote, fallbackPage: note.pageNumber });
-    openUIColumn('right');
+    setColumnVisibility(prev => ({ ...prev, middle: true, right: true }));
   };
 
   const resolvedPaper: ArxivPaper | null =
@@ -668,7 +667,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   // handleViewPdf — replicated here, no longer needs to come from App.tsx as a prop
   const handleViewPdf = useCallback((paper: ArxivPaper) => {
     setActivePdf(paper.pdfUri);
-    openColumn('right');
+    setColumnVisibility(prev => ({ ...prev, middle: true, right: true }));
     loadPdfFromUrl(paper.pdfUri, paper.title, paper.authors.join(', ')).then((result: any) => {
       if (!result.success && result.error) {
         setActivePdf(null);

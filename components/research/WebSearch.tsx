@@ -146,9 +146,6 @@ export const WebSearch: React.FC<WebSearchdProps> = ({
     if (!isPdfInContext(source.uri)) {
       togglePdfContext(source.uri, source.title);
     }
-
-    // Open the sources panel
-    openColumn('left');
   };
 
   const domain = getDomain(source.uri);
@@ -218,7 +215,7 @@ export const WebSearch: React.FC<WebSearchdProps> = ({
                     e.stopPropagation();
                     setViewFailed(false);
                     setActivePdf(source.uri);
-                    openColumn('right');
+                    setColumnVisibility(prev => ({ ...prev, middle: true, right: true }));
                     loadPdfFromUrl(source.uri, source.title).then(result => {
                       // @ts-ignore
                       if (result && !result.success && result.error) {
