@@ -14,7 +14,8 @@ src/
 │   │   └── UploadView.tsx             # Direct PDF upload
 │   ├── library/
 │   │   ├── SourcesPanel.tsx           # Left column: PDF list
-│   │   └── PdfViewer.tsx              # Right column: PDF display
+│   │   ├── PdfViewer.tsx              # Right column: PDF display
+│   │   └── NotesManager.tsx           # Integrated Library + Research Workspace
 │   └── agent/
 │       └── AgentChat.tsx              # AI assistant interface
 ├── contexts/
