@@ -638,6 +638,11 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
     uploadedPaperStatuses,
     timeToFirstNotes,
     stopDeepResearch,
+    insightQuestions,
+    selectedInsightQuestions,
+    toggleInsightQuestion,
+    resolveInsights,
+    hasSubmittedInsights
   } = useResearch();
 
   const { loadedPdfs, isPdfInContext, loadPdfFromUrl, setActivePdf, downloadingUris, failedUris } = useLibrary();
@@ -787,11 +792,11 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
     const allPageSelected = (pagePaperIds as string[]).every(id => selectedArxivIds.has(id));
 
     if (allPageSelected) {
-      const currentSelection = Array.from(selectedArxivIds);
+      const currentSelection = Array.from(selectedArxivIds) as string[];
       const newSelection = currentSelection.filter(id => !(pagePaperIds as string[]).includes(id));
       selectAllArxivPapers(newSelection);
     } else {
-      const currentSelection = Array.from(selectedArxivIds);
+      const currentSelection = Array.from(selectedArxivIds) as string[];
       const newSelection = Array.from(new Set([...currentSelection, ...(pagePaperIds as string[])]));
       selectAllArxivPapers(newSelection);
     }
@@ -962,7 +967,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
     <>
       {/* ── Header Controls (Selection, Bulk Copy, Filters, Collapse) ─────────── */}
       {!isBlurred && (currentTabCandidates.length > 0 || totalNotes > 0) && (
-        <div className="relative z-40 flex items-center justify-between mb-4 px-1 animate-fade-in">
+        <div className="relative z-20 flex items-center justify-between mb-4 px-1 animate-fade-in">
 
           {/* LEFT: Selection + Bulk actions */}
           <div className="flex items-center gap-2">
@@ -987,7 +992,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
                 {isSelectMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-40 pointer-events-none" onClick={() => onSelectMenuOpenChange(false)} />
-                    <div className="absolute left-0 top-full mt-2 w-64 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 py-1.5 animate-fade-in pointer-events-auto" style={{ overflow: 'visible' }}>
+                    <div className="absolute left-0 top-full mt-2 w-64 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 animate-fade-in pointer-events-auto" style={{ overflow: 'visible' }}>
                       <button
                         onClick={handleSelectPage}
                         className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -1039,7 +1044,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
                 {isNoteSelectMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-40 pointer-events-none" onClick={() => onNoteSelectMenuOpenChange(false)} />
-                    <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 py-1.5 animate-fade-in pointer-events-auto" style={{ overflow: 'visible' }}>
+                    <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 animate-fade-in pointer-events-auto" style={{ overflow: 'visible' }}>
                       <button
                         onClick={handleSelectNotesPage}
                         className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
@@ -1099,7 +1104,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
           </div>
 
           {/* RIGHT: Filter Toggle + Expand/Collapse */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 z-20">
             <button
               onClick={() => onShowFiltersChange(!showFilters)}
               className={`flex items-center gap-2 px-3 py-2.5 text-xs font-bold rounded-lg transition-all ${showFilters || searchQuery || localFilters.paper !== 'all' || localFilters.query !== 'all' || localFilters.hasNotes
@@ -1331,11 +1336,17 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
       {/* ── DYNAMIC LOADING BOX (Phases: initializing, searching, filtering) ──── */}
       {(researchPhase === 'initializing' ||
         researchPhase === 'searching' ||
-        researchPhase === 'filtering') && (
+        researchPhase === 'filtering' ||
+        researchPhase === 'reviewing_insights') && (
           <DynamicLoadingBox
             researchPhase={researchPhase}
             paperData={paperDataList}
             gatheringStatus={status}
+            insightQuestions={insightQuestions}
+            selectedQuestions={selectedInsightQuestions}
+            onToggleQuestion={toggleInsightQuestion}
+            onProceed={resolveInsights}
+            hasSubmittedInsights={hasSubmittedInsights}
           />
         )}
     </>

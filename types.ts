@@ -106,10 +106,11 @@ export interface ArxivSearchStructured {
   primary_keyword: string;
   secondary_keywords: string[];
   query_combinations: string[];
+  insight_questions?: string[];
 }
 
 export type SearchMode = 'web' | 'deep' | 'upload' | 'results';
-export type ResearchPhase = 'idle' | 'initializing' | 'searching' | 'filtering' | 'extracting' | 'completed' | 'failed';
+export type ResearchPhase = 'idle' | 'initializing' | 'searching' | 'filtering' | 'reviewing_insights' | 'extracting' | 'completed' | 'failed';
 
 // NEW: Search API metrics tracking
 export interface SearchMetrics {

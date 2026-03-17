@@ -135,8 +135,8 @@ export const DeepResearchView: React.FC = () => {
 
       {/* ── STICKY HEADER ────────────────────────────────────────────────────── */}
       {(
-        <div className="sticky top-0 z-30 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-0 mb-3 px-4 sm:px-6 shadow-sm">
-          <div className="flex items-center justify-between py-3 gap-4">
+        <div className="sticky top-0 z-40 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-0 px-4 sm:px-6 shadow-sm flex justify-center">
+          <div className="flex items-center justify-between py-3 gap-4 w-full max-w-5xl">
             <div className="flex items-center -mb-px">
               <button
                 onClick={() => { setActiveTab('web'); setActiveSearchMode('web'); }}
@@ -166,7 +166,7 @@ export const DeepResearchView: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 z-50">
               {(activeTab === 'deep' || activeTab === 'results') && (currentTabCandidates.length > 0 || (activeTab === 'results')) && (
                 <div className="relative">
                   <button
@@ -193,8 +193,8 @@ export const DeepResearchView: React.FC = () => {
 
                   {isSortOpen && (
                     <>
-                      <div className="fixed inset-0 z-40" onClick={() => setIsSortOpen(false)} />
-                      <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50 animate-fade-in">
+                      <div className="fixed inset-0 z-[100]" onClick={() => setIsSortOpen(false)} />
+                      <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-[110] animate-fade-in">
                         {activeTab === 'results' ? (
                           <>
                             {/* My Results tab sorting options */}
@@ -243,96 +243,96 @@ export const DeepResearchView: React.FC = () => {
       {/* ── TAB CONTENT ─────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 custom-scrollbar">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-        {activeTab === 'web' ? (
-          <div className="space-y-6">
-            {searchState?.isLoading && (!webSearchSources || webSearchSources.length === 0) ? (
-              <div className="flex flex-col items-center justify-center h-screen min-h-[400px] p-8 space-y-6 animate-fade-in">
-                <div className="relative">
-                  <div className="w-20 h-20 border-4 border-scholar-100 dark:border-scholar-900 border-t-scholar-600 dark:border-t-scholar-500 rounded-full animate-spin"></div>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Search size={24} className="text-scholar-600 dark:text-scholar-500 animate-pulse" />
+          {activeTab === 'web' ? (
+            <div className="space-y-6">
+              {searchState?.isLoading && (!webSearchSources || webSearchSources.length === 0) ? (
+                <div className="flex flex-col items-center justify-center h-screen min-h-[400px] p-8 space-y-6 animate-fade-in">
+                  <div className="relative">
+                    <div className="w-20 h-20 border-4 border-scholar-100 dark:border-scholar-900 border-t-scholar-600 dark:border-t-scholar-500 rounded-full animate-spin"></div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Search size={24} className="text-scholar-600 dark:text-scholar-500 animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="text-center space-y-3 max-w-md mx-auto">
+                    <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Searching the Web</h3>
+                    <p className="text-gray-500 dark:text-gray-400 leading-relaxed animate-pulse">Finding relevant sources...</p>
                   </div>
                 </div>
-                <div className="text-center space-y-3 max-w-md mx-auto">
-                  <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Searching the Web</h3>
-                  <p className="text-gray-500 dark:text-gray-400 leading-relaxed animate-pulse">Finding relevant sources...</p>
+              ) : webSearchSources.length > 0 ? (
+                webSearchSources.map((source, idx) => (
+                  <WebSearchView
+                    key={`${source.url}-${idx}`}
+                    source={source}
+                    isSelected={selectedWebSourceUris.has(source.uri)}
+                    onToggle={(checked) => toggleWebSourceSelection(source.uri, checked)}
+                  />
+                ))
+              ) : (
+                <div className="py-24 flex flex-col items-center justify-center text-center opacity-40">
+                  <Search size={64} className="mb-6" />
+                  <h3 className="text-xl font-bold">No web search results</h3>
+                  <p className="text-sm">Perform a search to see relevant web sources.</p>
                 </div>
-              </div>
-            ) : webSearchSources.length > 0 ? (
-              webSearchSources.map((source, idx) => (
-                <WebSearchView
-                  key={`${source.url}-${idx}`}
-                  source={source}
-                  isSelected={selectedWebSourceUris.has(source.uri)}
-                  onToggle={(checked) => toggleWebSourceSelection(source.uri, checked)}
-                />
-              ))
-            ) : (
-              <div className="py-24 flex flex-col items-center justify-center text-center opacity-40">
-                <Search size={64} className="mb-6" />
-                <h3 className="text-xl font-bold">No web search results</h3>
-                <p className="text-sm">Perform a search to see relevant web sources.</p>
-              </div>
-            )}
-          </div>
-        ) : activeTab === 'results' ? (
-          <PaperResults
-            allNotesExpanded={allNotesExpanded}
-            onAllNotesExpandedChange={setAllNotesExpanded}
-            selectedNoteIds={selectedNoteIds}
-            onSelectedNoteIdsChange={setSelectedNoteIds}
-            onSelectNote={handleSelectNote}
-            sortBy={currentSort}
-            isSortOpen={isSortOpen}
-            showFilters={showFilters}
-            searchQuery={searchQuery}
-            localFilters={localFilters}
-            currentPage={currentPage}
-            isSelectMenuOpen={isSelectMenuOpen}
-            isNoteSelectMenuOpen={isNoteSelectMenuOpen}
-            justCopiedNotes={justCopiedNotes}
-            onSortChange={handleSortChange}
-            onSortOpenChange={setIsSortOpen}
-            onShowFiltersChange={setShowFilters}
-            onSearchQueryChange={setSearchQuery}
-            onLocalFiltersChange={setLocalFilters}
-            onCurrentPageChange={setCurrentPage}
-            onSelectMenuOpenChange={setIsSelectMenuOpen}
-            onNoteSelectMenuOpenChange={setIsNoteSelectMenuOpen}
-            onBulkCopyNotes={handleBulkCopyNotesFeedback}
-            onShowClearModal={() => setShowClearModal(true)}
-            status={status}
-          />
-        ) : (
-          <DeepSearch
-            allNotesExpanded={allNotesExpanded}
-            onAllNotesExpandedChange={setAllNotesExpanded}
-            selectedNoteIds={selectedNoteIds}
-            onSelectedNoteIdsChange={setSelectedNoteIds}
-            onSelectNote={handleSelectNote}
-            sortBy={currentSort}
-            isSortOpen={isSortOpen}
-            showFilters={showFilters}
-            searchQuery={searchQuery}
-            localFilters={localFilters}
-            currentPage={currentPage}
-            isSelectMenuOpen={isSelectMenuOpen}
-            isNoteSelectMenuOpen={isNoteSelectMenuOpen}
-            justCopiedNotes={justCopiedNotes}
-            onSortChange={handleSortChange}
-            onSortOpenChange={setIsSortOpen}
-            onShowFiltersChange={setShowFilters}
-            onSearchQueryChange={setSearchQuery}
-            onLocalFiltersChange={setLocalFilters}
-            onCurrentPageChange={setCurrentPage}
-            onSelectMenuOpenChange={setIsSelectMenuOpen}
-            onNoteSelectMenuOpenChange={setIsNoteSelectMenuOpen}
-            onBulkCopyNotes={handleBulkCopyNotesFeedback}
-            onShowClearModal={() => setShowClearModal(true)}
-            status={status}
-            generatedKeywords={[]} // Handled by context
-          />
-        )}
+              )}
+            </div>
+          ) : activeTab === 'results' ? (
+            <PaperResults
+              allNotesExpanded={allNotesExpanded}
+              onAllNotesExpandedChange={setAllNotesExpanded}
+              selectedNoteIds={selectedNoteIds}
+              onSelectedNoteIdsChange={setSelectedNoteIds}
+              onSelectNote={handleSelectNote}
+              sortBy={currentSort}
+              isSortOpen={isSortOpen}
+              showFilters={showFilters}
+              searchQuery={searchQuery}
+              localFilters={localFilters}
+              currentPage={currentPage}
+              isSelectMenuOpen={isSelectMenuOpen}
+              isNoteSelectMenuOpen={isNoteSelectMenuOpen}
+              justCopiedNotes={justCopiedNotes}
+              onSortChange={handleSortChange}
+              onSortOpenChange={setIsSortOpen}
+              onShowFiltersChange={setShowFilters}
+              onSearchQueryChange={setSearchQuery}
+              onLocalFiltersChange={setLocalFilters}
+              onCurrentPageChange={setCurrentPage}
+              onSelectMenuOpenChange={setIsSelectMenuOpen}
+              onNoteSelectMenuOpenChange={setIsNoteSelectMenuOpen}
+              onBulkCopyNotes={handleBulkCopyNotesFeedback}
+              onShowClearModal={() => setShowClearModal(true)}
+              status={status}
+            />
+          ) : (
+            <DeepSearch
+              allNotesExpanded={allNotesExpanded}
+              onAllNotesExpandedChange={setAllNotesExpanded}
+              selectedNoteIds={selectedNoteIds}
+              onSelectedNoteIdsChange={setSelectedNoteIds}
+              onSelectNote={handleSelectNote}
+              sortBy={currentSort}
+              isSortOpen={isSortOpen}
+              showFilters={showFilters}
+              searchQuery={searchQuery}
+              localFilters={localFilters}
+              currentPage={currentPage}
+              isSelectMenuOpen={isSelectMenuOpen}
+              isNoteSelectMenuOpen={isNoteSelectMenuOpen}
+              justCopiedNotes={justCopiedNotes}
+              onSortChange={handleSortChange}
+              onSortOpenChange={setIsSortOpen}
+              onShowFiltersChange={setShowFilters}
+              onSearchQueryChange={setSearchQuery}
+              onLocalFiltersChange={setLocalFilters}
+              onCurrentPageChange={setCurrentPage}
+              onSelectMenuOpenChange={setIsSelectMenuOpen}
+              onNoteSelectMenuOpenChange={setIsNoteSelectMenuOpen}
+              onBulkCopyNotes={handleBulkCopyNotesFeedback}
+              onShowClearModal={() => setShowClearModal(true)}
+              status={status}
+              generatedKeywords={[]} // Handled by context
+            />
+          )}
         </div>
       </div>
 
@@ -374,8 +374,7 @@ export const DeepResearchView: React.FC = () => {
               <h3 className="text-xl font-bold mb-3">Start New Research Session?</h3>
               <p className="text-base text-gray-500 leading-relaxed">
                 Starting a new search will <span className="font-semibold text-gray-900 dark:text-gray-100">permanently clear</span> your current results.
-                <br /><br />
-                Are you sure you want to discard your progress?
+                <br />Are you sure you want to discard your research notes found?
               </p>
             </div>
             <div className="grid grid-cols-2 gap-4">

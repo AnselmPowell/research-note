@@ -976,7 +976,7 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
     <>
       {/* ── Header Controls (Selection, Bulk Copy, Filters, Collapse) ─────────── */}
       {!isBlurred && (currentTabCandidates.length > 0 || totalNotes > 0) && (
-        <div className="relative z-40 flex items-center justify-between mb-4 px-1 animate-fade-in">
+        <div className="relative z-20 flex items-center justify-between mb-4 px-1 animate-fade-in">
 
           {/* LEFT: Selection + Bulk actions */}
           <div className="flex items-center gap-2">
@@ -1084,8 +1084,8 @@ export const PaperResults: React.FC<PaperResultsProps> = ({
               <button
                 onClick={handleBulkCopyNotes}
                 className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg shadow-sm transition-all ${justCopiedNotes
-                    ? 'bg-scholar-500 dark:bg-scholar-400 text-white hover:bg-scholar-500 dark:hover:bg-scholar-400'
-                    : 'text-white bg-scholar-600 dark:bg-scholar-700 hover:bg-scholar-700 dark:hover:bg-scholar-600'
+                  ? 'bg-scholar-500 dark:bg-scholar-400 text-white hover:bg-scholar-500 dark:hover:bg-scholar-400'
+                  : 'text-white bg-scholar-600 dark:bg-scholar-700 hover:bg-scholar-700 dark:hover:bg-scholar-600'
                   }`}
                 title={justCopiedNotes ? `Copied! ${selectedNoteIds.length} Notes` : `Copy ${selectedNoteIds.length} selected notes`}
               >

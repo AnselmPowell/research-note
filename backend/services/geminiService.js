@@ -262,6 +262,7 @@ Given a user research question, generate:
 One primary keyword phrase that captures the core academic subject
 Three secondary keyword phrases that represent: key variables, mechanisms, scope (e.g. global, longitudinal, comparative, psychological, economic)
 Then generate multiple keyword combinations using strict AND logic, prioritised from most specific → slightly broader.
+Finally, generate Four additional insight questions that could be useful for the student in their research. These should be counter-arguments, alternative perspectives, or another way to ask the question to deepen the analysis.
 
 CRITICAL RULES
 1. Preserve academic entities
@@ -293,6 +294,9 @@ This additional keyword should complete the query asked by the user
 max of 3 key words
 As much as possible, these should be a single word, keep it to one word.
 
+6. Insight questions most be short max 8 words. could be counter-arguments, alternative perspectives, or another way to ask the question to deepen the analysis. Important max of 8 words.
+
+7. The purpose of Insight question is to use the questions to extract information from papers, make sure questions are phased in a way that can extract information from papers.
 
 OUTPUT FORMAT (MANDATORY)
 Return ONLY valid JSON. No explanations. No markdown. No prose.
@@ -303,7 +307,8 @@ Return ONLY valid JSON. No explanations. No markdown. No prose.
     "primary AND secondary AND secondary",
     "primary AND secondary",
     "primary AND secondary"
-  ]
+  ],
+  "insight_questions": ["question 1", "question 2", "question 3", "question 4"]
 }
 
 EXAMPLES (FOLLOW THESE PATTERNS EXACTLY)
@@ -474,7 +479,10 @@ User query:
       secondary_keywords: Array.isArray(parsed.secondary_keywords)
         ? parsed.secondary_keywords.filter(s => s && typeof s === 'string').slice(0, 3)
         : fallback.secondary_keywords,
-      query_combinations: combos.length > 0 ? combos : fallback.query_combinations
+      query_combinations: combos.length > 0 ? combos : fallback.query_combinations,
+      insight_questions: Array.isArray(parsed.insight_questions)
+        ? parsed.insight_questions.filter(q => q && typeof q === 'string').slice(0, 4)
+        : []
     };
 
     // Safety net: if combinations empty but primary exists, build one

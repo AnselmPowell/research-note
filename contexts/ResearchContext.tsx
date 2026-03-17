@@ -104,6 +104,13 @@ interface ResearchContextType {
   addToPaperResults: (papers: ArxivPaper[], notes: DeepResearchNote[]) => void;
   clearPaperResults: () => void;
   removePaperFromResults: (paperId: string) => void;
+  resetAccumulatedDataForMigration: () => void;
+  // NEW: Insight questions for deepening research
+  insightQuestions: string[];
+  selectedInsightQuestions: string[];
+  hasSubmittedInsights: boolean;
+  toggleInsightQuestion: (q: string) => void;
+  resolveInsights: () => void;
 }
 
 const ResearchContext = createContext<ResearchContextType | undefined>(undefined);
@@ -309,6 +316,31 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // NEW: Search metrics tracking
   const [searchMetrics, setSearchMetrics] = useState<SearchMetrics | null>(null);
 
+  const [insightQuestions, setInsightQuestions] = useState<string[]>([]);
+  const [selectedInsightQuestions, setSelectedInsightQuestions] = useState<string[]>([]);
+  const selectedInsightQuestionsRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    selectedInsightQuestionsRef.current = selectedInsightQuestions;
+  }, [selectedInsightQuestions]);
+
+  const [hasSubmittedInsights, setHasSubmittedInsights] = useState(false);
+  const [insightPromiseResolver, setInsightPromiseResolver] = useState<(() => void) | null>(null);
+
+  const toggleInsightQuestion = useCallback((q: string) => {
+    setSelectedInsightQuestions(prev =>
+      prev.includes(q) ? prev.filter(item => item !== q) : [...prev, q]
+    );
+  }, []);
+
+  const resolveInsights = useCallback(() => {
+    setHasSubmittedInsights(true);
+    if (insightPromiseResolver) {
+      insightPromiseResolver();
+      setInsightPromiseResolver(null);
+    }
+  }, [insightPromiseResolver]);
+
   // Auto-save deep research results whenever they change (debounced to prevent excessive writes)
   useEffect(() => {
     // Only save if we have VISIBLE results (filtered candidates or deep research notes)
@@ -414,9 +446,10 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Phase breakdown
       lines.push('📊 PHASE BREAKDOWN:');
       Object.entries(researchTimings.phases).forEach(([phase, data]) => {
-        if (data?.duration !== undefined) {
-          const percentage = ((data.duration / totalDuration) * 100).toFixed(1);
-          lines.push(`  ${phase.padEnd(15)} ${data.duration.toFixed(2)}ms (${percentage}%)`);
+        const phaseData = data as any;
+        if (phaseData?.duration !== undefined) {
+          const percentage = ((phaseData.duration / totalDuration) * 100).toFixed(1);
+          lines.push(`  ${phase.padEnd(15)} ${phaseData.duration.toFixed(2)}ms (${percentage}%)`);
         }
       });
 
@@ -792,6 +825,10 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setUploadedPaperStatuses({}); // Clear uploaded paper statuses
     setShouldOpenPdfViewer(false); // Reset navigation intent
     setNavigationHandled(false); // Reset navigation flag
+    setInsightQuestions([]); // RESET
+    setSelectedInsightQuestions([]); // RESET
+    setHasSubmittedInsights(false); // RESET
+    setInsightPromiseResolver(null); // RESET
   }, []);
 
   // Complete reset for sign out - clears all research and search data
@@ -1068,7 +1105,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           updateUploadedPaperStatus(pdf.uri, 'failed');
         }
       });
-      
+
       toastService.error('PDF analysis could not complete. Please check your connection.', null);
     } finally {
       setIsDeepResearching(false);
@@ -1270,6 +1307,9 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     startPhaseTimer('initializing');
     setArxivCandidates([]);
     setFilteredCandidates([]);
+    setInsightQuestions([]); // RESET
+    setSelectedInsightQuestions([]); // RESET
+    setHasSubmittedInsights(false); // RESET
     setSearchState(prev => ({ ...prev, query: query.topics.join(', ') }));
 
     try {
@@ -1319,6 +1359,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (signal.aborted) return;
       endPhaseTimer('initializing');
       const structuredTerms = await generateArxivSearchTerms(query.topics, query.questions);
+      setInsightQuestions(structuredTerms.insight_questions || []); // CAPTURE
       const displayKeywords = [structuredTerms.primary_keyword, ...structuredTerms.secondary_keywords].filter(Boolean);
       setArxivKeywords(displayKeywords);
 
@@ -1382,12 +1423,23 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
 
         if (signal.aborted) return;
-        
+
         // ✅ CRITICAL: Set data BEFORE changing phase
         setFilteredCandidates(filtered);
         setTopFilteredPapers(topTenPapers);
 
         endPhaseTimer('filtering');
+
+        // NEW: Gating for Insight Questions Review
+        if (structuredTerms.insight_questions?.length > 0 && !signal.aborted && !hasSubmittedInsights) {
+          setResearchPhase('reviewing_insights');
+          setGatheringStatus("Reviewing research suggestions...");
+          await new Promise<void>((resolve) => {
+            setInsightPromiseResolver(() => resolve);
+          });
+          if (signal.aborted) return;
+        }
+
         setResearchPhase('extracting');
         startPhaseTimer('extracting');
 
@@ -1395,7 +1447,17 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setGatheringStatus(`Found ${totalSources} relevant sources. Gathering notes...`);
 
         // Combine user PDFs + ArXiv papers (user PDFs processed first)
-        await performHybridResearch(userPdfs, filtered, query.questions, displayKeywords);
+        // Combine user questions + Selected AI Insight Questions (using Ref to avoid stale closure)
+        const finalQuestionsForExtraction = [...query.questions, ...selectedInsightQuestionsRef.current];
+
+        console.log('[ResearchContext] 📝 FINAL QUESTIONS FOR EXTRACTION:', {
+          original: query.questions.length,
+          insights: selectedInsightQuestionsRef.current.length,
+          total: finalQuestionsForExtraction.length,
+          questions: finalQuestionsForExtraction
+        });
+
+        await performHybridResearch(userPdfs, filtered, finalQuestionsForExtraction, displayKeywords);
 
         if (signal.aborted) return;
         endPhaseTimer('extracting');
@@ -1406,7 +1468,17 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setResearchPhase('extracting');
         startPhaseTimer('extracting');
         setGatheringStatus("Analyzing your provided PDFs...");
-        await performHybridResearch(userPdfs, [], query.questions, displayKeywords);
+        // Combine user questions + Selected AI Insight Questions (using Ref to avoid stale closure)
+        const finalQuestionsForExtraction = [...query.questions, ...selectedInsightQuestionsRef.current];
+
+        console.log('[ResearchContext] 📝 FINAL QUESTIONS FOR EXTRACTION (PDF-ONLY):', {
+          original: query.questions.length,
+          insights: selectedInsightQuestionsRef.current.length,
+          total: finalQuestionsForExtraction.length,
+          questions: finalQuestionsForExtraction
+        });
+
+        await performHybridResearch(userPdfs, [], finalQuestionsForExtraction, displayKeywords);
         if (signal.aborted) return;
         endPhaseTimer('extracting');
         setResearchPhase('completed');
@@ -1424,7 +1496,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (!signal.aborted) {
         setGatheringStatus("Research failed.");
         setResearchPhase('idle'); // Reset to idle so spinner stops
-        
+
         // Show toast with retry option
         toastService.error('Research could not complete. Please check your connection and try again.', null, {
           label: 'Try Again',
@@ -1529,7 +1601,12 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addToPaperResults,
     clearPaperResults,
     removePaperFromResults,
-    resetAccumulatedDataForMigration
+    resetAccumulatedDataForMigration,
+    insightQuestions,
+    selectedInsightQuestions,
+    hasSubmittedInsights,
+    toggleInsightQuestion,
+    resolveInsights
   }), [
     activeSearchMode, searchState, searchBarState, updateSearchBar, clearSearchBar,
     searchHistory, addToHistory, removeFromHistory, clearHistory,
@@ -1543,9 +1620,9 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     showUploadedTab, shouldOpenPdfViewer, uploadedPaperStatuses, updateUploadedPaperStatus,
     navigationHandled, pendingDeepResearchQuery, isDeepSearchBarExpanded,
     researchTimings, timeToFirstNotes, timeToFirstPaper, searchMetrics,
-    // NEW: Accumulated results
     accumulatedPapers, accumulatedNotes, paperResultsMetadata,
-    addToPaperResults, clearPaperResults, removePaperFromResults, resetAccumulatedDataForMigration
+    addToPaperResults, clearPaperResults, removePaperFromResults, resetAccumulatedDataForMigration,
+    insightQuestions, selectedInsightQuestions, hasSubmittedInsights, toggleInsightQuestion, resolveInsights
   ]);
 
   return (
