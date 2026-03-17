@@ -23,8 +23,10 @@ import {
   BookOpenText,
   Lightbulb,
   FileJson,
-  Loader2
+  Loader2,
+  Sparkles
 } from 'lucide-react';
+import { PaperSearch } from '../research/PaperSearch';
 import { useDatabase } from '../../database/DatabaseContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
@@ -75,12 +77,14 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
   const { setColumnVisibility, handleScroll } = useUI();
 
   // --- STATE ---
-  const [activeTab, setActiveTab] = useState<'notes' | 'papers'>('notes');
+  const [activeTab, setActiveTab] = useState<'notes' | 'papers' | 'research'>('notes');
 
   // Sync tab with external navigation view
   useEffect(() => {
     if (activeView === 'papers') {
       setActiveTab('papers');
+    } else if (activeView === 'research') {
+      setActiveTab('research');
     } else if (['all', 'recent', 'flagged', 'starred'].includes(activeView)) {
       setActiveTab('notes');
     }
@@ -603,6 +607,14 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                 <FileText size={18} className="flex-shrink-0" />
                 <span className="tab-label">Papers</span>
               </button>
+
+              <button
+                onClick={() => { setActiveTab('research'); setCurrentPage(1); setSelectedNoteIds([]); }}
+                className={`tab-button px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'research' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+              >
+                <BookOpenText size={18} className="flex-shrink-0" />
+                <span className="tab-label">Research</span>
+              </button>
             </div>
 
             {/* RIGHT: VIEW TOGGLES AND FILTERS */}
@@ -731,9 +743,14 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
         className="flex-1 overflow-auto custom-scrollbar"
       >
         <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
-
-          {/* Paper Sub-Filters (Pills) */}
-          {activeTab === 'papers' && (
+          {activeTab === 'research' ? (
+            <div className="animate-fade-in">
+              <PaperSearch />
+            </div>
+          ) : (
+            <>
+              {/* Paper Sub-Filters (Pills) */}
+              {activeTab === 'papers' && (
             <div className="flex items-center gap-2 mb-6 px-1 animate-fade-in overflow-x-auto no-scrollbar">
               <button
                 onClick={() => setPaperSubFilter('all')}
@@ -965,6 +982,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
               </div>
             </div>
           )}
+        </>
+      )}
         </div>
       </div>
 

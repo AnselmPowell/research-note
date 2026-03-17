@@ -569,59 +569,36 @@ const ResearchCardNote: React.FC<{
 // Self-contained deep research tab — reads all data from context (no prop drilling)
 
 interface DeepSearchProps {
-  allNotesExpanded: boolean;
-  onAllNotesExpandedChange: (expanded: boolean) => void;
-  selectedNoteIds: string[];
-  onSelectedNoteIdsChange: (ids: string[]) => void;
-  onSelectNote: (id: string) => void;
-  showFilters: boolean;
-  searchQuery: string;
-  localFilters: { paper: string; query: string; hasNotes: boolean };
-  currentPage: number;
-  isSelectMenuOpen: boolean;
-  isNoteSelectMenuOpen: boolean;
-  justCopiedNotes: boolean;
-  onSearchQueryChange: (q: string) => void;
-  onLocalFiltersChange: (filters: { paper: string; query: string; hasNotes: boolean }) => void;
-  onCurrentPageChange: (page: number) => void;
-  onSelectMenuOpenChange: (open: boolean) => void;
-  onNoteSelectMenuOpenChange: (open: boolean) => void;
-  onBulkCopyNotes: () => void;
   onShowClearModal: () => void;
-  status: string;
-  generatedKeywords: string[];
 }
 
-export const DeepSearch: React.FC<DeepSearchProps> = ({
-  allNotesExpanded,
-  onAllNotesExpandedChange,
-  selectedNoteIds,
-  onSelectedNoteIdsChange,
-  onSelectNote,
-  showFilters,
-  searchQuery,
-  localFilters,
-  currentPage,
-  isSelectMenuOpen,
-  isNoteSelectMenuOpen,
-  justCopiedNotes,
-  onShowFiltersChange,
-  onSearchQueryChange,
-  onLocalFiltersChange,
-  onCurrentPageChange,
-  onSelectMenuOpenChange,
-  onNoteSelectMenuOpenChange,
-  onBulkCopyNotes,
-  onShowClearModal,
-  status,
-  generatedKeywords,
-}) => {
+export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
+  const [allNotesExpanded, setAllNotesExpanded] = useState(true);
+  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [localFilters, setLocalFilters] = useState({ paper: 'all', query: 'all', hasNotes: false });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isSelectMenuOpen, setIsSelectMenuOpen] = useState(false);
+  const [isNoteSelectMenuOpen, setIsNoteSelectMenuOpen] = useState(false);
+  const [justCopiedNotes, setJustCopiedNotes] = useState(false);
+
+  // Define setters to match expected handler names (minimizes diff)
+  const onAllNotesExpandedChange = setAllNotesExpanded;
+  const onSelectedNoteIdsChange = setSelectedNoteIds;
+  const onShowFiltersChange = setShowFilters;
+  const onSearchQueryChange = setSearchQuery;
+  const onLocalFiltersChange = setLocalFilters;
+  const onCurrentPageChange = setCurrentPage;
+  const onSelectMenuOpenChange = setIsSelectMenuOpen;
+  const onNoteSelectMenuOpenChange = setIsNoteSelectMenuOpen;
+
   const {
     researchPhase,
     candidates,
     filteredCandidates,
     arxivCandidates,
-    topFilteredPapers,  // ← NEW: Top 10 papers for loading box
+    topFilteredPapers,
     selectedArxivIds,
     isDeepResearching,
     deepResearchResults,
@@ -633,8 +610,30 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
     selectedInsightQuestions,
     toggleInsightQuestion,
     resolveInsights,
-    hasSubmittedInsights
+    hasSubmittedInsights,
+    status,
+    arxivKeywords: generatedKeywords
   } = useResearch();
+
+  const accumulatedPapers = arxivCandidates;
+  const accumulatedNotes = deepResearchResults;
+
+  const handleBulkCopyNotes = useCallback(() => {
+    if (selectedNoteIds.length === 0) return;
+    const notesToCopy = accumulatedNotes
+      .filter(n => selectedNoteIds.includes(n.uniqueId))
+      .map(n => `> ${n.quote}\n\nSource: ${n.sourcePaper.title}`)
+      .join('\n\n---\n\n');
+    navigator.clipboard.writeText(notesToCopy);
+    setJustCopiedNotes(true);
+    setTimeout(() => setJustCopiedNotes(false), 2000);
+  }, [selectedNoteIds, accumulatedNotes]);
+
+  const onSelectNote = useCallback((id: string) => {
+    setSelectedNoteIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  }, []);
 
   const { loadedPdfs, isPdfInContext, loadPdfFromUrl, setActivePdf, downloadingUris, failedUris } = useLibrary();
   const { openColumn } = useUI();
@@ -840,22 +839,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({
     onNoteSelectMenuOpenChange(false);
   }, [content, selectedNoteIds, sortBy, onSelectedNoteIdsChange, onNoteSelectMenuOpenChange]);
 
-  const handleBulkCopyNotes = useCallback(() => {
-    if (selectedNoteIds.length === 0) return;
-    const notesToCopy = selectedNoteIds
-      .map(noteId => {
-        const note = (content as any[]).find((n: any) => n.uniqueId === noteId);
-        if (!note) return null;
-        return `Quote: "${note.quote}"\nSource: ${note.sourcePaper?.title || 'Unknown'}\nPage: ${note.pageNumber}\nReference : ${note.sourcePaper?.harvardReference || 'N/A'}\n`;
-      })
-      .filter(Boolean)
-      .join('\n---\n\n');
 
-    if (notesToCopy) {
-      navigator.clipboard.writeText(notesToCopy);
-      onBulkCopyNotes();
-    }
-  }, [selectedNoteIds, content, onBulkCopyNotes]);
 
 
 

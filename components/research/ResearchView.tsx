@@ -146,13 +146,7 @@ export const ResearchView: React.FC = () => {
                 )}
               </button>
 
-              <button
-                onClick={() => { setActiveTab('results'); setActiveSearchMode('results'); }}
-                className={`px-4 py-1 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'results' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
-              >
-                <LayoutList size={20} className="flex-shrink-0" />
-                <span className="hidden sm:inline">My Results</span>
-              </button>
+
             </div>
           </div>
         </div>
@@ -193,55 +187,8 @@ export const ResearchView: React.FC = () => {
                 </div>
               )}
             </div>
-          ) : activeTab === 'results' ? (
-            <PaperSearch
-              allNotesExpanded={allNotesExpanded}
-              onAllNotesExpandedChange={setAllNotesExpanded}
-              selectedNoteIds={selectedNoteIds}
-              onSelectedNoteIdsChange={setSelectedNoteIds}
-              onSelectNote={handleSelectNote}
-              showFilters={showFilters}
-              searchQuery={searchQuery}
-              localFilters={localFilters}
-              currentPage={currentPage}
-              isSelectMenuOpen={isSelectMenuOpen}
-              isNoteSelectMenuOpen={isNoteSelectMenuOpen}
-              justCopiedNotes={justCopiedNotes}
-              onShowFiltersChange={setShowFilters}
-              onSearchQueryChange={setSearchQuery}
-              onLocalFiltersChange={setLocalFilters}
-              onCurrentPageChange={setCurrentPage}
-              onSelectMenuOpenChange={setIsSelectMenuOpen}
-              onNoteSelectMenuOpenChange={setIsNoteSelectMenuOpen}
-              onBulkCopyNotes={handleBulkCopyNotesFeedback}
-              onShowClearModal={() => setShowClearModal(true)}
-              status={status}
-            />
           ) : (
-            <DeepSearch
-              allNotesExpanded={allNotesExpanded}
-              onAllNotesExpandedChange={setAllNotesExpanded}
-              selectedNoteIds={selectedNoteIds}
-              onSelectedNoteIdsChange={setSelectedNoteIds}
-              onSelectNote={handleSelectNote}
-              showFilters={showFilters}
-              searchQuery={searchQuery}
-              localFilters={localFilters}
-              currentPage={currentPage}
-              isSelectMenuOpen={isSelectMenuOpen}
-              isNoteSelectMenuOpen={isNoteSelectMenuOpen}
-              justCopiedNotes={justCopiedNotes}
-              onShowFiltersChange={setShowFilters}
-              onSearchQueryChange={setSearchQuery}
-              onLocalFiltersChange={setLocalFilters}
-              onCurrentPageChange={setCurrentPage}
-              onSelectMenuOpenChange={setIsSelectMenuOpen}
-              onNoteSelectMenuOpenChange={setIsNoteSelectMenuOpen}
-              onBulkCopyNotes={handleBulkCopyNotesFeedback}
-              onShowClearModal={() => setShowClearModal(true)}
-              status={status}
-              generatedKeywords={[]} // Handled by context
-            />
+            <DeepSearch onShowClearModal={() => setShowClearModal(true)} />
           )}
         </div>
       </div>

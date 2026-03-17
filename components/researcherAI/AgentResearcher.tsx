@@ -63,7 +63,7 @@ export const AgentResearcher: React.FC = () => {
         selectedWebSourceUris
     } = useResearch();
 
-    const { setColumnVisibility } = useUI();
+    const { setColumnVisibility, openColumn, setLibraryActiveView } = useUI();
 
     // Unified loading state: ArXiv Loading OR PDF Loading
     const isDeepResearchLoading = (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed') || isDeepResearching;
@@ -245,9 +245,12 @@ export const AgentResearcher: React.FC = () => {
         // Use performHybridAnalysis for Agent-selected papers (WITH accumulation to "My Results")
         performHybridAnalysis(uniquePdfs, uniqueArxivPapers, currentQuestions, arxivKeywords);
 
-        // Open middle column and switch to results tab
-        setColumnVisibility(prev => ({ ...prev, middle: true }));
-        setActiveSearchMode('results');
+        // Open library column and switch to research tab
+        openColumn('library');
+        setLibraryActiveView('research');
+        
+        // Ensure other research views are closed to avoid confusion
+        setColumnVisibility(prev => ({ ...prev, middle: false }));
 
         setIsBarExpanded(false);
         setActiveTool(null);

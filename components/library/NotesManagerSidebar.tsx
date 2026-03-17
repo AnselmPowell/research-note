@@ -11,7 +11,6 @@ import {
   LayoutList,
   ChevronRight,
   X,
-  FileText,
   User,
   LogOut,
   Settings,
@@ -35,13 +34,14 @@ const ResearchNoteLogo: React.FC<{ className?: string }> = ({ className = "" }) 
 );
 
 const NavItem: React.FC<{
-  icon: any,
+  icon?: any,
   label: string,
-  count: number,
+  count?: number,
   isActive: boolean,
   onClick: () => void,
-  iconColor?: string
-}> = ({ icon: Icon, label, count, isActive, onClick, iconColor = "text-gray-500" }) => (
+  iconColor?: string,
+  showCount?: boolean
+}> = ({ icon: Icon, label, count, isActive, onClick, iconColor = "text-gray-500", showCount = true }) => (
   <div
     className={`
       flex items-center py-3 px-4 cursor-pointer transition-all duration-200 text-base rounded-xl mx-2 group
@@ -49,18 +49,22 @@ const NavItem: React.FC<{
     `}
     onClick={onClick}
   >
-    <span className={`mr-4 flex-shrink-0 ${isActive ? 'text-scholar-600' : iconColor}`}>
-      <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
-    </span>
+    {Icon && (
+      <span className={`mr-4 flex-shrink-0 ${isActive ? 'text-scholar-600' : iconColor}`}>
+        <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+      </span>
+    )}
     <span className={`flex-1 font-medium truncate ${isActive ? 'text-gray-900 font-bold dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>
       {label}
     </span>
-    <span className={`
-      text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center transition-colors
-      ${isActive ? 'bg-scholar-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}
-    `}>
-      {count}
-    </span>
+    {showCount && count !== undefined && (
+      <span className={`
+        text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center transition-colors
+        ${isActive ? 'bg-scholar-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'}
+      `}>
+        {count}
+      </span>
+    )}
   </div>
 );
 
@@ -255,8 +259,9 @@ export const SidebarNav: React.FC<{
 
       <div className="flex-1 -mt-4 overflow-y-auto custom-scrollbar px-0.5 md:px-1">
         <div className="mb-1">
-          <NavItem icon={LayoutList} label="All Notes" count={savedNotes.length} isActive={columnVisibility.library && libraryActiveView === 'all'} onClick={() => handleSelect('all')} iconColor="text-gray-700" />
-          <NavItem icon={FileText} label="Papers" count={savedPapers.length} isActive={columnVisibility.library && libraryActiveView === 'papers'} onClick={() => handleSelect('papers')} iconColor="text-scholar-500" />
+          <NavItem label="All Notes" count={savedNotes.length} isActive={columnVisibility.library && libraryActiveView === 'all'} onClick={() => handleSelect('all')} />
+          <NavItem label="Papers" count={savedPapers.length} isActive={columnVisibility.library && libraryActiveView === 'papers'} onClick={() => handleSelect('papers')} />
+          <NavItem label="Research" count={0} showCount={false} isActive={columnVisibility.library && libraryActiveView === 'research'} onClick={() => handleSelect('research')} />
 
           <div className="h-px bg-gray-100 dark:bg-gray-800 mx-6 my-2 opacity-50"></div>
 

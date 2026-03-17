@@ -43,30 +43,6 @@ import { ExternalLinkIcon } from '../ui/icons';
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type SortOption = 'most-relevant-notes' | 'relevant-papers' | 'newest-papers';
 
-interface PaperSearchProps {
-  allNotesExpanded: boolean;
-  onAllNotesExpandedChange: (expanded: boolean) => void;
-  selectedNoteIds: string[];
-  onSelectedNoteIdsChange: (ids: string[]) => void;
-  onSelectNote: (id: string) => void;
-  showFilters: boolean;
-  searchQuery: string;
-  localFilters: { paper: string; query: string; hasNotes: boolean };
-  currentPage: number;
-  isSelectMenuOpen: boolean;
-  isNoteSelectMenuOpen: boolean;
-  justCopiedNotes: boolean;
-  onShowFiltersChange: (show: boolean) => void;
-  onSearchQueryChange: (q: string) => void;
-  onLocalFiltersChange: (filters: { paper: string; query: string; hasNotes: boolean }) => void;
-  onCurrentPageChange: (page: number) => void;
-  onSelectMenuOpenChange: (open: boolean) => void;
-  onNoteSelectMenuOpenChange: (open: boolean) => void;
-  onBulkCopyNotes: () => void;
-  onShowClearModal: () => void;
-  status: string;
-}
-
 // ─── Constants & Helpers ───────────────────────────────────────────────────────
 const ITEMS_PER_PAGE = 15;
 
@@ -580,36 +556,63 @@ const ResearchCardNote: React.FC<{
 });
 
 // ─── PaperResults Main Component ───────────────────────────────────────────────
-export const PaperSearch: React.FC<PaperSearchProps> = ({
-  allNotesExpanded,
-  onAllNotesExpandedChange,
-  selectedNoteIds,
-  onSelectedNoteIdsChange,
-  onSelectNote,
-  showFilters,
-  searchQuery,
-  localFilters,
-  currentPage,
-  isSelectMenuOpen,
-  isNoteSelectMenuOpen,
-  justCopiedNotes,
-  onShowFiltersChange,
-  onSearchQueryChange,
-  onLocalFiltersChange,
-  onCurrentPageChange,
-  onSelectMenuOpenChange,
-  onNoteSelectMenuOpenChange,
-  onBulkCopyNotes,
-  onShowClearModal,
-  status,
-}) => {
+export const PaperSearch: React.FC = () => {
+  const [allNotesExpanded, setAllNotesExpanded] = useState(true);
+  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [localFilters, setLocalFilters] = useState({ paper: 'all', query: 'all', hasNotes: false });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isSelectMenuOpen, setIsSelectMenuOpen] = useState(false);
+  const [isNoteSelectMenuOpen, setIsNoteSelectMenuOpen] = useState(false);
+  const [justCopiedNotes, setJustCopiedNotes] = useState(false);
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [isClearingResults, setIsClearingResults] = useState(false);
+
+  const handleClearResults = async () => {
+    setIsClearingResults(true);
+    await clearPaperResults();
+    setIsClearingResults(false);
+    setShowClearModal(false);
+  };
+
+  // Define setters to match expected handler names (minimizes diff)
+  const onAllNotesExpandedChange = setAllNotesExpanded;
+  const onSelectedNoteIdsChange = setSelectedNoteIds;
+  const onShowFiltersChange = setShowFilters;
+  const onSearchQueryChange = setSearchQuery;
+  const onLocalFiltersChange = setLocalFilters;
+  const onCurrentPageChange = setCurrentPage;
+  const onSelectMenuOpenChange = setIsSelectMenuOpen;
+  const onNoteSelectMenuOpenChange = setIsNoteSelectMenuOpen;
+  const onShowClearModal = () => setShowClearModal(true);
+
   const {
     researchPhase,
     accumulatedPapers,
     accumulatedNotes,
     removePaperFromResults,
-    stopDeepResearch
+    stopDeepResearch,
+    status,
+    clearPaperResults
   } = useResearch();
+
+  const handleBulkCopyNotes = useCallback(() => {
+    if (selectedNoteIds.length === 0) return;
+    const notesToCopy = accumulatedNotes
+      .filter(n => selectedNoteIds.includes(n.uniqueId))
+      .map(n => `> ${n.quote}\n\nSource: ${n.sourcePaper.title}`)
+      .join('\n\n---\n\n');
+    navigator.clipboard.writeText(notesToCopy);
+    setJustCopiedNotes(true);
+    setTimeout(() => setJustCopiedNotes(false), 2000);
+  }, [selectedNoteIds, accumulatedNotes]);
+
+  const onSelectNote = useCallback((id: string) => {
+    setSelectedNoteIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  }, []);
 
   const { setActivePdf } = useLibrary();
   const { openColumn } = useUI();
@@ -826,23 +829,6 @@ export const PaperSearch: React.FC<PaperSearchProps> = ({
     }
     onNoteSelectMenuOpenChange(false);
   }, [content, selectedNoteIds, sortBy, onSelectedNoteIdsChange, onNoteSelectMenuOpenChange]);
-
-  const handleBulkCopyNotes = useCallback(() => {
-    if (selectedNoteIds.length === 0) return;
-    const notesToCopy = selectedNoteIds
-      .map(noteId => {
-        const note = (content as any[]).find((n: any) => n.uniqueId === noteId);
-        if (!note) return null;
-        return `Quote: "${note.quote}"\nSource: ${note.sourcePaper?.title || 'Unknown'}\nPage: ${note.pageNumber}\nReference : ${note.sourcePaper?.harvardReference || 'N/A'}\n`;
-      })
-      .filter(Boolean)
-      .join('\n---\n\n');
-
-    if (notesToCopy) {
-      navigator.clipboard.writeText(notesToCopy);
-      onBulkCopyNotes();
-    }
-  }, [selectedNoteIds, content, onBulkCopyNotes]);
 
   // ─── Dropdown options ──────────────────────────────────────────────────────────
   const uniquePapers = useMemo(() => {
@@ -1391,37 +1377,30 @@ export const PaperSearch: React.FC<PaperSearchProps> = ({
         )}
       </div>
 
-      {/* ── PERSISTENT LOADING MODAL (During Filtering & Extracting) ────── */}
-      {isBlurred && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-          <div className="bg-white dark:bg-dark-card rounded-2xl shadow-2xl p-8 border border-gray-200 dark:border-gray-700 max-w-sm animate-in fade-in zoom-in-95 pointer-events-auto">
-            <div className="flex flex-col items-center space-y-6">
-              {/* Spinner */}
-              <div className="relative">
-                <div className="w-24 h-24 border-4 border-scholar-100 dark:border-scholar-900 border-t-scholar-600 dark:border-t-scholar-500 rounded-full animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <BookOpenText size={28} className="text-scholar-600 dark:text-scholar-500 animate-pulse" />
-                </div>
-              </div>
-
-              {/* Status Text */}
-              <div className="text-center space-y-2">
-                <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">
-                  {researchPhase === 'extracting' ? 'Extracting Notes' : 'Filtering Papers'}
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 animate-pulse">
-                  {status || (researchPhase === 'filtering' ? 'Analyzing relevance...' : 'Processing documents...')}
-                </p>
-              </div>
-
-              {/* Progress Info (if available) */}
-              {currentTabCandidates.length > 0 && researchPhase === 'extracting' && (
-                <div className="bg-scholar-50 dark:bg-scholar-900/20 rounded-lg px-4 py-2 border border-scholar-100 dark:border-scholar-800">
-                  <p className="text-xs sm:text-sm font-medium text-scholar-700 dark:text-scholar-300">
-                    {currentTabCandidates.filter(p => p.analysisStatus === 'completed').length} of {currentTabCandidates.length} papers completed
-                  </p>
-                </div>
-              )}
+      {/* ── CLEAR MODAL ─────────────────────────────────────────────────────── */}
+      {showClearModal && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-transparent" onClick={() => !isClearingResults && setShowClearModal(false)} />
+          <div className="relative w-full max-sm:max-w-[320px] max-w-sm bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-6 ring-1 ring-black/5 animate-in zoom-in-95">
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-bold mb-2">Clear Results?</h3>
+              <p className="text-sm text-gray-500">This will remove all current results and unsaved notes.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowClearModal(false)}
+                disabled={isClearingResults}
+                className="px-4 py-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors border border-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearResults}
+                disabled={isClearingResults}
+                className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-all"
+              >
+                {isClearingResults ? 'Clearing...' : 'Clear All'}
+              </button>
             </div>
           </div>
         </div>

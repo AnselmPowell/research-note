@@ -8,7 +8,7 @@ interface AssignmentModalState {
   sourceMetadata: any;
 }
 
-export type LibraryView = 'all' | 'recent' | 'flagged' | 'starred' | 'papers';
+export type LibraryView = 'all' | 'recent' | 'flagged' | 'starred' | 'papers' | 'research';
 export type ColumnKey = 'left' | 'middle' | 'library' | 'right';
 
 interface UIContextType {
