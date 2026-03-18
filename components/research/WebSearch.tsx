@@ -36,7 +36,7 @@ export const WebSearch: React.FC<WebSearchdProps> = ({
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
   const { isPaperSelectedByUri, addToSelectionByUri } = useResearch();
   const { loadedPdfs, loadPdfFromUrl, togglePdfContext, isPdfInContext, setActivePdf, downloadingUris } = useLibrary();
-  const { openColumn } = useUI();
+  const { openColumn, setColumnVisibility } = useUI();
   const [viewFailed, setViewFailed] = useState(false);
   const [showManualInstruction, setShowManualInstruction] = useState(false);
 
@@ -215,7 +215,8 @@ export const WebSearch: React.FC<WebSearchdProps> = ({
                     e.stopPropagation();
                     setViewFailed(false);
                     setActivePdf(source.uri);
-                    setColumnVisibility(prev => ({ ...prev, middle: true, right: true }));
+                    // Explicitly close left sidebar when viewing from middle
+                    setColumnVisibility(prev => ({ ...prev, left: false, right: true }));
                     loadPdfFromUrl(source.uri, source.title).then(result => {
                       // @ts-ignore
                       if (result && !result.success && result.error) {

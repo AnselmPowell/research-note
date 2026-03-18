@@ -149,7 +149,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     }
     if (isLocal) {
       setActivePdf(paper.id);
-      setColumnVisibility(prev => ({ ...prev, middle: true, right: true }));
+      setColumnVisibility(prev => ({ ...prev, left: false, right: true }));
     } else if (onView) {
       onView();
     }
@@ -326,7 +326,7 @@ const ResearchCardNote: React.FC<{
   const { toggleContextNote, isNoteInContext, setActiveSearchMode } = useResearch();
   const { isNoteSaved, deleteNote, saveNote, savedNotes } = useDatabase();
   const { setSearchHighlight, loadPdfFromUrl, setActivePdf } = useLibrary();
-  const { openColumn: openUIColumn } = useUI();
+  const { openColumn: openUIColumn, setColumnVisibility } = useUI();
 
   const createPaperMetadata = useCallback((
     note: DeepResearchNote,
@@ -410,7 +410,8 @@ const ResearchCardNote: React.FC<{
     loadPdfFromUrl(note.pdfUri, sourceTitle);
     setActivePdf(note.pdfUri);
     setSearchHighlight({ text: cleanedQuote, fallbackPage: note.pageNumber });
-    setColumnVisibility(prev => ({ ...prev, middle: true, right: true }));
+    // Close left sidebar when viewing from notes
+    setColumnVisibility(prev => ({ ...prev, left: false, right: true }));
   };
 
   const resolvedPaper: ArxivPaper | null =
@@ -635,7 +636,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   }, []);
 
   const { loadedPdfs, isPdfInContext, loadPdfFromUrl, setActivePdf, downloadingUris, failedUris } = useLibrary();
-  const { openColumn } = useUI();
+  const { openColumn, setColumnVisibility } = useUI();
 
   // ─── Local Sort State ─────────────────────────────────────────────────────────
   const [sortBy, setSortBy] = useState<SortOption>('relevant-papers');
@@ -667,7 +668,8 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   // handleViewPdf — replicated here, no longer needs to come from App.tsx as a prop
   const handleViewPdf = useCallback((paper: ArxivPaper) => {
     setActivePdf(paper.pdfUri);
-    setColumnVisibility(prev => ({ ...prev, middle: true, right: true }));
+    // Open viewer, close sidebar
+    setColumnVisibility(prev => ({ ...prev, left: false, right: true }));
     loadPdfFromUrl(paper.pdfUri, paper.title, paper.authors.join(', ')).then((result: any) => {
       if (!result.success && result.error) {
         setActivePdf(null);

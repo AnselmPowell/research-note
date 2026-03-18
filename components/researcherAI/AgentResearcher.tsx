@@ -214,7 +214,8 @@ export const AgentResearcher: React.FC = () => {
     const handleViewCitation = (citation: AgentCitation) => {
         loadPdfFromUrl(citation.sourceId, citation.title);
         setActivePdf(citation.sourceId);
-        setColumnVisibility(prev => ({ ...prev, right: true }));
+        // Viewer from agent: close sidebar, keep viewer
+        setColumnVisibility(prev => ({ ...prev, left: false, right: true }));
     };
 
     const handleStartDeepResearch = async () => {
@@ -248,7 +249,7 @@ export const AgentResearcher: React.FC = () => {
         // Open library column and switch to research tab
         openColumn('library');
         setLibraryActiveView('research');
-        
+
         // Ensure middle view stays open alongside the library for splitscreen
         setColumnVisibility(prev => ({ ...prev, middle: true }));
 
@@ -339,7 +340,7 @@ export const AgentResearcher: React.FC = () => {
 
             {/* TOOL: DEEP RESEARCH BAR */}
             {showDeepBar && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-[50] group">
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-[999] group">
                     {/* HOVER CLOSE BUTTON */}
                     {!isBarExpanded && (
                         <div className="absolute -top-10 left-0 w-full flex justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-600 pointer-events-none group-hover:pointer-events-auto">
@@ -486,7 +487,7 @@ export const AgentResearcher: React.FC = () => {
                                     <button
                                         onClick={handleStartDeepResearch}
                                         disabled={
-                                            (!isDeepResearchLoading && (deepQuestions.length === 0 && !deepInput.trim())) || 
+                                            (!isDeepResearchLoading && (deepQuestions.length === 0 && !deepInput.trim())) ||
                                             !hasContext ||
                                             (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed' && !isDeepResearchLoading)
                                         }
@@ -501,8 +502,8 @@ export const AgentResearcher: React.FC = () => {
                              `}
                                         title={
                                             isDeepResearchLoading ? "Stop Hybrid Analysis" :
-                                            (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed' && !isDeepResearchLoading) ? "Main Deep Research in progress. Stop it first." :
-                                            "Start Hybrid Analysis"
+                                                (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed' && !isDeepResearchLoading) ? "Main Deep Research in progress. Stop it first." :
+                                                    "Start Hybrid Analysis"
                                         }
                                     >
                                         {isDeepResearchLoading ? (

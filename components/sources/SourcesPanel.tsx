@@ -9,7 +9,7 @@ export const SourcesPanel: React.FC = () => {
     const { savedPapers, deletePaper, savePaper } = useDatabase();
     const { setActivePdf, loadPdfFromUrl, addRemotePdf, addLocalPdf, addPdfFile, addPdfFileAndReturn, isPdfInContext, togglePdfContext, loadedPdfs, downloadingUris, removePdf } = useLibrary();
     const { isPaperSelectedByUri, addToSelectionByUri, removeFromSelectionByUri, selectedArxivIds, arxivCandidates, filteredCandidates } = useResearch();
-    const { openColumn } = useUI();
+    const { openColumn, setColumnVisibility } = useUI();
 
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -65,13 +65,14 @@ export const SourcesPanel: React.FC = () => {
 
     const handleOpenPaper = useCallback((uri: string, title: string) => {
         setActivePdf(uri);
-        openColumn('right');
+        // Keep Sources panel open while opening the viewer, preserve middle column state
+        setColumnVisibility(prev => ({ ...prev, left: true, right: true }));
         loadPdfFromUrl(uri, title).then(result => {
             if (!result.success && result.error) {
                 setActivePdf(null);
             }
         });
-    }, [loadPdfFromUrl, setActivePdf, openColumn]);
+    }, [loadPdfFromUrl, setActivePdf, setColumnVisibility]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []) as File[];

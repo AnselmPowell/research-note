@@ -64,6 +64,7 @@
   - Removed auto-opening of Sources Panel (left column) when adding papers to library/sources
   - Improved user focus by maintaining current column state during document collection
   - Enforced Persistent Splitscreen: Middle column (Research/Results) now stays open when viewing PDFs from all search views.
+  - Context-Aware Sidebar: Sources panel stays open when viewing from it, but automatically closes when viewing from research results to maximize focus.
 
 ### ✅ Authentication (95%)
 - Neon Auth + OAuth (Google, Microsoft)

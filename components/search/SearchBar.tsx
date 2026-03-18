@@ -236,7 +236,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         addToSelectionByUri(result.pdf.uri);
 
         // Open viewer and clear input
-        setColumnVisibility(prev => ({ ...prev, right: true, middle: true }));
+        setColumnVisibility(prev => ({ ...prev, left: false, right: true, middle: true }));
         e.target.value = '';
       } else {
         flashError("Failed to process file");
@@ -253,8 +253,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         addToSelectionByUri(result.pdf.uri);
 
         updateSearchBar({ mainInput: '' });
-        // Switch into upload-compatible layout
-        setColumnVisibility(prev => ({ ...prev, right: true, middle: true }));
+        // Switch into upload-compatible layout and ensure sidebar is closed
+        setColumnVisibility(prev => ({ ...prev, left: false, right: true, middle: true }));
       } else {
         if (result.error) {
           flashError(`${result.error.reason}: ${result.error.actionableMsg.split('.')[0]}`);
@@ -724,20 +724,20 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         <div className="absolute top-full left-0 right-0 mt-3 bg-white dark:bg-dark-card rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-5 animate-slide-up z-40 origin-top">
 
           {/* Prompt to add topic if none exist */}
-            <div className="mb-1 animate-fade-in border-gray-100 dark:border-gray-800 pb-1">
-              <div className="text-md font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                 {searchBarState.additionalTopics.length === 0 && searchBarState.urls.length === 0 && (
-                   <span>Add a </span>
-                  )}
-                topic or subject
-              </div>
-                  
-              {(searchBarState.additionalTopics.length === 0 && searchBarState.urls.length === 0  ) && searchBarState.mainInput.trim().length > 0 && (
-                <div className="text-xs text-scholar-600 dark:text-scholar-400 mt-1 flex items-center gap-1">
-                  Press Enter ↵ to add topic
-                </div>
-              ) }
+          <div className="mb-1 animate-fade-in border-gray-100 dark:border-gray-800 pb-1">
+            <div className="text-md font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              {searchBarState.additionalTopics.length === 0 && searchBarState.urls.length === 0 && (
+                <span>Add a </span>
+              )}
+              topic or subject
             </div>
+
+            {(searchBarState.additionalTopics.length === 0 && searchBarState.urls.length === 0) && searchBarState.mainInput.trim().length > 0 && (
+              <div className="text-xs text-scholar-600 dark:text-scholar-400 mt-1 flex items-center gap-1">
+                Press Enter ↵ to add topic
+              </div>
+            )}
+          </div>
 
           {(searchBarState.additionalTopics.length > 0 || searchBarState.urls.length > 0) && (
             <div className="flex flex-wrap gap-2 mb-4 w-full animate-fade-in border-b border-gray-50 dark:border-gray-800 pb-4">
@@ -824,9 +824,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({
                 )}
               </button>
             </div>
-            </div>
           </div>
-      )}
         </div>
-      );
+      )}
+    </div>
+  );
 };

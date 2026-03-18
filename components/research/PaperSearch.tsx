@@ -130,7 +130,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     }
     if (isLocal) {
       setActivePdf(paper.id);
-      setColumnVisibility(prev => ({ ...prev, middle: true, right: true }));
+      setColumnVisibility(prev => ({ ...prev, left: false, right: true }));
     } else if (onView) {
       onView();
     }
@@ -325,7 +325,7 @@ const ResearchCardNote: React.FC<{
   const { toggleContextNote, isNoteInContext, setActiveSearchMode } = useResearch();
   const { isNoteSaved, deleteNote, saveNote, savedNotes } = useDatabase();
   const { setSearchHighlight, loadPdfFromUrl, setActivePdf } = useLibrary();
-  const { openColumn: openUIColumn } = useUI();
+  const { openColumn: openUIColumn, setColumnVisibility } = useUI();
 
   const createPaperMetadata = useCallback((
     note: DeepResearchNote,
@@ -401,7 +401,8 @@ const ResearchCardNote: React.FC<{
     loadPdfFromUrl(note.pdfUri, sourceTitle);
     setActivePdf(note.pdfUri);
     setSearchHighlight({ text: cleanedQuote, fallbackPage: note.pageNumber });
-    setColumnVisibility(prev => ({ ...prev, middle: true, right: true }));
+    // Keep results open, close sources sidebar
+    setColumnVisibility(prev => ({ ...prev, left: false, right: true }));
   };
 
   const resolvedPaper: ArxivPaper | null =
@@ -614,7 +615,7 @@ export const PaperSearch: React.FC = () => {
   }, []);
 
   const { setActivePdf } = useLibrary();
-  const { openColumn } = useUI();
+  const { openColumn, setColumnVisibility } = useUI();
 
   // ─── Local Sort State ─────────────────────────────────────────────────────────
   type SortOptionResults = 'most-relevant-notes' | 'recent-research' | 'alphabetical';
@@ -951,7 +952,8 @@ export const PaperSearch: React.FC = () => {
 
   const handleViewPdf = useCallback((paper: ArxivPaper) => {
     setActivePdf(paper.pdfUri);
-    setColumnVisibility(prev => ({ ...prev, middle: true, right: true }));
+    // Open viewer alongside results, close sources sidebar
+    setColumnVisibility(prev => ({ ...prev, left: false, right: true }));
   }, [setActivePdf, setColumnVisibility]);
 
   return (
