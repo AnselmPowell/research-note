@@ -236,7 +236,7 @@ export const SidebarNav: React.FC<{
   return (
     <div className="w-full flex flex-col bg-white dark:bg-dark-card h-full">
       {/* Header: Logo and Close Button */}
-      <div className="px-3 md:px-4 pt-6 pb-4">
+      <div className="px-3 md:px-4 pt-2 pb-2">
         <div className="flex items-center justify-between">
           <ResearchNoteLogo className="text-2xl" />
           {onClose && (
@@ -248,7 +248,7 @@ export const SidebarNav: React.FC<{
       </div>
 
       {/* Controls Section */}
-      <div className="px-3 md:px-4 pt-0 ml-0.5">
+      <div className="px-3 md:px-4 pt-0 mx-auto justify-self-center justify-center">
         <div className="flex items-center justify-between mb-6">
           <div className="flex-1">
             <LayoutControls inSidebar={true} />

@@ -162,7 +162,7 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
       `}>
 
         {/* Header: Centered Status */}
-        <div className={`p-2 sm:p-2 flex flex-col relative`}>
+        <div className={`p-2 sm:p-2 pt-2 mt-2 flex flex-col relative`}>
 
           {/* Top Row: Centered Hub with Loader */}
           <div className="flex flex-col items-center justify-center transition-all duration-500">

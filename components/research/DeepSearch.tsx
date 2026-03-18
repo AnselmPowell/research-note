@@ -230,7 +230,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
               </div>
             </div>
 
-            <h3 className="text-base sm:text-2xl font-bold text-gray-900 dark:text-gray-100 leading-snug mb-1 cursor-pointer hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors" onClick={handleOpenPdf}>
+            <h3 className="text-3xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 leading-snug my-3 cursor-pointer hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors" onClick={handleOpenPdf}>
               {paper.title}
             </h3>
 
