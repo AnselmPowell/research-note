@@ -219,19 +219,7 @@ const App: React.FC = () => {
     }`
     , [isHeaderVisible, allColumnsClosed]);
 
-  // Show loading screen during authentication or config loading
-  // if (authLoading || isConfigLoading) {
-  //   return (
-  //     <div className="h-screen flex items-center justify-center bg-cream dark:bg-dark-bg">
-  //       <div className="text-center">
-  //         <div className="w-8 h-8 border-4 border-scholar-200 border-t-scholar-600 rounded-full animate-spin mx-auto mb-4"></div>
-  //         <p className="text-gray-600 dark:text-gray-400">
-  //           {authLoading ? 'Loading...' : 'Initializing...'}
-  //         </p>
-  //       </div>
-  //     </div>
-  //   );
-  // }
+
 
   // Configuration error handling
   if (configError) {
@@ -286,12 +274,19 @@ const App: React.FC = () => {
             </div>
           )}
           {!isLibraryOpen && (
-            <div className="absolute right-2 top-4 flex items-center gap-3 pr-5">
+            <div className="absolute right-2 top-4 flex items-center gap-3 pr-5 scale-125">
               <LayoutControls />
             </div>
           )}
         </div>
       </div>
+
+      {/* Layout Controls - Always visible, positioned at top-right */}
+      {isHeaderVisible === false && (
+        <div className="absolute top-2 right-2 z-[100] flex items-center gap-3">
+          <LayoutControls />
+        </div>
+      )}
 
       {allColumnsClosed ? (
         <main

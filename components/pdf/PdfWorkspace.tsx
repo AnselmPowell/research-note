@@ -33,15 +33,15 @@ const TabBar = ({ internalPdfs, activePdfUri, onTabChange, onClosePdf, onAddClic
     isVisible: boolean
 }) => (
     <div className={`w-full max-w-5xl px-4 pt-2 transition-all duration-300 transform origin-top z-30 bg-cream dark:bg-dark-bg ${isVisible ? 'translate-y-0 opacity-100 relative' : '-translate-y-full opacity-0 pointer-events-none absolute top-0'}`}>
-        <div className="flex items-center border-b border-gray-300 dark:border-gray-700 overflow-x-auto no-scrollbar">
+        <div className="flex items-center pb-4 border-b border-gray-300 dark:border-gray-700 overflow-x-auto no-scrollbar">
             {internalPdfs.map(pdf => (
                 <div key={pdf.id} onClick={() => onTabChange(pdf.id)} className={`flex items-center cursor-pointer px-4 py-2 border-b-2 -mb-px whitespace-nowrap ${activePdfUri === pdf.id ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400 dark:border-scholar-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>
-                    <FileText size={14} className="mr-2 opacity-70" />
-                    <span className="text-sm font-medium truncate max-w-[150px]">{pdf.file.name}</span>
+                    <FileText size={14} className="mr-1 opacity-70" />
+                    <span className="text-sm font-medium truncate max-w-[120px]">{pdf.file.name}</span>
                     <button onClick={(e) => { e.stopPropagation(); onClosePdf(pdf.id); }} className="ml-2 p-0.5 rounded-full text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"><X className="w-3 h-3" /></button>
                 </div>
             ))}
-            <button onClick={onAddClick} className="flex-shrink-0 flex items-center ml-2 px-3 py-1.5 text-xs text-gray-500 bg-gray-100 rounded-md hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 transition-colors">
+            <button onClick={onAddClick} className="flex-shrink-0 flex items-center ml-1 px-3 py-1.5 text-xs text-gray-500 bg-gray-100 rounded-md hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 transition-colors">
                 <Plus className="w-3 h-3 mr-1" />Add
             </button>
         </div>

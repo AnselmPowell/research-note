@@ -167,14 +167,14 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
           {/* Top Row: Centered Hub with Loader */}
           <div className="flex flex-col items-center justify-center transition-all duration-500">
             <div className="relative">
-              <Loader2 size={30} className=" w-16 h-16 text-scholar-600 animate-spin font-thin" />
+              <Loader2 size={32} className=" w-16 h-16 text-scholar-600 dark:text-scholar-400 animate-spin font-thin" />
               <div className="absolute inset-0 flex items-center justify-center border-l-stone-300">
-                <BookOpenText size={24} className="text-scholar-600" />
+                <BookOpenText size={24} className="text-scholar-600 dark:text-scholar-400" />
               </div>
             </div>
 
             <div className="text-center">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-scholar-600/60 transition-all mb-1">
+              <h3 className="text-[16px] font-black uppercase tracking-[0.3em] text-scholar-600/60 dark:text-scholar-400/60 transition-all mb-1">
                 {researchPhase.replace('_', ' ')}
               </h3>
               <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">{gatheringStatus}</p>

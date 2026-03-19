@@ -25,7 +25,8 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
     toggleLock,
     handleAutoHeaderHide,
     handleScroll,
-    isLibraryOpen
+    isLibraryOpen,
+    isHeaderVisible
   } = useUI();
   const { setActiveSearchMode } = useResearch();
 
@@ -296,17 +297,19 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
             style={{ width: getColumnWidth('left') }}
             className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-sm min-w-[320px] relative`}
           >
-            <ColumnHeader
-              title="Sources"
-              icon={FolderOpen}
-              colKey="left"
-              onClose={() => toggleColumn('left')}
-              isLocked={columnLocks.left}
-              activeColumnCount={activeColumnCount}
-              onExpand={handleExpand}
-              onTitleClick={handleTitleClick}
-              onToggleLock={toggleLock}
-            />
+            {isHeaderVisible === true && (
+              <ColumnHeader
+                title="Sources"
+                icon={FolderOpen}
+                colKey="left"
+                onClose={() => toggleColumn('left')}
+                isLocked={columnLocks.left}
+                activeColumnCount={activeColumnCount}
+                onExpand={handleExpand}
+                onTitleClick={handleTitleClick}
+                onToggleLock={toggleLock}
+              />
+            )}
             <div onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar">{sourcesContent}</div>
 
             {/* Interaction Barrier: Prevents clicks on Sources when Library is open */}
@@ -327,17 +330,19 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
             style={{ width: getColumnWidth('middle') }}
             className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-sm min-w-[320px]`}
           >
-            <ColumnHeader
-              title="Research"
-              icon={BookOpenText}
-              colKey="middle"
-              onClose={() => toggleColumn('middle')}
-              isLocked={columnLocks.middle}
-              activeColumnCount={activeColumnCount}
-              onExpand={handleExpand}
-              onTitleClick={handleTitleClick}
-              onToggleLock={toggleLock}
-            />
+            {isHeaderVisible === true && (
+              <ColumnHeader
+                title="Research"
+                icon={BookOpenText}
+                colKey="middle"
+                onClose={() => toggleColumn('middle')}
+                isLocked={columnLocks.middle}
+                activeColumnCount={activeColumnCount}
+                onExpand={handleExpand}
+                onTitleClick={handleTitleClick}
+                onToggleLock={toggleLock}
+              />
+            )}
             <div onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar relative">{middleContent}</div>
           </div>
         )}
@@ -350,17 +355,19 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
             style={{ width: getColumnWidth('library'), minWidth: '45%' }}
             className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-sm`}
           >
-            <ColumnHeader
-              title="Research Library"
-              icon={Library}
-              colKey="library"
-              onClose={() => toggleColumn('library')}
-              isLocked={columnLocks.library}
-              activeColumnCount={activeColumnCount}
-              onExpand={handleExpand}
-              onTitleClick={handleTitleClick}
-              onToggleLock={toggleLock}
-            />
+            {isHeaderVisible === true && (
+              <ColumnHeader
+                title="Library"
+                icon={Library}
+                colKey="library"
+                onClose={() => toggleColumn('library')}
+                isLocked={columnLocks.library}
+                activeColumnCount={activeColumnCount}
+                onExpand={handleExpand}
+                onTitleClick={handleTitleClick}
+                onToggleLock={toggleLock}
+              />
+            )}
             <div className="flex-1 overflow-hidden relative">{libraryContent}</div>
           </div>
         )}
@@ -373,17 +380,19 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
             style={{ width: getColumnWidth('right'), minWidth: '45%' }}
             className={`flex flex-col h-full bg-cream dark:bg-dark-card border rounded-xl dark:border-gray-700 overflow-hidden shadow-sm transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]`}
           >
-            <ColumnHeader
-              title="Paper View"
-              icon={FileText}
-              colKey="right"
-              onClose={() => toggleColumn('right')}
-              isLocked={columnLocks.right}
-              activeColumnCount={activeColumnCount}
-              onExpand={handleExpand}
-              onTitleClick={handleTitleClick}
-              onToggleLock={toggleLock}
-            />
+            {isHeaderVisible === true && (
+              <ColumnHeader
+                title="Paper View"
+                icon={FileText}
+                colKey="right"
+                onClose={() => toggleColumn('right')}
+                isLocked={columnLocks.right}
+                activeColumnCount={activeColumnCount}
+                onExpand={handleExpand}
+                onTitleClick={handleTitleClick}
+                onToggleLock={toggleLock}
+              />
+            )}
             <div onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar relative">{rightContent}</div>
           </div>
         )}

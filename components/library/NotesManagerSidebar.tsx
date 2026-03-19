@@ -261,7 +261,7 @@ export const SidebarNav: React.FC<{
         <div className="mb-1">
           <NavItem label="All Notes" count={savedNotes.length} isActive={columnVisibility.library && libraryActiveView === 'all'} onClick={() => handleSelect('all')} />
           <NavItem label="Papers" count={savedPapers.length} isActive={columnVisibility.library && libraryActiveView === 'papers'} onClick={() => handleSelect('papers')} />
-          <NavItem label="Research" count={0} showCount={false} isActive={columnVisibility.library && libraryActiveView === 'research'} onClick={() => handleSelect('research')} />
+          <NavItem label="Research Findings" count={0} showCount={false} isActive={columnVisibility.library && libraryActiveView === 'research'} onClick={() => handleSelect('research')} />
 
           <div className="h-px bg-gray-100 dark:bg-gray-800 mx-6 my-2 opacity-50"></div>
 

@@ -592,7 +592,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                     }
                   }
                 }}
-                className={`tab-button px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'notes' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+                className={`tab-button px-6 pt-4 pb-1  text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'notes' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
               >
                 <LayoutList size={18} className="flex-shrink-0" />
                 <span className="tab-label">
@@ -602,7 +602,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
               <button
                 onClick={() => { setActiveTab('papers'); setCurrentPage(1); setSelectedNoteIds([]); }}
-                className={`tab-button px-6 py-4 text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === 'papers' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+                className={`tab-button px-6 pt-4 pb-1  text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === 'papers' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
               >
                 <FileText size={18} className="flex-shrink-0" />
                 <span className="tab-label">Papers</span>
@@ -610,40 +610,42 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
               <button
                 onClick={() => { setActiveTab('research'); setCurrentPage(1); setSelectedNoteIds([]); }}
-                className={`tab-button px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'research' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+                className={`tab-button px-6 pt-4 pb-1 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'research' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
               >
                 <BookOpenText size={18} className="flex-shrink-0" />
-                <span className="tab-label">Research</span>
+                <span className="tab-label">Research Findings</span>
               </button>
             </div>
 
             {/* RIGHT: VIEW TOGGLES AND FILTERS */}
-            <div className="flex items-center gap-2">
-              <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
+            {(activeTab === 'notes' || activeTab === 'papers') && (
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
+                  <button
+                    onClick={() => setViewMode('table')}
+                    className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400' : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
+                    title="Table View"
+                  >
+                    <TableIcon size={18} />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400' : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
+                    title="List View"
+                  >
+                    <LayoutList size={18} />
+                  </button>
+                </div>
+
                 <button
-                  onClick={() => setViewMode('table')}
-                  className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400' : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
-                  title="Table View"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition-all ${showFilters ? 'bg-scholar-50 dark:bg-scholar-900/30 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400' : 'bg-white/60 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
                 >
-                  <TableIcon size={18} />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400' : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
-                  title="List View"
-                >
-                  <LayoutList size={18} />
+                  <Filter size={18} className="flex-shrink-0" />
+                  <span className="tab-label">Filters</span>
                 </button>
               </div>
-
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition-all ${showFilters ? 'bg-scholar-50 dark:bg-scholar-900/30 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400' : 'bg-white/60 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
-              >
-                <Filter size={18} className="flex-shrink-0" />
-                <span className="tab-label">Filters</span>
-              </button>
-            </div>
+            )}
           </div>
 
           {/* ACTION BAR ROW - ONLY WHEN ITEMS SELECTED */}

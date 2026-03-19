@@ -21,15 +21,19 @@ const DesktopButton = ({ col, icon: Icon, label, tooltipIcon, isActive, onToggle
   isActive: boolean,
   onToggle: (col: ColumnKey) => void
 }) => {
+  const {
+    isHeaderVisible
+  } = useUI();
+
   return (
     <button
       onClick={() => onToggle(col)}
       className={`group relative p-2 md:p-2.5 rounded-lg transition-all duration-200 ${isActive
-        ? 'bg-scholar-100 dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400 '
+        ? 'bg-scholar-50 dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400 '
         : 'text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
         }`}
     >
-      <Icon size={30} />
+      <Icon size={isHeaderVisible ? 28 : 24} />
       <Tooltip text={label} icon={tooltipIcon} />
     </button>
   );
@@ -47,8 +51,8 @@ export const LayoutControls: React.FC<LayoutControlsProps> = ({ inSidebar = fals
     darkMode,
     isLibraryOpen,
     setLibraryOpen,
-    setHeaderVisible
   } = useUI();
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 

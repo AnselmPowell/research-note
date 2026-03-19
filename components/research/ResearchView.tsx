@@ -228,14 +228,14 @@ export const ResearchView: React.FC = () => {
           <div className="absolute inset-0 bg-transparent" onClick={() => setPendingDeepResearchQuery(null)} />
           <div className="relative w-full max-w-lg bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-8 animate-in zoom-in-95">
             <div className="text-center mb-8">
-              <h3 className="text-xl font-bold mb-3">Start New Research Session?</h3>
+              <h3 className="text-xl font-bold dark:text-white mb-3">Start New Research Session?</h3>
               <p className="text-base text-gray-500 leading-relaxed">
                 Starting a new search will <span className="font-semibold text-gray-900 dark:text-gray-100">permanently clear</span> your current results.
                 <br />Are you sure you want to discard your research notes found?
               </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <button onClick={() => setPendingDeepResearchQuery(null)} className="px-6 py-3 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+              <button onClick={() => setPendingDeepResearchQuery(null)} className="px-6 py-3 text-sm dark:text-white font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                 Go Back
               </button>
               <button

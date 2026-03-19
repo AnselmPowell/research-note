@@ -1126,17 +1126,17 @@ export const PaperSearch: React.FC = () => {
                   <div className="fixed inset-0 z-40 pointer-events-none" onClick={() => setIsSortOpen(false)} />
                   <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50 animate-fade-in pointer-events-auto">
                     <button onClick={() => { setSortBy('most-relevant-notes'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <Star size={16} className={sortBy === 'most-relevant-notes' ? "text-scholar-600" : "text-gray-400"} />
-                      <span className="text-sm font-medium">Most Relevant Notes</span>
+                      <Star size={16} className={sortBy === 'most-relevant-notes' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+                      <span className="text-sm font-medium dark:text-white">Most Relevant Notes</span>
                     </button>
                     <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1" />
                     <button onClick={() => { setSortBy('recent-research'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <Calendar size={16} className={sortBy === 'recent-research' ? "text-scholar-600" : "text-gray-400"} />
-                      <span className="text-sm font-medium">Recent Research</span>
+                      <Calendar size={16} className={sortBy === 'recent-research' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+                      <span className="text-sm font-medium dark:text-white">Recent Research</span>
                     </button>
                     <button onClick={() => { setSortBy('alphabetical'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <ArrowUpDown size={16} className={sortBy === 'alphabetical' ? "text-scholar-600" : "text-gray-400"} />
-                      <span className="text-sm font-medium">Alphabetical</span>
+                      <ArrowUpDown size={16} className={sortBy === 'alphabetical' ? " text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+                      <span className="text-sm font-medium dark:text-white">Alphabetical</span>
                     </button>
                   </div>
                 </>
