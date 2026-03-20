@@ -378,7 +378,7 @@ export const AgentResearcher: React.FC = () => {
                     {/* HOVER CLOSE BUTTON */}
                     {!isBarExpanded && (
                         <div className="absolute -top-10 left-0 w-full flex justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-600 pointer-events-none group-hover:pointer-events-auto">
-                            <div className="absolute bg-gray-800 p-1.5 w-6 h-8 pt-10 opacity-0"></div>
+                            <div className="absolute bg-gray-800 p-1.5 w-full h-10 pt-10 opacity-0"></div>
                             <button
                                 onClick={handleDismiss}
                                 className="bg-gray-800 text-white dark:bg-white dark:text-gray-900 p-1.5 rounded-full shadow-lg transform hover:scale-110 transition-transform"
@@ -386,17 +386,17 @@ export const AgentResearcher: React.FC = () => {
                             >
                                 <X size={22} />
                             </button>
+
                         </div>
                     )}
 
                     <div
                         ref={barRef}
                         className={`
-                 relative bg-white dark:bg-dark-card border border-gray-200 dark:border-gray-700 shadow-2xl transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
-                 ${isBarExpanded ? 'rounded-2xl p-4' : 'rounded-full px-2 py-2 cursor-text hover:shadow-scholar-lg hover:border-scholar-200'}
-               `}
-                        onClick={() => !isBarExpanded && setIsBarExpanded(true)}
-                    >
+                            relative bg-white dark:bg-dark-card border border-gray-200 dark:border-gray-700 shadow-2xl transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+                            ${isBarExpanded ? 'rounded-xl p-3' : 'rounded-2xl p-3 cursor-text hover:shadow-scholar-lg hover:border-scholar-200'}
+                        `}
+                        onClick={() => !isBarExpanded && setIsBarExpanded(true)}>
                         {isBarExpanded && (
                             <div className="mb-4 opacity-0 animate-fade-in space-y-3 delay-150 fill-mode-forwards" style={{ animationFillMode: 'forwards' }}>
                                 <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
@@ -495,7 +495,7 @@ export const AgentResearcher: React.FC = () => {
                         )}
 
                         {/* INPUT AREA */}
-                        <div className={`flex items-center gap-2 transition-all duration-500 ease-in-out ${isBarExpanded ? 'bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-700 focus-within:bg-white dark:focus-within:bg-gray-900 focus-within:border-scholar-500 shadow-inner' : 'pl-3'}`}>
+                        <div className={`flex items-center gap-2 ${isBarExpanded ? 'bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2 border border-gray-200 dark:border-gray-700 focus-within:bg-white dark:focus-within:bg-gray-900 focus-within:border-scholar-500 shadow-inner' : 'pl-3'}`}>
                             <div className={`flex-shrink-0 text-scholar-600 dark:text-scholar-400`}>
                                 {isDeepResearchLoading ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
                             </div>
