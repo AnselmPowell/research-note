@@ -44,7 +44,7 @@ To properly document your authentication system for you, I need to understand:
 
 ## 📚 **COMPLETE AUTHENTICATION SYSTEM DOCUMENTATION**
 
-Perfect! I've systematically analyzed your entire authentication implementation. Your system is indeed excellent - it supports both social authentication (Google & Microsoft) and traditional email/password authentication with proper security patterns. Here's everything you need to replicate this in their React + Neon setup:
+Perfect! I've systematically analysed your entire authentication implementation. Your system is indeed excellent - it supports both social authentication (Google & Microsoft) and traditional email/password authentication with proper security patterns. Here's everything you need to replicate this in their React + Neon setup:
 
 ---
 

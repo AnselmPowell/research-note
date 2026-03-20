@@ -276,7 +276,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                 ) : (
                   <div className="flex items-center gap-1.5 text-xs font-medium text-scholar-600 dark:text-scholar-400">
                     <Check size={12} className="text-success-600" />
-                    <span>Waiting to be analyzed</span>
+                    <span>Waiting to be analysed</span>
                   </div>
                 )}
               </div>

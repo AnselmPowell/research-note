@@ -237,7 +237,7 @@ export const AgentResearcher: React.FC = () => {
 
         if (currentQuestions.length === 0 || !hasContext) return;
 
-        // ✅ CRITICAL: Only analyze papers that are in the deduplicated contextItems
+        // ✅ CRITICAL: Only analyse papers that are in the deduplicated contextItems
         const uniquePdfs = contextPdfs.filter(p => contextItems.some(item => item.id === p.uri && item.type === 'pdf'));
         const uniqueArxivPapers = selectedArxivPapers.filter(p => contextItems.some(item => item.id === p.id && item.type === 'arxiv'));
 

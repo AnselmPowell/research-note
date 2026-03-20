@@ -154,15 +154,15 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
   const containerSizeClass = showInsights ? 'max-w-3xl' : 'max-w-md';
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center z-50 p-4 pointer-events-none">
-      <div className={`
-        ${(isReviewing || isFiltering || showInsights) ? 'bg-white dark:bg-dark-card rounded-[2.5rem] shadow-2xl border border-gray-100 dark:border-gray-800' : ''} 
-        w-full transition-all duration-500 pointer-events-auto flex flex-col max-h-[70vh] overflow-hidden scale-100
+    <div className="absolute inset-0 flex items-center justify-center z-40 p-2 pointer-events-none">
+      <div className={` 
+        ${(isReviewing || isFiltering || showInsights) ? 'bg-white p-8 dark:bg-dark-card rounded-[2rem] shadow-2xl border border-gray-100 dark:border-gray-800' : ''} 
+        w-full  duration-500 pointer-events-auto flex flex-col max-h-[70vh] overflow-hidden
         ${containerSizeClass}
       `}>
 
         {/* Header: Centered Status */}
-        <div className={`p-2 sm:p-2 pt-2 mt-2 flex flex-col relative`}>
+        <div className={`p-2 sm:p-2 pt-2 flex flex-col relative`}>
 
           {/* Top Row: Centered Hub with Loader */}
           <div className="flex flex-col items-center justify-center transition-all duration-500">
@@ -174,7 +174,7 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
             </div>
 
             <div className="text-center">
-              <h3 className="text-[16px] font-black uppercase tracking-[0.3em] text-scholar-600/60 dark:text-scholar-400/60 transition-all mb-1">
+              <h3 className="text-[14px] font-black uppercase tracking-[0.3em] text-scholar-600/60 dark:text-scholar-400/60 transition-all mb-1">
                 {researchPhase.replace('_', ' ')}
               </h3>
               <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">{gatheringStatus}</p>
@@ -195,7 +195,7 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
 
           {/* Progress Message (Only in Simple View) */}
           {!showInsights && (
-            <div className="text-center h-20 flex items-center justify-center animate-in fade-in zoom-in-95">
+            <div className="text-center mt-2 h-20 flex items-center justify-center animate-in fade-in zoom-in-95">
               <p
                 className="text-lg font-bold text-gray-800 dark:text-gray-200 transition-opacity duration-1000 leading-snug px-4"
                 style={{ opacity: isTextVisible ? 1 : 0 }}
@@ -208,14 +208,14 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
 
         {/* Insight Selection Area (Displays based on visibility logic) */}
         {showInsights && (
-          <div className="flex-1 flex flex-col min-h-0 bg-scholar-50/20 dark:bg-black/20 animate-in slide-in-from-bottom-6 duration-700 delay-300">
-            <div className="p-4 sm:p-6 pt-0 flex-1 overflow-auto">
+          <div className="flex-1 flex flex-col min-h-0  dark:bg-black/20 animate-in slide-in-from-bottom-6 duration-700 delay-300">
+            <div className="p-4 sm:p-4 pt-0 flex-1 overflow-auto">
 
-              <div className="flex items-end justify-between mb-4">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight max-w-lg leading-tight">
+              <div className="flex mx-auto items-center text-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight max-w-lg leading-tight text-center">
                   {isReviewing
                     ? "Last chance: Deepen your research?"
-                    : "While searching, does any of these question you want to add?"}
+                    : "While searching, does any of these question you want to add to your search?"}
                 </h2>
 
                 {isReviewing && (
@@ -234,7 +234,7 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
                       key={q}
                       onClick={() => onToggleQuestion?.(q)}
                       className={`
-                        group relative w-full text-left p-2 rounded-xl border transition-all duration-300 flex items-center justify-between gap-4
+                        group relative text-lg w-full text-left p-2 rounded-xl border transition-all duration-300 flex items-center justify-between gap-2
                         ${isSelected
                           ? 'bg-white dark:bg-scholar-900/40 border-scholar-600 shadow-lg ring-1 ring-scholar-600'
                           : 'bg-white/50 dark:bg-gray-900/20 border-gray-100 dark:border-gray-800 hover:border-scholar-300 dark:hover:border-scholar-700 hover:bg-white dark:hover:bg-gray-800 hover:shadow-md'

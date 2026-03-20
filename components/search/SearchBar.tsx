@@ -89,7 +89,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   const historyRef = useRef<HTMLDivElement>(null);
 
   // Determine if deep research is currently active/loading
-  const isDeepLoading = ['initializing', 'searching', 'filtering', 'extracting'].includes(researchPhase);
+  const isDeepLoading = ['initializing', 'searching', 'filtering', 'extracting', 'reviewing_insights'].includes(researchPhase);
 
   // Handle PDF loading and navigation when PDFs are processed
   useEffect(() => {
@@ -295,6 +295,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       if (hasMatches) {
         setShowHistory(prev => !prev); // Toggle behavior
       }
+    }
+    if (searchBarState.additionalTopics.length > 0) {
+      setIsExpanded(true);
     }
   };
 
@@ -597,7 +600,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
                   <Upload size={18} className="text-gray-500 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
                     <div className="text-sm font-bold text-gray-900 dark:text-gray-100">Upload PDF</div>
-                    <div className="text-xs text-gray-400 font-medium mt-0.5">Analyze your own documents</div>
+                    <div className="text-xs text-gray-400 font-medium mt-0.5">Analyse your own documents</div>
                   </div>
                   {mode === 'upload' && <Check size={16} className="absolute right-4 top-4 text-scholar-600" />}
                 </button>
@@ -721,7 +724,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       )}
 
       {mode === 'deep' && isExpanded && (
-        <div className="absolute top-full left-0 right-0 mt-3 bg-white dark:bg-dark-card rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-5 animate-slide-up z-40 origin-top">
+        <div className="absolute z-[999] top-full left-0 right-0 mt-3 bg-white dark:bg-dark-card rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-5 animate-slide-up origin-top">
 
           {/* Prompt to add topic if none exist */}
           <div className="mb-1 animate-fade-in border-gray-100 dark:border-gray-800 pb-1">
