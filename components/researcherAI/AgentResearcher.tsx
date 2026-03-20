@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { GraduationCap, Sparkles, MessageSquareText, X, BookOpenText, Plus, Loader2, FileText, Play, Search, ArrowRight, Library, AlertCircle, ChevronUp, ChevronDown, Trash2, Square } from 'lucide-react';
+import { Sparkles, X, BookOpenText, Plus, Loader2, FileText, ArrowRight, AlertCircle, ChevronDown, Trash2, Square } from 'lucide-react';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useResearch } from '../../contexts/ResearchContext';
 import { useUI } from '../../contexts/UIContext';
@@ -16,10 +16,13 @@ export interface ChatMessage {
     citations?: AgentCitation[];
 }
 
-export const AgentResearcher: React.FC = () => {
+interface AgentResearcherProps {
+    activeTool: 'chat' | 'deep' | null;
+    setActiveTool: (tool: 'chat' | 'deep' | null) => void;
+}
+
+export const AgentResearcher: React.FC<AgentResearcherProps> = ({ activeTool, setActiveTool }) => {
     // --- STATE ---
-    const [activeTool, setActiveTool] = useState<'chat' | 'deep' | null>(null);
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     const [isLocked, setIsLocked] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -39,8 +42,6 @@ export const AgentResearcher: React.FC = () => {
 
     const sidebarRef = useRef<HTMLDivElement>(null);
     const barRef = useRef<HTMLDivElement>(null);
-    const fabContainerRef = useRef<HTMLDivElement>(null);
-
     const prevRightRef = useRef(false);
     const prevAllClosedRef = useRef(false);
 
@@ -141,6 +142,14 @@ export const AgentResearcher: React.FC = () => {
         prevContextCountRef.current = contextItems.length;
     }, [contextItems.length]);
 
+    // When FAB opens the deep bar, expand it and un-dismiss it
+    useEffect(() => {
+        if (activeTool === 'deep') {
+            setIsBarExpanded(true);
+            setIsDismissed(false);
+        }
+    }, [activeTool]);
+
     // ✅ WATCHDOG: Auto-remove papers from context if they fail to load
     useEffect(() => {
         failedUris.forEach(uri => {
@@ -208,10 +217,8 @@ export const AgentResearcher: React.FC = () => {
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             const target = event.target as Node;
-            if (fabContainerRef.current && fabContainerRef.current.contains(target)) return;
             if (activeTool === 'chat' && !isLocked && sidebarRef.current && !sidebarRef.current.contains(target)) {
                 setActiveTool(null);
-                setIsMenuOpen(false);
             }
             if (showDeepBar && isBarExpanded && barRef.current && !barRef.current.contains(target)) {
                 setIsBarExpanded(false);
@@ -357,19 +364,6 @@ export const AgentResearcher: React.FC = () => {
         setActiveTool(null);
     };
 
-    const toggleTool = (tool: 'chat' | 'deep') => {
-        if (activeTool === tool) {
-            setActiveTool(null);
-            setIsMenuOpen(false);
-        } else {
-            setActiveTool(tool);
-            setIsMenuOpen(false);
-            if (tool === 'deep') {
-                setIsBarExpanded(true);
-                setIsDismissed(false);
-            }
-        }
-    };
 
     const MAX_VISIBLE_TAGS = 5;
     const visibleContextItems = showAllDocs ? contextItems : contextItems.slice(0, MAX_VISIBLE_TAGS);
@@ -604,51 +598,7 @@ export const AgentResearcher: React.FC = () => {
                 </div>
             )}
 
-            {/* FAB */}
-            <div ref={fabContainerRef} className="fixed bottom-6 right-6 z-[50] flex flex-col items-end gap-3">
-                {isMenuOpen && (
-                    <div className="flex items-center gap-3 animate-slide-up origin-bottom">
-                        <span className="bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-md border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300">Deep Research</span>
-                        <button
-                            onClick={() => toggleTool('deep')}
-                            className={`w-12 h-12 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center transition-transform hover:scale-105 ${activeTool === 'deep' ? 'bg-scholar-600 text-white' : 'bg-white dark:bg-gray-800 text-scholar-600 dark:text-scholar-400'}`}
-                        >
-                            <BookOpenText size={20} />
-                        </button>
-                    </div>
-                )}
 
-                {isMenuOpen && (
-                    <div className="flex items-center gap-3 animate-slide-up origin-bottom" style={{ animationDelay: '0.05s' }}>
-                        <span className="bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-md border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300">AI Assistant</span>
-                        <button
-                            onClick={() => toggleTool('chat')}
-                            className={`w-12 h-12 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center transition-transform hover:scale-105 ${activeTool === 'chat' ? 'bg-scholar-600 text-white' : 'bg-white dark:bg-gray-800 text-scholar-600 dark:text-scholar-400'}`}
-                        >
-                            <MessageSquareText size={20} />
-                        </button>
-                    </div>
-                )}
-
-                <button
-                    onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    className={`group flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-xl transition-all duration-300 ${isMenuOpen || activeTool ? 'bg-gray-800 hover:bg-gray-900' : 'bg-scholar-600 hover:bg-scholar-700'} text-white hover:scale-105`}
-                >
-                    {isMenuOpen ? (
-                        <X size={28} />
-                    ) : (
-                        <div className="relative">
-                            <GraduationCap size={28} className="transition-transform duration-300" />
-                            {/* CHANGED: Counter uses contextItems.length (checked only) and 'peeking out' from corner */}
-                            {contextItems.length > 0 && !isMenuOpen && (
-                                <span className="absolute -top-7 -right-7 flex h-8 w-8 items-center justify-center rounded-full bg-scholar-600 text-[12px] font-black border-2 border-white dark:border-gray-800 shadow-sm animate-fade-in ring-1 ring-red-400/20">
-                                    {contextItems.length}
-                                </span>
-                            )}
-                        </div>
-                    )}
-                </button>
-            </div>
         </>
     );
 };

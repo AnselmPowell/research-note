@@ -7,6 +7,7 @@ import { SourcesPanel } from './components/sources/SourcesPanel';
 import { ResearchView } from './components/research/ResearchView';
 import { PdfWorkspace } from './components/pdf/PdfWorkspace';
 import { AgentResearcher } from './components/researcherAI/AgentResearcher';
+import { AgentFAB } from './components/researcherAI/AgentFAB';
 import { LayoutControls } from './components/layout/LayoutControls';
 import { NotesManagerSidebar } from './components/library/NotesManagerSidebar';
 import { NotesManager } from './components/library/NotesManager';
@@ -49,6 +50,20 @@ const App: React.FC = () => {
   const [configError, setConfigError] = useState<string | null>(null);
   const [isConfigLoading, setIsConfigLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // Shared AI tool state — lifted here so AgentFAB and AgentResearcher stay in sync
+  const [activeTool, setActiveTool] = useState<'chat' | 'deep' | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const handleSelectDeep = () => {
+    setActiveTool(prev => prev === 'deep' ? null : 'deep');
+    setIsMenuOpen(false);
+  };
+
+  const handleSelectChat = () => {
+    setActiveTool(prev => prev === 'chat' ? null : 'chat');
+    setIsMenuOpen(false);
+  };
 
   // Validate configuration on app startup
   useEffect(() => {
@@ -248,7 +263,14 @@ const App: React.FC = () => {
         onShowAuthModal={() => setShowAuthModal(true)}
         resetCallbacks={[resetUI, resetAllResearchData, resetLibrary]}
       />
-      <AgentResearcher />
+      <AgentFAB
+        isMenuOpen={isMenuOpen}
+        setIsMenuOpen={setIsMenuOpen}
+        activeTool={activeTool}
+        onSelectDeep={handleSelectDeep}
+        onSelectChat={handleSelectChat}
+      />
+      <AgentResearcher activeTool={activeTool} setActiveTool={setActiveTool} />
 
       {/* Search Tag - Visible only when header is hidden and columns are open */}
       {!isHeaderVisible && !allColumnsClosed && (
