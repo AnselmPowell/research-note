@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Sparkles, MessageSquareText, X, BookOpenText, Plus, Loader2, FileText, Play, Search, ArrowRight, Library, AlertCircle, ChevronUp, ChevronDown, Trash2, Square } from 'lucide-react';
+import { GraduationCap, Sparkles, MessageSquareText, X, BookOpenText, Plus, Loader2, FileText, Play, Search, ArrowRight, Library, AlertCircle, ChevronUp, ChevronDown, Trash2, Square } from 'lucide-react';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useResearch } from '../../contexts/ResearchContext';
 import { useUI } from '../../contexts/UIContext';
@@ -155,7 +155,7 @@ export const AgentResearcher: React.FC = () => {
     useEffect(() => {
         // Detect "Main Search View" (Home)
         const isAllClosed = !columnVisibility.left && !columnVisibility.middle && !columnVisibility.library && !columnVisibility.right;
-        
+
         // Detect Transitions: Use refs to ensure we only trigger on the MOMENT of transition
         const transitionedToRightOpen = columnVisibility.right && !prevRightRef.current;
         const transitionedToHome = isAllClosed && !prevAllClosedRef.current;
@@ -638,10 +638,10 @@ export const AgentResearcher: React.FC = () => {
                         <X size={28} />
                     ) : (
                         <div className="relative">
-                            <Sparkles size={28} className="transition-transform duration-300" />
-                            {/* CHANGED: Counter uses contextItems.length (checked only) */}
+                            <GraduationCap size={28} className="transition-transform duration-300" />
+                            {/* CHANGED: Counter uses contextItems.length (checked only) and 'peeking out' from corner */}
                             {contextItems.length > 0 && !isMenuOpen && (
-                                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold border-2 border-white">
+                                <span className="absolute -top-7 -right-7 flex h-8 w-8 items-center justify-center rounded-full bg-scholar-600 text-[12px] font-black border-2 border-white dark:border-gray-800 shadow-sm animate-fade-in ring-1 ring-red-400/20">
                                     {contextItems.length}
                                 </span>
                             )}
