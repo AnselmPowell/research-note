@@ -273,8 +273,11 @@ export const SourcesPanel: React.FC = () => {
 
             resultPromise.then(result => {
                 if (result && !result.success) {
-                    // Logic to handle failure if needed - AgentResearcher watchdog handles cleanup
+                    // Logic to handle failure: Unselect the paper
                     console.warn(`[SourcesPanel] Delayed PDF load failed for ${title}`, result.error);
+                    removeFromSelectionByUri(uri);
+                    setSelectedPaperUris(prev => prev.filter(u => u !== uri));
+                    // Note: AgentResearcher watchdog will handle AI context removal
                 }
             });
         }

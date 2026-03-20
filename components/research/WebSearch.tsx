@@ -96,7 +96,10 @@ export const WebSearch: React.FC<WebSearchdProps> = ({
     loadPdfFromUrl(source.uri, source.title).then(result => {
        if (result && !result.success) {
          console.warn('[WebSearch] Verification failed in background:', result?.error);
-         // AgentResearcher watchdog will handle removal if it failed
+         // Unselect on failure
+         onToggle(false);
+         setShowManualInstruction(true);
+         // AgentResearcher watchdog will handle context removal
        }
     });
   };
@@ -262,9 +265,11 @@ export const WebSearch: React.FC<WebSearchdProps> = ({
 
         {/* ✅ Simple one-line error message */}
         {showManualInstruction && !isGloballySelected && !isSaved && (
-          <span className="flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 animate-fade-in mt-1">
-            <AlertCircle size={12} />
-            Download failed. Please download manually and upload.
+          <span className="flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-500 animate-fade-in mt-1.5">
+            <AlertCircle size={14} className="flex-shrink-0" />
+            <span className="leading-snug">
+              Unable to access document. Please <a href={source.uri} target="_blank" rel="noopener noreferrer" className="underline hover:text-red-700">view externally</a> or upload manually.
+            </span>
           </span>
         )}
 
