@@ -3,6 +3,7 @@ import { Sparkles, MessageSquareText, X, BookOpenText, Plus, Loader2, FileText, 
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useResearch } from '../../contexts/ResearchContext';
 import { useUI } from '../../contexts/UIContext';
+import { useDatabase } from '../../database/DatabaseContext';
 import { agentService, AgentCitation } from '../../services/agentService';
 import { ChatInterface } from './ChatInterface';
 
@@ -40,8 +41,9 @@ export const AgentResearcher: React.FC = () => {
     const barRef = useRef<HTMLDivElement>(null);
     const fabContainerRef = useRef<HTMLDivElement>(null);
 
-    // CHANGED: Import isPdfInContext to filter loaded PDFs
-    const { loadedPdfs, isPdfInContext, setActivePdf, loadPdfFromUrl, removePdf, togglePdfContext } = useLibrary();
+    const { savedPapers } = useDatabase();
+
+    const { contextUris, downloadingUris, failedUris, loadedPdfs, isPdfInContext, setActivePdf, loadPdfFromUrl, removePdf, togglePdfContext } = useLibrary();
     const {
         contextNotes,
         performHybridResearch,
@@ -68,25 +70,45 @@ export const AgentResearcher: React.FC = () => {
     // Unified loading state: ArXiv Loading OR PDF Loading
     const isDeepResearchLoading = (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed') || isDeepResearching;
 
-    // CHANGED: Filter loadedPdfs to only include those that are "Checked" (In Context)
-    const contextPdfs = loadedPdfs.filter(p => isPdfInContext(p.uri));
+    // Filter loadedPdfs to only include those that are "Checked" (In Context)
+    const contextPdfs = loadedPdfs.filter(p => contextUris.has(p.uri));
 
     // Calculate total selected items for Deep Research
     const selectedArxivPapers = filteredCandidates.filter(p => selectedArxivIds.has(p.id));
 
-    // Unified Context Items List (DEDUPLICATED BY TITLE)
+    // Unified Context Items List (DEDUPLICATED BY TITLE) - INCLUDING LOADING ITEMS
     const contextItems = useMemo(() => {
-        const items = [
-            ...contextPdfs.map(p => ({ id: p.uri, title: (p.metadata.title || p.file.name).trim(), type: 'pdf' as const })),
-            ...selectedArxivPapers.map(p => ({ id: p.id, title: p.title.trim(), type: 'arxiv' as const }))
-        ];
+        // 1. Map all intent-based URIs from LibraryContext
+        const pdfItems = Array.from(contextUris).map(uriOrUnknown => {
+            const uri = uriOrUnknown as string;
+            const loaded = loadedPdfs.find(p => p.uri === uri);
+            const saved = savedPapers.find(p => p.uri === uri);
+            const isDownloading = downloadingUris.has(uri);
+
+            return {
+                id: uri,
+                // Fallback chain: Memory -> Database -> Filename -> Fallback
+                title: loaded?.metadata?.title || saved?.title || uri.split('/').pop()?.replace('.pdf', '') || 'Loading...',
+                type: 'pdf' as const,
+                status: loaded ? 'loaded' as const : (isDownloading ? 'loading' as const : 'pending' as const)
+            };
+        });
+
+        const arxivItems = selectedArxivPapers.map(p => ({
+            id: p.id,
+            title: p.title.trim(),
+            type: 'arxiv' as const,
+            status: 'loaded' as const
+        }));
+
+        const allItems = [...pdfItems, ...arxivItems];
 
         // Unique items by normalized title
         const seenTitles = new Set<string>();
         const genericTitles = ['untitled document', 'document', 'pdf document', 'untitled', 'unknown'];
-        const deduplicated: typeof items = [];
+        const deduplicated: typeof allItems = [];
 
-        for (const item of items) {
+        for (const item of allItems) {
             const normalized = item.title.toLowerCase().trim();
             const isGeneric = genericTitles.includes(normalized);
 
@@ -102,7 +124,9 @@ export const AgentResearcher: React.FC = () => {
         }
 
         return deduplicated;
-    }, [contextPdfs, selectedArxivPapers]);
+    }, [contextUris, downloadingUris, loadedPdfs, savedPapers, selectedArxivPapers]);
+
+    const isAnyPaperLoading = contextItems.some(item => item.status === 'loading' || item.status === 'pending');
 
     const hasContext = contextItems.length > 0;
 
@@ -113,6 +137,16 @@ export const AgentResearcher: React.FC = () => {
         }
         prevContextCountRef.current = contextItems.length;
     }, [contextItems.length]);
+
+    // ✅ WATCHDOG: Auto-remove papers from context if they fail to load
+    useEffect(() => {
+        failedUris.forEach(uri => {
+            if (contextUris.has(uri)) {
+                console.warn(`[AgentResearcher] Auto-removing failed source: ${uri}`);
+                togglePdfContext(uri);
+            }
+        });
+    }, [failedUris, contextUris, togglePdfContext]);
 
     // Logic to determine if the bar should be visible
     const showDeepBar = activeTool === 'deep' || (hasContext && !isDismissed);
@@ -398,7 +432,11 @@ export const AgentResearcher: React.FC = () => {
                                         <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto custom-scrollbar">
                                             {visibleContextItems.map((item) => (
                                                 <div key={item.id} className="flex items-center gap-1.5 bg-scholar-600/10 text-scholar-700 dark:text-scholar-300 px-3 py-1.5 rounded-full text-xs font-medium border border-scholar-200 dark:border-scholar-800 animate-fade-in">
-                                                    <FileText size={12} className="opacity-70 flex-shrink-0" />
+                                                    {item.status === 'loading' ? (
+                                                        <Loader2 size={12} className="animate-spin text-scholar-600 dark:text-scholar-400 flex-shrink-0" />
+                                                    ) : (
+                                                        <FileText size={12} className="opacity-70 flex-shrink-0" />
+                                                    )}
                                                     <span className="truncate max-w-[150px] sm:max-w-[200px]">{item.title}</span>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); removeItem(item); }}
@@ -489,21 +527,23 @@ export const AgentResearcher: React.FC = () => {
                                         disabled={
                                             (!isDeepResearchLoading && (deepQuestions.length === 0 && !deepInput.trim())) ||
                                             !hasContext ||
+                                            isAnyPaperLoading ||
                                             (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed' && !isDeepResearchLoading)
                                         }
                                         className={`
                                 flex items-center gap-2 px-4 py-1.5 rounded-lg font-semibold text-xs transition-all shadow-sm
                                 ${isDeepResearchLoading
                                                 ? 'bg-white text-gray-800 border border-gray-300 hover:text-red-600 hover:border-red-300'
-                                                : (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed' && !isDeepResearchLoading)
+                                                : (isAnyPaperLoading || (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed' && !isDeepResearchLoading))
                                                     ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                                                     : 'bg-scholar-600 hover:bg-scholar-700 text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-300'
                                             }
                              `}
                                         title={
                                             isDeepResearchLoading ? "Stop Hybrid Analysis" :
-                                                (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed' && !isDeepResearchLoading) ? "Main Deep Research in progress. Stop it first." :
-                                                    "Start Hybrid Analysis"
+                                                isAnyPaperLoading ? "Waiting for documents to load..." :
+                                                    (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed' && !isDeepResearchLoading) ? "Main Deep Research in progress. Stop it first." :
+                                                        "Start Hybrid Analysis"
                                         }
                                     >
                                         {isDeepResearchLoading ? (

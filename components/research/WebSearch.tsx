@@ -86,22 +86,19 @@ export const WebSearch: React.FC<WebSearchdProps> = ({
       return;
     }
 
-    // 2. If selecting, we MUST verify the PDF is downloadable first
-    // This connects to the backend fetch-pdf service
-    const result = await loadPdfFromUrl(source.uri, source.title);
-
-    if (result && result.success) {
-      // PDF verified and loaded into memory
-      onToggle(true);
-      // Sync: Also add to AI context if not present
-      if (!isPdfInContext(source.uri)) {
-        togglePdfContext(source.uri, source.title);
-      }
-    } else {
-      // Verification failed
-      setShowManualInstruction(true);
-      console.warn('[WebSearch] Failed to verify PDF for selection:', result?.error);
+    // 2. If selecting, add to context IMMEDIATELY (triggers research bar)
+    onToggle(true);
+    if (!isPdfInContext(source.uri)) {
+      togglePdfContext(source.uri, source.title);
     }
+    
+    // Trigger load in background
+    loadPdfFromUrl(source.uri, source.title).then(result => {
+       if (result && !result.success) {
+         console.warn('[WebSearch] Verification failed in background:', result?.error);
+         // AgentResearcher watchdog will handle removal if it failed
+       }
+    });
   };
 
   const handleAddToSources = async (e: React.MouseEvent) => {

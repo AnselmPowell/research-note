@@ -259,26 +259,24 @@ export const SourcesPanel: React.FC = () => {
                 }
             }
 
-            // Checking: Add to GLOBAL selection and AI context
+            // Sync with global selection
             addToSelectionByUri(uri);
-            setSelectedPaperUris(prev => [...prev, uri]);  // Local state
+            setSelectedPaperUris(prev => [...prev, uri]);
 
-            // Ensure PDF is loaded before adding to context
-            const isLoaded = loadedPdfs.some(p => p.uri === uri);
-            if (!isLoaded) {
-                const result = await loadPdfFromUrl(uri, title);
-                if (result && !result.success) {
-                    // If loading failed, remove from global selection
-                    removeFromSelectionByUri(uri);
-                    setSelectedPaperUris(prev => prev.filter(u => u !== uri));
-                    return;
-                }
-            }
-
-            // Add to AI context
+            // ✅ NEW: Add to AI context IMMEDIATELY (triggers research bar to open)
             if (!isPdfInContext(uri)) {
                 togglePdfContext(uri, title);
             }
+
+            // Start loading in background (no await blocking the UI/Bar)
+            const resultPromise = loadPdfFromUrl(uri, title);
+
+            resultPromise.then(result => {
+                if (result && !result.success) {
+                    // Logic to handle failure if needed - AgentResearcher watchdog handles cleanup
+                    console.warn(`[SourcesPanel] Delayed PDF load failed for ${title}`, result.error);
+                }
+            });
         }
     }, [isPaperSelectedByUri, addToSelectionByUri, removeFromSelectionByUri, isPdfInContext, togglePdfContext, loadedPdfs, loadPdfFromUrl, selectedArxivIds, arxivCandidates, filteredCandidates]);
 
