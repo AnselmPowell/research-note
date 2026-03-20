@@ -41,6 +41,9 @@ export const AgentResearcher: React.FC = () => {
     const barRef = useRef<HTMLDivElement>(null);
     const fabContainerRef = useRef<HTMLDivElement>(null);
 
+    const prevRightRef = useRef(false);
+    const prevAllClosedRef = useRef(false);
+
     const { savedPapers } = useDatabase();
 
     const { contextUris, downloadingUris, failedUris, loadedPdfs, isPdfInContext, setActivePdf, loadPdfFromUrl, removePdf, togglePdfContext } = useLibrary();
@@ -65,7 +68,7 @@ export const AgentResearcher: React.FC = () => {
         selectedWebSourceUris
     } = useResearch();
 
-    const { setColumnVisibility, openColumn, setLibraryActiveView } = useUI();
+    const { columnVisibility, setColumnVisibility, openColumn, setLibraryActiveView } = useUI();
 
     // Unified loading state: ArXiv Loading OR PDF Loading
     const isDeepResearchLoading = (researchPhase !== 'idle' && researchPhase !== 'completed' && researchPhase !== 'failed') || isDeepResearching;
@@ -147,6 +150,28 @@ export const AgentResearcher: React.FC = () => {
             }
         });
     }, [failedUris, contextUris, togglePdfContext]);
+
+    // ✅ LAYOUT WATCHDOG: Auto-dismiss bar on specific layout transitions
+    useEffect(() => {
+        // Detect "Main Search View" (Home)
+        const isAllClosed = !columnVisibility.left && !columnVisibility.middle && !columnVisibility.library && !columnVisibility.right;
+        
+        // Detect Transitions: Use refs to ensure we only trigger on the MOMENT of transition
+        const transitionedToRightOpen = columnVisibility.right && !prevRightRef.current;
+        const transitionedToHome = isAllClosed && !prevAllClosedRef.current;
+
+        if (transitionedToRightOpen || transitionedToHome) {
+            // If bar is open or showing, dismiss it
+            if (activeTool === 'deep' || !isDismissed) {
+                console.log(`[AgentResearcher] Auto-dismissing bar: Home=${transitionedToHome}, PDF=${transitionedToRightOpen}`);
+                handleDismiss();
+            }
+        }
+
+        // Update tracking refs
+        prevRightRef.current = columnVisibility.right;
+        prevAllClosedRef.current = isAllClosed;
+    }, [columnVisibility, activeTool, isDismissed]);
 
     // Logic to determine if the bar should be visible
     const showDeepBar = activeTool === 'deep' || (hasContext && !isDismissed);
