@@ -69,9 +69,15 @@ export const ResearchView: React.FC = () => {
   const isSearching = researchPhase === 'searching' || researchPhase === 'initializing';
 
   // ─── Shared UI State ───────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<TabType>(
-    (activeSearchMode === 'web' || activeSearchMode === 'deep') ? activeSearchMode : 'deep'
-  );
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    const hasDeepResults = arxivCandidates.length > 0 || filteredCandidates.length > 0 || researchPhase !== 'idle';
+    const hasWebResults = webSearchSources.length > 0;
+
+    // Rule: Default to deep research, but fall back to web if deep is empty and web has data
+    if (!hasDeepResults && hasWebResults && activeSearchMode === 'deep') return 'web';
+    if (activeSearchMode === 'web' || activeSearchMode === 'deep') return activeSearchMode;
+    return 'deep';
+  });
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [allNotesExpanded, setAllNotesExpanded] = useState(true);
   const [isNoteSelectMenuOpen, setIsNoteSelectMenuOpen] = useState(false);
@@ -84,12 +90,20 @@ export const ResearchView: React.FC = () => {
   const [showClearModal, setShowClearModal] = useState(false);
   const [isClearingResults, setIsClearingResults] = useState(false);
 
-  // Sync tab with search mode
+  // Sync tab with search mode and results on initial open or search mode changes
   useEffect(() => {
+    const hasDeepResults = arxivCandidates.length > 0 || filteredCandidates.length > 0 || researchPhase !== 'idle';
+    const hasWebResults = webSearchSources.length > 0;
+
     if (activeSearchMode === 'web' || activeSearchMode === 'deep') {
-      setActiveTab(activeSearchMode);
+      // Rule: Automality open on deep research, but fallback to web if deep is empty and web has data
+      if (!hasDeepResults && hasWebResults && activeSearchMode === 'deep') {
+        setActiveTab('web');
+      } else {
+        setActiveTab(activeSearchMode);
+      }
     }
-  }, [activeSearchMode]);
+  }, [activeSearchMode, arxivCandidates.length, filteredCandidates.length, researchPhase, webSearchSources.length]);
 
   const handleSelectNote = useCallback((id: string) => {
     setSelectedNoteIds(prev =>
