@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { ArxivPaper, DeepResearchNote } from '../../types';
 import { useResearch } from '../../contexts/ResearchContext';
 import { useLibrary } from '../../contexts/LibraryContext';
@@ -66,13 +67,13 @@ interface PaperCardProps {
   isLocal?: boolean;
   forceExpanded?: boolean;
   activeQuery?: string;
-  onRemovePaper?: (id: string) => void;
+  onRemovePaper?: (id: string, title: string) => void;
   isSelected?: boolean;
   onToggleSelection?: (paperId: string) => void;
 }
 
 // ─── PaperCard Component ───────────────────────────────────────────────────────
-const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true, activeQuery = 'all', onRemovePaper, isSelected: propIsSelected, onToggleSelection }) => {
+const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true, activeQuery = 'all', onRemovePaper: onRemovePaperClick, isSelected: propIsSelected, onToggleSelection }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isAbstractExpanded, setIsAbstractExpanded] = useState(false);
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
@@ -208,13 +209,11 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                   </button>
 
                   {/* Remove from My Results button - unique to PaperResults tab */}
-                  {onRemovePaper && (
+                  {onRemovePaperClick && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm(`Remove "${paper.title.substring(0, 60)}..." from My Results?`)) {
-                          onRemovePaper(paper.id);
-                        }
+                        onRemovePaperClick(paper.id, paper.title);
                       }}
                       className="text-xs font-medium px-2 py-1 rounded-md transition-colors flex items-center gap-1 shadow-sm bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
                       title="Remove from My Results"
@@ -568,6 +567,15 @@ export const PaperSearch: React.FC = () => {
   const [justCopiedNotes, setJustCopiedNotes] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
   const [isClearingResults, setIsClearingResults] = useState(false);
+  const [deletePaperModal, setDeletePaperModal] = useState<{
+    isOpen: boolean;
+    paperId: string | null;
+    paperTitle: string;
+  }>({
+    isOpen: false,
+    paperId: null,
+    paperTitle: '',
+  });
 
   const handleClearResults = async () => {
     setIsClearingResults(true);
@@ -1314,7 +1322,7 @@ export const PaperSearch: React.FC = () => {
                   onView={() => handleViewPdf(paper)}
                   isLocal={false}
                   activeQuery={localFilters.query}
-                  onRemovePaper={handleRemovePaper}
+                  onRemovePaper={(id, title) => setDeletePaperModal({ isOpen: true, paperId: id, paperTitle: title })}
                   isSelected={accumulatedSelectedIds.has(paper.id)}
                   onToggleSelection={handleToggleAccumulatedSelection}
                 />
@@ -1378,8 +1386,48 @@ export const PaperSearch: React.FC = () => {
         )}
       </div>
 
+      {/* ── DELETE PAPER MODAL ─────────────────────────────────────────────────── */}
+      {deletePaperModal.isOpen && createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-transparent" onClick={() => setDeletePaperModal(prev => ({ ...prev, isOpen: false }))} />
+
+          <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-xl shadow-2xl ring-1 ring-gray-900/5 dark:ring-white/10 p-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                Remove from Results?
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                Remove <span className="font-medium text-gray-700 dark:text-gray-200">"{deletePaperModal.paperTitle}"</span> from current results? 
+                Unsaved notes for this paper will be lost.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setDeletePaperModal(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors border border-gray-100 dark:border-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (deletePaperModal.paperId) {
+                    handleRemovePaper(deletePaperModal.paperId);
+                  }
+                  setDeletePaperModal(prev => ({ ...prev, isOpen: false }));
+                }}
+                className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-all"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* ── CLEAR MODAL ─────────────────────────────────────────────────────── */}
-      {showClearModal && (
+      {showClearModal && createPortal(
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-transparent" onClick={() => !isClearingResults && setShowClearModal(false)} />
           <div className="relative w-full max-sm:max-w-[320px] max-w-sm bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-6 ring-1 ring-black/5 animate-in zoom-in-95">
@@ -1404,7 +1452,8 @@ export const PaperSearch: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

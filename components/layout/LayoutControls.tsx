@@ -83,7 +83,7 @@ export const LayoutControls: React.FC<LayoutControlsProps> = ({ inSidebar = fals
       {/* Desktop View: Row of buttons */}
       <div className="hidden md:flex items-center gap-2">
         <DesktopButton col="left" icon={FolderOpen} label="Sources" tooltipIcon={FolderOpen} isActive={columnVisibility.left} onToggle={handleToggle} />
-        <DesktopButton col="middle" icon={BookOpenText} label="Deep Research" tooltipIcon={BookOpenText} isActive={columnVisibility.middle} onToggle={handleToggle} />
+        <DesktopButton col="middle" icon={BookOpenText} label="Research" tooltipIcon={BookOpenText} isActive={columnVisibility.middle} onToggle={handleToggle} />
         <DesktopButton col="right" icon={FileText} label="Paper View" tooltipIcon={FileText} isActive={columnVisibility.right} onToggle={handleToggle} />
       </div>
 
