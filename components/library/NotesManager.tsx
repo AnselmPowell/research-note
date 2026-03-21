@@ -24,7 +24,8 @@ import {
   Lightbulb,
   FileJson,
   Loader2,
-  Sparkles
+  Sparkles,
+  Plus
 } from 'lucide-react';
 import { PaperSearch } from '../research/PaperSearch';
 import { useDatabase } from '../../database/DatabaseContext';
@@ -32,6 +33,8 @@ import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
 import { PapersTable } from './PapersTable';
 import { NotesTable } from './NotesTable';
+import { CreateNoteModal } from './CreateNoteModal';
+import { AddPaperModal } from './AddPaperModal';
 
 interface NotesManagerProps {
   activeView: string;
@@ -61,7 +64,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     toggleStar,
     toggleFlag,
     updateNote,
-    deletePaper
+    deletePaper,
+    saveNote
   } = useDatabase();
 
   const {
@@ -137,6 +141,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     isProcessing: false
   });
 
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isAddPaperModalOpen, setIsAddPaperModalOpen] = useState(false);
   const PAGE_SIZE = activeTab === 'notes' && viewMode === 'grid' ? 12 : 10;
 
   useEffect(() => {
@@ -573,9 +579,6 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
             {/* LEFT: TABS WITH SELECT ALL */}
             <div className="flex items-center -mb-px gap-2">
-
-
-
               {/* EXISTING TAB BUTTONS */}
               <button
                 onClick={() => {
@@ -751,6 +754,22 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
             </div>
           ) : (
             <>
+              {/* Add Paper Actions */}
+              {activeTab === 'papers' && (
+                <div className="flex items-center justify-between mb-4 mt-2 animate-in fade-in slide-in-from-top-2 duration-500 px-1">
+                  <button
+                    onClick={() => setIsAddPaperModalOpen(true)}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-scholar-600 hover:bg-scholar-800 text-white rounded-2xl shadow-lg shadow-scholar-600/20 transition-all hover:scale-[1.02] active:scale-95 group"
+                  >
+                    <Plus size={18} />
+                    <span className="text-sm font-black uppercase tracking-widest leading-none">Add Paper</span>
+                  </button>
+                  <p className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest opacity-60">
+                    Total {filteredPapers.length} papers
+                  </p>
+                </div>
+              )}
+
               {/* Paper Sub-Filters (Pills) */}
               {activeTab === 'papers' && (
                 <div className="flex items-center gap-2 mb-6 px-1 animate-fade-in overflow-x-auto no-scrollbar">
@@ -849,6 +868,19 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
               {activeTab === 'notes' ? (
                 <>
+                  {/* CREATE NOTE BUTTON - MOVED DOWN */}
+                  <div className="flex items-center justify-between mb-4 mt-2 animate-in fade-in slide-in-from-top-2 duration-500">
+                    <button
+                      onClick={() => setIsCreateModalOpen(true)}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-scholar-600 hover:bg-scholar-800 text-white rounded-2xl shadow-lg shadow-scholar-600/20 transition-all hover:scale-[1.02] active:scale-95 group"
+                    >
+                       <Plus size={18} />
+                       <span className="text-sm font-black uppercase tracking-widest leading-none">Create Note</span>
+                    </button>
+                    <p className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest opacity-60">
+                       Total {filteredNotes.length} insights
+                    </p>
+                  </div>
                   {viewMode === 'table' ? (
                     <NotesTable
                       notes={paginatedNotes}
@@ -1029,6 +1061,20 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
           </div>
         </div>
       )}
+
+      <CreateNoteModal 
+        isOpen={isCreateModalOpen} 
+        onClose={() => setIsCreateModalOpen(false)}
+        savedPapers={savedPapers}
+        onSave={async (note, paperMetadata) => {
+          await saveNote(note, paperMetadata);
+        }}
+      />
+
+      <AddPaperModal
+        isOpen={isAddPaperModalOpen}
+        onClose={() => setIsAddPaperModalOpen(false)}
+      />
     </div>
   );
 };

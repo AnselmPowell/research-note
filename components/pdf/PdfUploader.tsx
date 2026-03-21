@@ -69,8 +69,7 @@ const PdfUploader: React.FC<PdfUploaderProps> = ({ onFileChange, onUrlSubmit, er
                     </div>
                     <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Upload Research</h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                        Add PDF documents to your workspace .
-                    </p>
+                        Add PDF documents to get started.                    </p>
                     <p className="text-xs text-gray-400 mt-1">or drag and drop</p>
                 </div>
 
