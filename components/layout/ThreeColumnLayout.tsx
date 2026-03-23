@@ -295,7 +295,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         {showLeft && (
           <div
             style={{ width: getColumnWidth('left') }}
-            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-sm min-w-[320px] relative`}
+            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-sm min-w-[320px] relative overflow-hidden`}
           >
             {isHeaderVisible === true && (
               <ColumnHeader
