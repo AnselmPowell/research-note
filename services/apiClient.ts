@@ -144,4 +144,9 @@ export const api = {
     sendMessage: (message: string, fileUris: string[], contextNotes: any[], documentMetadata?: any[]) =>
       apiCall('/agent/send-message', 'POST', { message, fileUris, contextNotes, documentMetadata }),
   },
+
+  researchAgent: {
+    runTask: (task: string, papers: any[], notes: any[], workflowId?: string) =>
+      apiCall('/research-agent/run-task', 'POST', { task, papers, notes, workflowId }),
+  },
 };

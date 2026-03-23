@@ -1,8 +1,30 @@
-# Active Context - Research Note
+## Current Work Focus (March 23, 2026)
 
-## Current Work Focus (March 17, 2026)
+### COMPLETED: Research Agent Harness & Tool Robustness ✅
 
-### COMPLETED: Research Tab Integration into NotesManager ✅
+**Session (Mar 23, 2026) - Upgraded Agent ReAct Loop and Advanced Navigation**
+
+**Problem Solved:**
+- The research agent suffered from "iteration amnesia," losing context between tool calls.
+- Searching dense academic papers was inefficient due to single-keyword limits and lack of logical structure awareness.
+- Agent failed silently or abruptly when reaching iteration limits.
+
+**Solution: The ReAct Harness Upgrade**
+1. **Memory Buffering**: Implemented a 3-observation buffer (`recentObservations`) to keep immediate context alive across sequential actions.
+2. **Persistence Upgrades**:
+   - Expanded `executionLog` to include agent `Thought` strings and increased result truncation from 120 to 500 characters.
+   - Fixed the auto-save mechanism: Any tool (e.g., `get_paper_structure`) can now automatically inject findings into the long-term Session Memory.
+3. **Advanced Navigation Tools**:
+   - `search_multiple_keyword`: Scans for an array of terms in one go to save iterations.
+   - `get_paper_structure`: A dedicated sub-agent tool (`gemini-2.5-flash`) that maps the logical structure of 50 pages and auto-saves a Table of Contents with page numbers.
+4. **Resiliency**: Increased `MAX_ITERATIONS` to 15 and implemented a graceful failure state that returns partial findings gathered so far instead of a blank error.
+
+**Result:**
+- ✅ Agent effectively traverses non-standard papers by "mapping" them first.
+- ✅ Sustained reasoning across longer tasks (Literature Reviews / Comparisons).
+- ✅ Efficient token usage by offloading structural mapping to a fast model.
+
+### PREVIOUS: Research Tab Integration into NotesManager ✅
 
 **Session (Mar 17, 2026) - Full Integration of Research Workflow into Library**
 

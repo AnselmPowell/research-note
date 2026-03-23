@@ -83,11 +83,16 @@
   - Gemini analyzes file content in responses
   - Citations properly extracted from responses
 
-### ✅ Agent Researcher (95%)
-- Dynamic system instructions based on selected documents
-- Citation extraction and formatting
-- Context notes integration
-- TypeScript typing for responses
+### ✅ Agent Researcher & Harness (100%)
+- **Dynamic ReAct Loop**: 15-iteration limit with memory buffering (`recentObservations: 3`)
+- **Citation & Structure Extraction**: Automatical fallback to `get_paper_structure` AI-subagent
+- **Execution Logging**: Complete trace including `Thought` strings and 500-char observation snippets
+- **Guideline Workflows**: Integrated workflows for Methodology, Findings, and Comparisons
+- 🆕 **Mar 23:** Research Agent Harness & Tool Upgrades
+  - Renamed `read_pages` to `read_multiple_pages`
+  - Added `search_multiple_keyword` (multi-term scanning)
+  - Added `get_paper_structure` (Fast AI TOC mapping)
+  - Fixed "Agent Amnesia" via permanent thought preservation in context layers
 - 🆕 **Feb 23:** File upload → Gemini pipeline fixed
   - Automatic sync when files added to context
   - Proper caching with URI-based lookups
@@ -104,6 +109,18 @@
 - Encapsulated `sortBy` and `isSortOpen` state into `DeepSearch` and `PaperSearch`.
 - Recreated the Sort Dropdown UI immediately to the right of the existing 'Filters' button in both tabs.
 - Cleaned up parent component.
+
+---
+
+### ✅ RESEARCH AGENT HARNESS & NAVIGATION (Mar 23, 2026)
+**Major Accomplishment:** Upgraded the agent's iterative reasoning and paper traversal capabilities.
+
+**Problem:** Agent struggled to find sections in papers with non-standard structures and would "forget" previous results during long tasks.
+**Solution:**
+- **Navigation Tools:** Implemented `search_multiple_keyword` and `get_paper_structure`.
+- **Harness Logic:** Updated loop to preserve the last 3 observations and explicitly record `Thought` history.
+- **Auto-Memory:** Enabled tools to independently save findings into long-term `Session Memory`.
+- **Scalability:** Increased max iterations to 15.
 
 ---
 

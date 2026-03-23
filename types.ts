@@ -38,6 +38,29 @@ export interface LoadedPdf {
   numPages: number;
 }
 
+export interface KeywordSearchResult {
+  keyword: string;
+  totalCount: number;
+  pagesFound: Array<{
+    pageIndex: number;  // 0-indexed for code logic
+    pageNumber: number; // 1-indexed for student display
+    count: number;      // Occurrences on this specific page
+  }>;
+  status: 'match' | 'no match';
+}
+
+export type AcademicStatus = 
+  | 'Not academic paper' 
+  | 'Not Sure' 
+  | 'Possible academic paper' 
+  | 'Definitely academic paper';
+
+export interface AcademicVerificationResult {
+  status: AcademicStatus;
+  matchingKeywords: string[];
+  score: number;
+}
+
 export interface Citation {
   inline: string;
   full: string;
@@ -165,4 +188,26 @@ export interface AgentCitation {
 export interface AgentResponse {
   text: string;
   citations: AgentCitation[];
+}
+
+// Research Agent (ReAct loop) Result
+export interface ResearchAgentMemoryEntry {
+  label: string;
+  content: string;
+}
+
+export interface ResearchAgentHistoryEntry {
+  iteration: number;
+  tool: string;
+  paramsSummary: string;
+  resultSummary: string;
+  thinking: string;
+}
+
+export interface ResearchAgentResult {
+  success: boolean;
+  response: string;
+  iterations: number;
+  memoryUsed: ResearchAgentMemoryEntry[];
+  history: ResearchAgentHistoryEntry[];
 }

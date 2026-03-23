@@ -2,6 +2,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { enhanceMetadataWithAI } from './geminiService';
 import { getCachedMetadata, setCachedMetadata } from '../utils/metadataCache';
+import { KeywordSearchResult, AcademicVerificationResult, AcademicStatus } from '../types';
 
 // Set the worker source to the same version as the library
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
@@ -87,7 +88,7 @@ export const fetchPdfBuffer = async (uri: string, signal?: AbortSignal): Promise
     return await fetchViaServer(uri, signal);
   } catch (serverError: any) {
     console.warn(`[PDF Service] Server fetch failed: ${serverError.message}`);
-    
+
     // Strategy 2: Try smart browser direct fetch
     try {
       if (signal?.aborted) throw new Error('Aborted');
@@ -95,7 +96,7 @@ export const fetchPdfBuffer = async (uri: string, signal?: AbortSignal): Promise
       return await fetchViaBrowserDirect(uri, signal);
     } catch (browserError: any) {
       console.warn(`[PDF Service] Browser direct fetch failed: ${browserError.message}`);
-      
+
       // Strategy 3: Try public proxy fallback
       try {
         if (signal?.aborted) throw new Error('Aborted');
@@ -103,7 +104,7 @@ export const fetchPdfBuffer = async (uri: string, signal?: AbortSignal): Promise
         return await fetchViaProxy(uri, signal);
       } catch (proxyError: any) {
         console.error(`[PDF Service] All fetch strategies failed for ${uri}`);
-        
+
         // Classify error for user-friendly display
         const finalError = classifyError([serverError, browserError, proxyError]);
         throw new Error(finalError);
@@ -164,8 +165,8 @@ async function fetchViaBrowserDirect(uri: string, signal?: AbortSignal): Promise
     }
 
     const contentType = response.headers.get('content-type') || '';
-    if (!contentType.toLowerCase().includes('pdf') && 
-        !contentType.toLowerCase().includes('octet-stream')) {
+    if (!contentType.toLowerCase().includes('pdf') &&
+      !contentType.toLowerCase().includes('octet-stream')) {
       throw new Error('NotPDF');
     }
 
@@ -204,7 +205,7 @@ async function fetchViaProxy(uri: string, signal?: AbortSignal): Promise<ArrayBu
     for (const getProxyUrl of CORS_GATEWAYS) {
       try {
         if (signal?.aborted) throw new Error('Aborted');
-        
+
         const proxyUrl = getProxyUrl(uri);
         console.log(`[PDF Service] 🔀 Trying proxy gateway for ${uri}: ${proxyUrl.substring(0, 40)}...`);
 
@@ -218,10 +219,10 @@ async function fetchViaProxy(uri: string, signal?: AbortSignal): Promise<ArrayBu
         if (response.ok) {
           const buffer = await response.arrayBuffer();
           if (buffer.byteLength > 100) { // Basic sanity check
-             return buffer;
+            return buffer;
           }
         }
-        
+
         throw new Error(`ProxyStatus_${response.status}`);
       } catch (proxyError: any) {
         lastError = proxyError;
@@ -262,7 +263,7 @@ function classifyError(errors: any[]): string {
   if (errorStrings.includes('ProxyError') || errorStrings.includes('HTTP_')) {
     return 'ProxyError';
   }
-  
+
   return 'NetworkOrCORSError';
 }
 
@@ -506,9 +507,9 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSig
 
       pages.push(pageText);
 
-      // Collect first page text for abstract extraction
-      if (i === 1) {
-        fullTextForAbstract = pageText;
+      // Collect first 3 pages text for better abstract detection (handles cover pages)
+      if (i <= 3) {
+        fullTextForAbstract += (fullTextForAbstract ? "\n\n" : "") + pageText;
       }
     }
 
@@ -602,4 +603,105 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSig
     console.error("PDF Extraction Failed:", error);
     throw error;
   }
+};
+
+/**
+ * Quickly scans a parsed PDF (pages array) for a specific keyword.
+ * Returns detailed occurrence metrics per page.
+ */
+export const searchKeywordInPdf = (pages: string[], keyword: string): KeywordSearchResult => {
+  if (!keyword.trim() || !pages || pages.length === 0) {
+    return { keyword, totalCount: 0, pagesFound: [], status: 'no match' };
+  }
+
+  const results: KeywordSearchResult['pagesFound'] = [];
+  let totalCount = 0;
+
+  // Escape special characters to prevent regex breaking and set global/case-insensitive flags
+  const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(escapedKeyword, 'gi');
+
+  pages.forEach((pageText, index) => {
+    const matches = pageText.match(regex);
+    if (matches && matches.length > 0) {
+      const count = matches.length;
+      totalCount += count;
+      results.push({
+        pageIndex: index,
+        pageNumber: index + 1,
+        count: count
+      });
+    }
+  });
+
+  return {
+    keyword,
+    totalCount,
+    pagesFound: results,
+    status: totalCount > 0 ? 'match' : 'no match'
+  };
+};
+
+/**
+ * Analyzes structural hallmarks to verify if a PDF is an academic document.
+ * Checks the first 8 and last 8 pages for mandatory academic headings.
+ */
+export const verifyAcademicPaper = (pages: string[]): AcademicVerificationResult => {
+  if (!pages || pages.length === 0) {
+    return { status: 'Not academic paper', matchingKeywords: [], score: 0 };
+  }
+
+  // 1. Definition: Hallmark Keywords for Academic Structure
+  const introMarkers = [
+    'abstract', 'introduction', 'method', 'methodology', 'methods', 'report',
+    'table of content', 'table of contents', 'table of reference',
+    'content list', 'literature review', 'background',
+    'hypothesis', 'research question'
+  ];
+
+  const outroMarkers = [
+    'reference', 'reference list', 'bibliography', 'works cited',
+    'endnotes', 'appendix', 'conclusion', 'conclusions', 'concluding',
+    'results', 'findings', 'discussion', 'recommendations', 'summary'
+  ];
+
+  const foundMarkers = new Set<string>();
+
+  // 2. Adaptive Scanning (Smart Search Strategy)
+  if (pages.length < 20) {
+    // PASS 1 (Unified): For short documents, perform one pass across the whole text
+    const fullText = pages.join(' ').toLowerCase();
+    const allMarkers = [...introMarkers, ...outroMarkers];
+    allMarkers.forEach(kw => {
+      if (fullText.includes(kw)) foundMarkers.add(kw);
+    });
+  } else {
+    // PASS 1 (Targeted): For long documents, scan the intro zones
+    const introZone = pages.slice(0, 8).join(' ').toLowerCase();
+    introMarkers.forEach(kw => {
+      if (introZone.includes(kw)) foundMarkers.add(kw);
+    });
+
+    // PASS 2 (Targeted): Scan the outro zones
+    const outroZone = pages.slice(-8).join(' ').toLowerCase();
+    outroMarkers.forEach(kw => {
+      if (outroZone.includes(kw)) foundMarkers.add(kw);
+    });
+  }
+
+  const matchingKeywords = Array.from(foundMarkers);
+  const score = matchingKeywords.length;
+
+  // 5. Scoring Tiers (Per User Requirement)
+  let status: AcademicStatus = 'Not academic paper';
+
+  if (score >= 4) {
+    status = 'Definitely academic paper';
+  } else if (score === 3) {
+    status = 'Possible academic paper';
+  } else if (score >= 1) {
+    status = 'Not Sure';
+  }
+
+  return { status, matchingKeywords, score };
 };

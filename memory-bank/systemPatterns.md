@@ -413,3 +413,14 @@ const isPaperSaved = useCallback(
 - **PDF lifecycle**: Load → Process → Display → Unmount cleanup
 - **Embedding cache**: Map structure with ~60% hit rate
 - **Future**: LRU cache for high-volume scenarios
+
+## Research Agent ReAct Pattern (UPGRADED Mar 23)
+Iterative reasoning loop with a multi-layered context architecture.
+
+- **ReAct Loop**: `researchAgentLoop.js` (15 max iterations).
+- **Asynchronous Execution**: `executeTool` is `async` to allow sub-agent operations (LLM inside tools).
+- **Auto-Memory Injection**: Tools return `memoryEntry` for immediate Layer 3 persistence.
+- **Workflow Guidelines**: `researchAgentWorkflows.js` provides task-specific hints.
+
+**Contextualization Strategy:**
+As the agent iterates, it builds a mental model of the paper by saving **Logical Structure** (via `get_paper_structure`) and **Key Findings** to its Session Memory. This ensures that in later iterations, the agent "knows" exactly where sections are located without wasting tokens on repetitive searches.

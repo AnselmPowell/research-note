@@ -321,6 +321,24 @@ async function sendMessage(message, fileUris, contextNotes, documentMetadata) {
 | Files never stored in uploadedFiles | Added useEffect with contextPdfs.length dependency |
 | .keys() error on plain object | Changed to Object.keys() |
 
+### Research Agent Harness (UPGRADED Mar 23)
+Dynamic ReAct loop with 15-iteration limit and persistent multi-layer context.
+
+**Tool Architecture:**
+- All tools are `async` and execute via `executeTool(tool, params, workspace, genAI)`.
+- Tools can return `memoryEntry` to auto-persist data into Layer 3 (Session Memory).
+
+**New Navigation Tools:**
+- **`search_multiple_keyword`**: Scans multiple terms (regex case-insensitive) across all pages.
+- **`get_paper_structure`**: Sub-agent utilizing `gemini-2.5-flash` to analyze the first 50 pages and generate a Table of Contents (Introduction, Methods, Results, etc.) with page numbers.
+
+**Context Layers:**
+1. **System Rules**: Global constraints and Harvard citation rules.
+2. **Tools & Workflows**: Guidelines for task execution.
+3. **Session Memory**: Persistent findings (auto-saved or manually via `save_to_memory`).
+4. **Execution Log**: Trace of iterative logic (Thinking + Tool Call Summary + Result Snapshot).
+5. **Recent Observations**: Current iteration results (3-slot buffer to prevent amnesia).
+
 ### File Upload Message Handling with Tool Calling
 ```typescript
 const readNotesTool: FunctionDeclaration = {
