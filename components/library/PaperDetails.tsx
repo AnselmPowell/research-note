@@ -239,15 +239,15 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                                 </p>
                             ) : (
                                 <div className="flex flex-col items-center justify-center min-h-[200px] border-gray-100 dark:border-gray-800 rounded-2xl animate-fade-in py-8 px-4 text-center">
-                                    <button 
+                                    <button
                                         onClick={() => onGenerateLiteratureReview(paper)}
-                                        className="inline-flex items-center gap-2.5 px-6 py-4 bg-scholar-50/50 dark:bg-scholar-900/20 text-scholar-600 dark:text-scholar-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl border border-scholar-300 dark:border-scholar-800/50 hover:bg-scholar-50 dark:hover:bg-scholar-900/40 transition-all group"
+                                        className="inline-flex items-center gap-2.5 px-6 py-5 bg-scholar-50/50 dark:bg-scholar-900/20 text-scholar-600 dark:text-scholar-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl border border-scholar-300 dark:border-scholar-800/50 hover:bg-scholar-50 dark:hover:bg-scholar-900/40 transition-all group"
                                     >
                                         <Sparkles size={14} className="group-hover:animate-pulse" />
                                         {activeTab === 'lit review' ? 'GENERATE LITERATURE REVIEW' :
-                                         activeTab === 'method' ? 'GENERATE METHODOLOGY' :
-                                         activeTab === 'findings' ? 'GENERATE FINDINGS/RESULTS' :
-                                         `GENERATE ${activeTab.toUpperCase()}`}
+                                            activeTab === 'method' ? 'GENERATE METHODOLOGY' :
+                                                activeTab === 'findings' ? 'GENERATE FINDINGS/RESULTS' :
+                                                    `GENERATE ${activeTab.toUpperCase()}`}
                                     </button>
                                 </div>
                             )}
