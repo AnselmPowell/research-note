@@ -20,6 +20,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
     isDownloading
 }) => {
     const [isExtracting, setIsExtracting] = useState(false);
+    const [activeTab, setActiveTab] = useState('abstract');
     const { savePaper } = useDatabase();
 
     if (!paper) return null;
@@ -202,26 +203,55 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                     <div className="grid grid-cols-2 gap-4 py-4 ">
                         <button
                             onClick={() => onGenerateLiteratureReview(paper)}
-                            className="flex items-center justify-center px-3 py-3.5 bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all rounded-xl"
+                            className="flex items-center justify-center px-3 py-2.5 bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all rounded-xl"
                         >
                             <span className="text-center">GENERATE LITERATURE REVIEW</span>
                         </button>
                         <button
                             onClick={() => onView(paper)}
-                            className="flex items-center justify-center px-4 py-3.5 bg-[#006E74] hover:bg-[#005a5f] text-white text-[11px] font-black uppercase tracking-widest rounded-xl transition-all gap-2 shadow-scholar-sm"
+                            className="flex items-center justify-center px-3 py-2.5 bg-scholar-600 hover:bg-scholar-500 text-white text-[11px] font-black uppercase tracking-widest rounded-xl transition-all gap-2 shadow-scholar-sm"
                         >
-                            {isDownloading ? <Loader2 size={16} className="animate-spin" /> : 'VIEW PDF DOCUMENT'}
+                            {isDownloading ? <Loader2 size={16} className="animate-spin" /> : 'VIEW PDF'}
                         </button>
                     </div>
 
-                    {/* Abstract Section */}
+                    {/* Tabs Section - Replacing Abstract Section */}
                     <div className="space-y-4 border-t pt-4 border-gray-400 dark:border-gray-500">
-                        <h3 className="text-md font-black uppercase tracking-[0.25em] text-gray-600 dark:text-gray-300">
-                            Abstract
-                        </h3>
-                        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 leading-relaxed font-medium">
-                            {paper.abstract || paper.summary || "No abstract available for this document."}
-                        </p>
+                        <div className="flex flex-wrap gap-x-6 gap-y-2">
+                            {['abstract', 'lit review', 'method', 'findings'].map((tab) => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setActiveTab(tab)}
+                                    className={`uppercase tracking-[0.2em] font-black transition-all ${activeTab === tab
+                                        ? 'text-md font-black uppercase tracking-[0.25em] text-gray-600 dark:text-gray-300 underline underline-offset-4'
+                                        : 'text-[10px] text-gray-500 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-600'
+                                        }`}
+                                >
+                                    {tab}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="min-h-[200px]">
+                            {activeTab === 'abstract' ? (
+                                <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 leading-relaxed font-medium animate-fade-in">
+                                    {paper.abstract || paper.summary || "No abstract available for this document."}
+                                </p>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center min-h-[200px] border-gray-100 dark:border-gray-800 rounded-2xl animate-fade-in py-8 px-4 text-center">
+                                    <button 
+                                        onClick={() => onGenerateLiteratureReview(paper)}
+                                        className="inline-flex items-center gap-2.5 px-6 py-4 bg-scholar-50/50 dark:bg-scholar-900/20 text-scholar-600 dark:text-scholar-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl border border-scholar-300 dark:border-scholar-800/50 hover:bg-scholar-50 dark:hover:bg-scholar-900/40 transition-all group"
+                                    >
+                                        <Sparkles size={14} className="group-hover:animate-pulse" />
+                                        {activeTab === 'lit review' ? 'GENERATE LITERATURE REVIEW' :
+                                         activeTab === 'method' ? 'GENERATE METHODOLOGY' :
+                                         activeTab === 'findings' ? 'GENERATE FINDINGS/RESULTS' :
+                                         `GENERATE ${activeTab.toUpperCase()}`}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
