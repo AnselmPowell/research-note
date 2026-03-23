@@ -7,6 +7,10 @@ import { KeywordSearchResult, AcademicVerificationResult, AcademicStatus } from 
 // Set the worker source to the same version as the library
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV
+  ? 'http://localhost:3001/api/v1'
+  : '/api/v1');
+
 interface ExtractedData {
   metadata: {
     title?: string;
@@ -123,7 +127,7 @@ async function fetchViaServer(uri: string, signal?: AbortSignal): Promise<ArrayB
   const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
   try {
-    const response = await fetch('/api/v1/pdf/fetch-pdf', {
+    const response = await fetch(`${API_BASE_URL}/pdf/fetch-pdf`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: uri }),

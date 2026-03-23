@@ -26,6 +26,7 @@ interface PapersTableProps {
     onExpand: (uri: string) => void;
     onDelete: (paper: DeepResearchResult) => void;
     onView: (paper: DeepResearchResult) => void;
+    onTitleClick: (paper: DeepResearchResult) => void; // Added onTitleClick
     getNotesCount: (uri: string) => number;
     isDownloading: (uri: string) => boolean;
     isFailed: (uri: string) => boolean;
@@ -42,6 +43,7 @@ export const PapersTable: React.FC<PapersTableProps> = ({
     onExpand,
     onDelete,
     onView,
+    onTitleClick, // Added onTitleClick
     getNotesCount,
     isDownloading
 }) => {
@@ -133,7 +135,10 @@ export const PapersTable: React.FC<PapersTableProps> = ({
 
                                     <td className="py-5 px-4">
                                         <div className="flex flex-col gap-1">
-                                            <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug group-hover:text-scholar-600 transition-colors">
+                                            <span 
+                                                onClick={(e) => { e.stopPropagation(); onTitleClick(paper); }}
+                                                className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug hover:text-scholar-600 transition-colors cursor-pointer"
+                                            >
                                                 {paper.title}
                                             </span>
                                             {/* Mobile-only metadata */}

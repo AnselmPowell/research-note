@@ -35,6 +35,7 @@ import { PapersTable } from './PapersTable';
 import { NotesTable } from './NotesTable';
 import { CreateNoteModal } from './CreateNoteModal';
 import { AddPaperModal } from './AddPaperModal';
+import { PaperDetails } from './PaperDetails';
 
 interface NotesManagerProps {
   activeView: string;
@@ -143,6 +144,15 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAddPaperModalOpen, setIsAddPaperModalOpen] = useState(false);
+  const [selectedPaperForDetails, setSelectedPaperForDetails] = useState<any>(null); // State for the details sidebar
+
+  // LIVE SYNC: Derive the paper for details from the reactive savedPapers array
+  // This ensures that when metadata is extracted, the sidebar updates immediately
+  const liveSelectedPaper = useMemo(() => {
+    if (!selectedPaperForDetails) return null;
+    return savedPapers.find(p => p.uri === selectedPaperForDetails.uri) || selectedPaperForDetails;
+  }, [selectedPaperForDetails, savedPapers]);
+
   const PAGE_SIZE = activeTab === 'notes' && viewMode === 'grid' ? 12 : 10;
 
   useEffect(() => {
@@ -545,7 +555,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-cream dark:bg-dark-bg font-sans notes-manager-container" style={{ containerType: 'inline-size' }}>
+    <div className="flex h-full overflow-hidden bg-cream dark:bg-dark-bg font-sans notes-manager-container relative" style={{ containerType: 'inline-size' }}>
+      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 border-r border-gray-100 dark:border-gray-800">
       <style>{`
         @container (max-width: 450px) {
           .tab-label { display: none; }
@@ -959,6 +970,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                         setActivePdf(p.uri);
                         setColumnVisibility(prev => ({ ...prev, right: true }));
                       }}
+                      onTitleClick={(p) => setSelectedPaperForDetails(p)}
                       getNotesCount={(uri) => notesCountByPaperUri.get(uri) || 0}
                       isDownloading={(uri) => downloadingUris.has(uri)}
                       isFailed={(uri) => failedUris.has(uri)}
@@ -975,6 +987,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                           onToggleExpand={() => handleTogglePaperExpand(paper.uri)}
                           notes={savedNotes.filter(n => n.paper_uri === paper.uri)}
                           onDelete={() => openDeletePaperModal(paper)}
+                          onTitleClick={(p) => setSelectedPaperForDetails(p)}
                         />
                       )) : (
                         <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
@@ -1075,11 +1088,77 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
         isOpen={isAddPaperModalOpen}
         onClose={() => setIsAddPaperModalOpen(false)}
       />
+      </div>
+
+      {/* Detail Sidebar - Now as a sibling for interactivity */}
+      {liveSelectedPaper && (
+        <div className="w-[480px] h-full hidden xl:block shadow-2xl ring-1 ring-black/5 z-20">
+          <PaperDetails
+            paper={liveSelectedPaper}
+            onClose={() => setSelectedPaperForDetails(null)}
+            onView={(p) => {
+              loadPdfFromUrl(p.uri, p.title);
+              setActivePdf(p.uri);
+              setColumnVisibility(prev => ({ ...prev, right: true }));
+            }}
+            onGenerateLiteratureReview={(p) => {
+              // Logic to trigger literature review workflow
+              console.log("Generating literature review for:", p.title);
+            }}
+            isDownloading={downloadingUris.has(liveSelectedPaper.uri)}
+          />
+        </div>
+      )}
+
+      {/* Overlay for smaller screens */}
+      {liveSelectedPaper && (
+        <div className="xl:hidden absolute inset-0 z-[100] flex justify-end">
+          <div className="absolute inset-0 bg-black/10 transition-opacity" onClick={() => setSelectedPaperForDetails(null)} />
+          <div className="relative w-full max-w-md h-full">
+            <PaperDetails
+              paper={liveSelectedPaper}
+              onClose={() => setSelectedPaperForDetails(null)}
+              onView={(p) => {
+                loadPdfFromUrl(p.uri, p.title);
+                setActivePdf(p.uri);
+                setColumnVisibility(prev => ({ ...prev, right: true }));
+                setSelectedPaperForDetails(null);
+              }}
+              onGenerateLiteratureReview={(p) => {
+                console.log("Generating literature review for:", p.title);
+                setSelectedPaperForDetails(null);
+              }}
+              isDownloading={downloadingUris.has(liveSelectedPaper.uri)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-function LibraryPaperCard({ paper, isSelected, isExpanded, onSelect, onToggleExpand, notes, onDelete }) {
+interface LibraryPaperCardProps {
+  key?: any;
+  paper: any;
+  isSelected: boolean;
+  isExpanded: boolean;
+  onSelect: () => void;
+  onToggleExpand: () => void;
+  notes: any[];
+  onDelete: () => void;
+  onTitleClick: (paper: any) => void;
+}
+
+function LibraryPaperCard({ 
+  paper, 
+  isSelected, 
+  isExpanded, 
+  onSelect, 
+  onToggleExpand, 
+  notes, 
+  onDelete,
+  onTitleClick 
+}: LibraryPaperCardProps) {
   const { loadPdfFromUrl, setActivePdf, setSearchHighlight, downloadingUris, failedUris } = useLibrary();
   const { setColumnVisibility, setLibraryExpanded, setLibraryOpen } = useUI();
   const { deleteNote, toggleStar, toggleFlag, updateNote } = useDatabase();
@@ -1149,7 +1228,7 @@ function LibraryPaperCard({ paper, isSelected, isExpanded, onSelect, onToggleExp
               </div>
             </div>
 
-            <h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white leading-snug mb-2 cursor-pointer hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors" onClick={handleOpenPdf}>
+            <h3 className="text-base sm:text-xl font-bold text-gray-900 dark:text-white leading-snug mb-2 cursor-pointer hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors" onClick={() => onTitleClick(paper)}>
               {paper.title}
             </h3>
 
@@ -1199,6 +1278,24 @@ function LibraryPaperCard({ paper, isSelected, isExpanded, onSelect, onToggleExp
   );
 }
 
+interface NoteCardProps {
+  key?: any;
+  note: any;
+  viewMode: any;
+  isSelected: any;
+  isExpanded: any;
+  isEditing: any;
+  onSelect: any;
+  onCardClick: any;
+  onToggleStar: any;
+  onToggleFlag: any;
+  onEdit: any;
+  onSaveEdit: any;
+  onCancelEdit: any;
+  onDelete: any;
+  paper: any;
+}
+
 function NoteCard({
   note,
   viewMode,
@@ -1214,7 +1311,7 @@ function NoteCard({
   onCancelEdit,
   onDelete,
   paper
-}) {
+}: NoteCardProps) {
   const [editContent, setEditContent] = useState(note.content);
   const [isSavingLocal, setIsSavingLocal] = useState(false);
   const [justCopied, setJustCopied] = useState(false);

@@ -95,7 +95,7 @@ async function enhanceMetadata(firstFourPagesText, currentMetadata) {
   TASK:
   Extract accurate metadata and format it according to these requirements:
   1. title: The exact full academic title of the paper.
-  2. author: The full name of the primary/lead author.
+  2. author: The full names of all authors.
   3. year: The 4-digit publication year.
   4. subject: A 2-3 sentence summary of the paper's core objective or findings (abstract-like).
   5. harvardReference: A COMPLETE and PROPERLY FORMATTED Harvard style reference for this paper.
@@ -105,7 +105,7 @@ async function enhanceMetadata(firstFourPagesText, currentMetadata) {
   Return EXACTLY this JSON structure:
   {
     "title": "...",
-    "author": "...",
+    "author": "List ALL authors found in the paper, separated by commas. Do not truncate.",
     "year": "...",
     "subject": "...",
     "harvardReference": "...",
