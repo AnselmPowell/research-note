@@ -39,7 +39,7 @@ if (config.geminiApiKey) {
   logger.warn('[ResearchAgent] No GEMINI_API_KEY set — agent will not function');
 }
 
-const MAX_ITERATIONS = 15;
+const MAX_ITERATIONS = 20;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTEXT BUILDER
@@ -160,23 +160,22 @@ Notes available: ${workspace.notes.length}`;
 
   // ── LAYER 6: Output Contract ──────────────────────────────────────────────
   const layer6 = `\n\nYOUR RESPONSE MUST BE ONLY VALID JSON — no markdown, no explanation, no other text.
-IMPORTANT: Your ONLY allowed actions are "tool_call" and "task_complete".
-"save_to_memory" is a TOOL, not an action — it must go inside "tool" and "params".
+IMPORTANT: You can output an array of 1 or 2 actions at a time (MAX 2).
+RULE: If you are chaining actions, 'save_to_session_memory' MUST be the first action in the array.
 
-For a tool call:
+Return an object with an "actions" array:
 {
-  "thinking": "Your step-by-step reasoning about what to do next",
-  "action": "tool_call",
-  "tool": "name_of_tool",
-  "params": { "param_name": "value" }
+  "actions": [
+    {
+      "thinking": "Brief reasoning",
+      "action": "tool_call",
+      "tool": "name",
+      "params": { ... }
+    }
+  ]
 }
 
-For completing the task:
-{
-  "thinking": "Why the task is now fully complete",
-  "action": "task_complete",
-  "params": { "response": "Your complete well-formatted response to the student" }
-}`;
+For completing the task, the action is "task_complete" and the param is "response".`;
 
   return [layer0, layer1, layer2, layer2b, layer3, layer4, layer5, layer6].join('\n');
 }
@@ -207,10 +206,25 @@ function extractDecision(responseText) {
   const firstBrace = cleaned.indexOf('{');
   const lastBrace = cleaned.lastIndexOf('}');
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+    try {
+      const decision = JSON.parse(cleaned.substring(firstBrace, lastBrace + 1));
+      return { decision, error: null };
+    } catch (e) {}
   }
 
-  // Attempt parse
+  // Strategy 3: Try finding an array [...] in case the LLM forgets the object wrapper
+  const firstBracket = cleaned.indexOf('[');
+  const lastBracket = cleaned.lastIndexOf(']');
+  if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+    try {
+      const decisionArr = JSON.parse(cleaned.substring(firstBracket, lastBracket + 1));
+      if (Array.isArray(decisionArr)) {
+        return { decision: { actions: decisionArr }, error: null };
+      }
+    } catch (e) {}
+  }
+
+  // Attempt raw parse fallback
   try {
     const decision = JSON.parse(cleaned);
     return { decision, error: null };
@@ -309,89 +323,113 @@ async function runAgentTask(task, workspace, workflowId) {
       continue;
     }
 
-    if (decision.thinking) {
-      const thinkingPreview = decision.thinking.length > 150
-        ? decision.thinking.substring(0, 150) + '...'
-        : decision.thinking;
-      logger.info(`[ResearchAgent] Agent Thought: "${thinkingPreview.replace(/\n/g, ' ')}"`);
+    // Normalize to an actions array (limit max 2)
+    let actionsToRun = [];
+    if (decision.actions && Array.isArray(decision.actions)) {
+      actionsToRun = decision.actions.slice(0, 2);
+    } else if (decision.action) {
+      actionsToRun = [decision]; // Fallback for single action formatting
     }
 
-    logger.info(`[ResearchAgent] Decision: action=${decision.action}, tool=${decision.tool || 'N/A'}`);
-
-    // ── STEP C: Handle task_complete ─────────────────────────────────────
-    if (decision.action === 'task_complete') {
-      const finalResponse = decision.params?.response || 'Task completed.';
-      logger.info(`[ResearchAgent] ✅ Task complete after ${iteration} iteration(s)`);
-      logger.info(`[ResearchAgent] Memory entries used: ${sessionMemory.length}`);
-
-      return {
-        success: true,
-        response: finalResponse,
-        iterations: iteration,
-        memoryUsed: sessionMemory,
-        history: executionLog
-      };
-    }
-
-    // ── STEP D: Handle tool_call ──────────────────────────────────────────
-    if (decision.action === 'tool_call' && decision.tool) {
-      // Pass sessionContextPool to allow tools to "register" content IDs
-      const toolResult = await executeTool(decision.tool, decision.params || {}, workspace, genAI, sessionContextPool);
-
-      // Guard against malformed tool result
-      const observation = (toolResult && typeof toolResult.observation === 'string')
-        ? toolResult.observation
-        : `ERROR: Tool "${decision.tool}" returned no output.`;
-
-      // Handle save_to_memory or auto-saves — push to long-term session memory
-      if (toolResult?.memoryEntries) {
-        // Handle array of entries (from new multi-save tool)
-        sessionMemory.push(...toolResult.memoryEntries);
-        logger.info(`[ResearchAgent] 💾 Multi-Memory saved: ${toolResult.memoryEntries.length} items`);
-      } else if (toolResult?.memoryEntry) {
-        sessionMemory.push(toolResult.memoryEntry);
-        logger.info(`[ResearchAgent] 💾 Memory saved: [${toolResult.memoryEntry.type}]`);
-      }
-
-      // Build compact param summary for the execution log
-      const paramsSummary = Object.entries(decision.params || {})
-        .map(([k, v]) => {
-          const val = typeof v === 'string' && v.length > 40
-            ? v.substring(0, 40) + '...'
-            : String(v);
-          return `${k}=${val}`;
-        })
-        .join(', ');
-
-      // Compact result summary for log — never stores full page text
-      const resultSummary = observation.length > 400
-        ? observation.substring(0, 400) + '... (truncated, use save_to_memory if needed)'
-        : observation;
-
-      // Push to execution log (persists entire session — compact only)
-      executionLog.push({
-        iteration,
-        tool: decision.tool,
-        paramsSummary,
-        resultSummary,
-        thinking: (decision.thinking || '').substring(0, 400)
-      });
-
-      // Set short-term observation array — full raw output, available ONLY for next few iterations
-      recentObservations.unshift(observation);
-      if (recentObservations.length > 3) {
-        recentObservations.pop(); // Keep only the 3 most recent
-      }
-
-      logger.info(`[ResearchAgent] Tool: ${decision.tool}`);
-      logger.info(`[ResearchAgent] Result: ${resultSummary.substring(0, 100)}`);
-
-    } else if (decision.action !== 'task_complete') {
-      // Invalid or missing action
-      const errorObs = `ERROR: Invalid action "${decision.action}". You must use "tool_call" or "task_complete".`;
-      recentObservations.unshift(errorObs);
+    if (actionsToRun.length === 0) {
+      recentObservations.unshift('ERROR: No valid actions found in your response.');
       if (recentObservations.length > 3) recentObservations.pop();
-      logger.warn(`[ResearchAgent] Invalid action: "${decision.action}"`);
+      continue;
+    }
+
+    // ── STEP C & D: Process Actions Sequentially ────────────────────────
+    for (let i = 0; i < actionsToRun.length; i++) {
+      const act = actionsToRun[i];
+
+      if (act.thinking) {
+        const thinkingPreview = act.thinking.length > 150
+          ? act.thinking.substring(0, 150) + '...'
+          : act.thinking;
+        logger.info(`[ResearchAgent] Agent Thought (Action ${i + 1}): "${thinkingPreview.replace(/\n/g, ' ')}"`);
+      }
+
+      logger.info(`[ResearchAgent] Decision (Action ${i + 1}): action=${act.action}, tool=${act.tool || 'N/A'}`);
+
+      // SAFEGUARD 1: Immediately return if task_complete
+      if (act.action === 'task_complete') {
+        const finalResponse = act.params?.response || 'Task completed.';
+        logger.info(`[ResearchAgent] ✅ Task complete after ${iteration} iteration(s)`);
+        logger.info(`[ResearchAgent] Memory entries used: ${sessionMemory.length}`);
+
+        return {
+          success: true,
+          response: finalResponse,
+          iterations: iteration,
+          memoryUsed: sessionMemory,
+          history: executionLog
+        };
+      }
+
+      // SAFEGUARD 2: Prevent save_to_session_memory as a second chained action
+      if (act.action === 'tool_call' && act.tool === 'save_to_session_memory' && i > 0) {
+        const errorObs = `ERROR: 'save_to_session_memory' CANNOT be the second action in a chain. Action disabled. Always save memory as your first action.`;
+        recentObservations.unshift(errorObs);
+        if (recentObservations.length > 3) recentObservations.pop();
+        logger.warn(`[ResearchAgent] 📛 Blocked save_to_session_memory as second action.`);
+        continue; // Skip executing this specific action
+      }
+
+      if (act.action === 'tool_call' && act.tool) {
+        // Pass sessionContextPool to allow tools to "register" content IDs
+        const toolResult = await executeTool(act.tool, act.params || {}, workspace, genAI, sessionContextPool);
+
+        // Guard against malformed tool result
+        const observation = (toolResult && typeof toolResult.observation === 'string')
+          ? toolResult.observation
+          : `ERROR: Tool "${act.tool}" returned no output.`;
+
+        // Handle save_to_memory or auto-saves — push to long-term session memory
+        if (toolResult?.memoryEntries) {
+          sessionMemory.push(...toolResult.memoryEntries);
+          logger.info(`[ResearchAgent] 💾 Multi-Memory saved: ${toolResult.memoryEntries.length} items`);
+        } else if (toolResult?.memoryEntry) {
+          sessionMemory.push(toolResult.memoryEntry);
+          logger.info(`[ResearchAgent] 💾 Memory saved: [${toolResult.memoryEntry.type}]`);
+        }
+
+        // Build compact param summary for the execution log
+        const paramsSummary = Object.entries(act.params || {})
+          .map(([k, v]) => {
+            const val = typeof v === 'string' && v.length > 40
+              ? v.substring(0, 40) + '...'
+              : String(v);
+            return `${k}=${val}`;
+          })
+          .join(', ');
+
+        const resultSummary = observation.length > 400
+          ? observation.substring(0, 400) + '... (truncated, use save_to_memory if needed)'
+          : observation;
+
+        // Push to execution log (persists entire session — compact only)
+        executionLog.push({
+          iteration,
+          tool: act.tool,
+          paramsSummary,
+          resultSummary,
+          thinking: (act.thinking || '').substring(0, 400)
+        });
+
+        // Set short-term observation array
+        recentObservations.unshift(observation);
+        if (recentObservations.length > 3) {
+          recentObservations.pop(); // Keep only the 3 most recent
+        }
+
+        logger.info(`[ResearchAgent] Tool: ${act.tool}`);
+        logger.info(`[ResearchAgent] Result: ${resultSummary.substring(0, 100)}`);
+
+      } else if (act.action !== 'task_complete') {
+        const errorObs = `ERROR: Invalid action "${act.action}". You must use "tool_call" or "task_complete".`;
+        recentObservations.unshift(errorObs);
+        if (recentObservations.length > 3) recentObservations.pop();
+        logger.warn(`[ResearchAgent] Invalid action: "${act.action}"`);
+      }
     }
   }
 
