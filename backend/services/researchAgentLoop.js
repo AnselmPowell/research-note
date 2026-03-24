@@ -175,7 +175,7 @@ Return an object with an "actions" array:
   ]
 }
 
-For completing the task, the action is "task_complete" and the param is "response".`;
+For completing the task, the action is "task_complete". The "response" param must be a LONG-FORM STRING (not an object) containing your complete academic findings. You can use markdown for formatting.`;
 
   return [layer0, layer1, layer2, layer2b, layer3, layer4, layer5, layer6].join('\n');
 }
@@ -339,7 +339,18 @@ async function runAgentTask(task, workspace, workflowId) {
 
     // ── STEP C & D: Process Actions Sequentially ────────────────────────
     for (let i = 0; i < actionsToRun.length; i++) {
-      const act = actionsToRun[i];
+      let act = actionsToRun[i];
+
+      // NORMALIZATION: If the agent mistakenly calls 'task_complete' as a 'tool_call', 
+      // convert it to the primary 'task_complete' action type.
+      if (act.action === 'tool_call' && act.tool === 'task_complete') {
+        logger.info(`[ResearchAgent] 🔄 Normalizing 'tool_call: task_complete' to primary 'task_complete' action.`);
+        act = {
+          action: 'task_complete',
+          params: act.params,
+          thinking: act.thinking
+        };
+      }
 
       if (act.thinking) {
         const thinkingPreview = act.thinking.length > 150
@@ -352,13 +363,23 @@ async function runAgentTask(task, workspace, workflowId) {
 
       // SAFEGUARD 1: Immediately return if task_complete
       if (act.action === 'task_complete') {
-        const finalResponse = act.params?.response || 'Task completed.';
+        let finalResponse = act.params?.response || 'Task completed.';
+        
+        // CATCH-ALL: Ensure finalResponse is a string to prevent React rendering crashes
+        if (typeof finalResponse === 'object' && finalResponse !== null) {
+          logger.warn(`[ResearchAgent] ⚠️  Agent returned an object for task_complete. Converting to string.`);
+          // Convert to a pretty-printed string or markdown-like list
+          finalResponse = Object.entries(finalResponse)
+            .map(([key, value]) => `### ${key}\n${String(value)}`)
+            .join('\n\n');
+        }
+
         logger.info(`[ResearchAgent] ✅ Task complete after ${iteration} iteration(s)`);
         logger.info(`[ResearchAgent] Memory entries used: ${sessionMemory.length}`);
 
         return {
           success: true,
-          response: finalResponse,
+          response: String(finalResponse),
           iterations: iteration,
           memoryUsed: sessionMemory,
           history: executionLog

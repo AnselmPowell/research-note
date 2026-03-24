@@ -267,7 +267,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                                         <div className="flex flex-col items-center justify-center min-h-[200px] py-8 text-center bg-gray-50/50 dark:bg-gray-900/20 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800">
                                             <Loader2 size={24} className="animate-spin text-scholar-600 mb-3" />
                                             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-scholar-600">Researching Document...</p>
-                                            <p className="text-[9px] text-gray-400 mt-1">Collecting data and synthesising findings</p>
+                                            <p className="text-[9px] text-gray-400 mt-1">Analysing paper and synthesising findings</p>
                                         </div>
                                     ) : (
                                         (() => {

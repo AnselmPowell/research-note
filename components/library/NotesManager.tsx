@@ -159,17 +159,27 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
   // Handler for running agent workflows (Lit Review, Method, Findings)
   const handleRunAgentWorkflow = useCallback(async (paper: any, workflowId: string) => {
     if (!paper.uri || agentProcessingUris.has(paper.uri)) return;
-    
+
     // 1. Mark as processing
     setAgentProcessingUris(prev => new Set(prev).add(paper.uri));
 
     try {
       console.log(`[NotesManager] Triggering Agent Workflow: ${workflowId} for ${paper.title}`);
-      
-      // 2. Prepare workspace for the agent
-      // Set a long timeout for the agent process (8 minutes)
+
+      // 2. Prepare descriptive task prompts for the agent
+      const taskDescriptions: Record<string, string> = {
+        'literature_review': `Write a thematic academic literature review synthesising this paper: "${paper.title}"`,
+        'get_methodology': `Extract and analyze the methodology used in this paper: "${paper.title}"`,
+        'get_findings': `Extract and synthesize the key results, findings, and conclusions from this paper: "${paper.title}"`,
+        'format_reference': `Format a professional Harvard reference for the paper: "${paper.title}".`,
+        'summarise_paper': `Provide a clear, academic summary/abstract of this paper: "${paper.title}"`
+      };
+
+      const taskPrompt = taskDescriptions[workflowId] || `Perform ${workflowId} analysis for the paper: "${paper.title}"`;
+
+      // 3. Set a long timeout for the agent process (8 minutes)
       const agentPromise = api.researchAgent.runTask(
-        `Perform ${workflowId} analysis for the paper: "${paper.title}"`,
+        taskPrompt,
         [paper],
         savedNotes.filter(n => (n.paper_uri || n.pdfUri) === paper.uri),
         workflowId
@@ -177,34 +187,35 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
       const response = await Promise.race([
         agentPromise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Analysis is taking longer than expected. Please wait a moment or check if the paper content is too large.')), 480000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Analysis is taking longer than expected. Please wait a moment.')), 480000))
       ]) as any;
 
       if (response && response.response) {
-        // 3. Map workflowId to the correct database field
+        // 4. Map workflowId to the correct database field
         const fieldMap: Record<string, string> = {
-          'summarise_paper': 'abstract', // fallback/improvement
+          'summarise_paper': 'abstract',
           'literature_review': 'literature_review',
           'get_methodology': 'methodology',
-          'get_findings': 'findings'
+          'get_findings': 'findings',
+          'format_reference': 'harvard_reference'
         };
 
         const targetField = fieldMap[workflowId];
         if (targetField) {
-            const updatedPaper = {
-                ...paper,
-                [targetField]: response.response
-            };
-            
-            // 4. Persistence
-            await savePaper(updatedPaper);
-            console.log(`[NotesManager] Agent successfully updated ${targetField} for ${paper.title}`);
+          const updatedPaper = {
+            ...paper,
+            [targetField]: response.response
+          };
+
+          // 5. Persistence (Triggers re-render via liveSelectedPaper memo)
+          await savePaper(updatedPaper);
+          console.log(`[NotesManager] Agent successfully updated ${targetField} for ${paper.title}`);
         }
       }
     } catch (error) {
       console.error(`[NotesManager] Agent Workflow ${workflowId} failed:`, error);
     } finally {
-      // 5. Unmark as processing
+      // 6. Unmark as processing
       setAgentProcessingUris(prev => {
         const next = new Set(prev);
         next.delete(paper.uri);
@@ -617,7 +628,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
   return (
     <div className="flex h-full overflow-hidden bg-cream dark:bg-dark-bg font-sans notes-manager-container relative" style={{ containerType: 'inline-size' }}>
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0 border-r border-gray-100 dark:border-gray-800">
-      <style>{`
+        <style>{`
         @container (max-width: 450px) {
           .tab-label { display: none; }
           .view-toggle-container { display: none !important; }
@@ -641,513 +652,513 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
         }
       `}</style>
 
-      {/* STICKY HEADER - OUTSIDE SCROLL CONTAINER */}
-      <div className="sticky top-0 z-20 bg-cream/95 dark:bg-dark-bg/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4">
+        {/* STICKY HEADER - OUTSIDE SCROLL CONTAINER */}
+        <div className="sticky top-0 z-20 bg-cream/95 dark:bg-dark-bg/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 shadow-sm">
+          <div className="max-w-6xl mx-auto px-4">
 
-          {/* PRIMARY HEADER ROW */}
-          <div className="flex justify-between items-center py-4 border-b border-gray-200 dark:border-gray-800">
+            {/* PRIMARY HEADER ROW */}
+            <div className="flex justify-between items-center py-4 border-b border-gray-200 dark:border-gray-800">
 
-            {/* LEFT: TABS WITH SELECT ALL */}
-            <div className="flex items-center -mb-px gap-2">
-              {/* EXISTING TAB BUTTONS */}
-              <button
-                onClick={() => {
-                  setActiveTab('notes');
-                  setCurrentPage(1);
-                  // FIXED: Clear AgentResearcher context when switching away from papers tab
-                  const currentlySelected = [...uiSelectedPaperUris];
-                  setUiSelectedPaperUris([]);
-                  // Remove papers from AgentResearcher context
-                  for (const paperUri of currentlySelected) {
-                    if (isPdfInContext(paperUri)) {
-                      const paper = paperByUri.get(paperUri);
-                      togglePdfContext(paperUri, paper?.title);
+              {/* LEFT: TABS WITH SELECT ALL */}
+              <div className="flex items-center -mb-px gap-2">
+                {/* EXISTING TAB BUTTONS */}
+                <button
+                  onClick={() => {
+                    setActiveTab('notes');
+                    setCurrentPage(1);
+                    // FIXED: Clear AgentResearcher context when switching away from papers tab
+                    const currentlySelected = [...uiSelectedPaperUris];
+                    setUiSelectedPaperUris([]);
+                    // Remove papers from AgentResearcher context
+                    for (const paperUri of currentlySelected) {
+                      if (isPdfInContext(paperUri)) {
+                        const paper = paperByUri.get(paperUri);
+                        togglePdfContext(paperUri, paper?.title);
+                      }
                     }
-                  }
-                }}
-                className={`tab-button px-6 pt-4 pb-1  text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'notes' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
-              >
-                <LayoutList size={18} className="flex-shrink-0" />
-                <span className="tab-label">
-                  {activeView === 'all' || activeView == 'papers' || activeView == 'research' ? 'All Notes' : activeView.charAt(0).toUpperCase() + activeView.slice(1)}
-                </span>
-              </button>
-
-              <button
-                onClick={() => { setActiveTab('papers'); setCurrentPage(1); setSelectedNoteIds([]); }}
-                className={`tab-button px-6 pt-4 pb-1  text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === 'papers' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
-              >
-                <FileText size={18} className="flex-shrink-0" />
-                <span className="tab-label">Papers</span>
-              </button>
-
-              <button
-                onClick={() => { setActiveTab('research'); setCurrentPage(1); setSelectedNoteIds([]); }}
-                className={`tab-button px-6 pt-4 pb-1 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'research' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
-              >
-                <BookOpenText size={18} className="flex-shrink-0" />
-                <span className="tab-label">Research Findings</span>
-              </button>
-            </div>
-
-            {/* RIGHT: VIEW TOGGLES AND FILTERS */}
-            {(activeTab === 'notes' || activeTab === 'papers') && (
-              <div className="flex items-center gap-2">
-                <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
-                  <button
-                    onClick={() => setViewMode('table')}
-                    className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400' : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
-                    title="Table View"
-                  >
-                    <TableIcon size={18} />
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400' : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
-                    title="List View"
-                  >
-                    <LayoutList size={18} />
-                  </button>
-                </div>
+                  }}
+                  className={`tab-button px-6 pt-4 pb-1  text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'notes' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+                >
+                  <LayoutList size={18} className="flex-shrink-0" />
+                  <span className="tab-label">
+                    {activeView === 'all' || activeView == 'papers' || activeView == 'research' ? 'All Notes' : activeView.charAt(0).toUpperCase() + activeView.slice(1)}
+                  </span>
+                </button>
 
                 <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition-all ${showFilters ? 'bg-scholar-50 dark:bg-scholar-900/30 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400' : 'bg-white/60 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
+                  onClick={() => { setActiveTab('papers'); setCurrentPage(1); setSelectedNoteIds([]); }}
+                  className={`tab-button px-6 pt-4 pb-1  text-sm font-medium border-b-2 transition-all flex items-center gap-2 ${activeTab === 'papers' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
                 >
-                  <Filter size={18} className="flex-shrink-0" />
-                  <span className="tab-label">Filters</span>
+                  <FileText size={18} className="flex-shrink-0" />
+                  <span className="tab-label">Papers</span>
                 </button>
+
+                <button
+                  onClick={() => { setActiveTab('research'); setCurrentPage(1); setSelectedNoteIds([]); }}
+                  className={`tab-button px-6 pt-4 pb-1 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'research' ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+                >
+                  <BookOpenText size={18} className="flex-shrink-0" />
+                  <span className="tab-label">Research Findings</span>
+                </button>
+              </div>
+
+              {/* RIGHT: VIEW TOGGLES AND FILTERS */}
+              {(activeTab === 'notes' || activeTab === 'papers') && (
+                <div className="flex items-center gap-2">
+                  <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
+                    <button
+                      onClick={() => setViewMode('table')}
+                      className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400' : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
+                      title="Table View"
+                    >
+                      <TableIcon size={18} />
+                    </button>
+                    <button
+                      onClick={() => setViewMode('list')}
+                      className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400' : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
+                      title="List View"
+                    >
+                      <LayoutList size={18} />
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition-all ${showFilters ? 'bg-scholar-50 dark:bg-scholar-900/30 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400' : 'bg-white/60 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
+                  >
+                    <Filter size={18} className="flex-shrink-0" />
+                    <span className="tab-label">Filters</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* ACTION BAR ROW - ONLY WHEN ITEMS SELECTED */}
+            {((activeTab === 'notes' && selectedNoteIds.length > 0) || (activeTab === 'papers' && uiSelectedPaperUris.length > 0)) && (
+              <div className="flex items-center justify-between py-3 gap-4 border-t border-gray-100 dark:border-gray-700/50 bg-cream/30 dark:bg-dark-card/30 rounded-b-xl -mx-4 px-4">
+
+                {/* LEFT: SELECTION INFO */}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={activeTab === 'notes' ? handleSelectAllNotes : handleSelectAllPapers}
+                    className="p-2.5 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                    title={(activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) || (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length) ? 'Clear selection' : 'Select all on page'}
+                  >
+                    <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${(activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) ||
+                      (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length)
+                      ? 'bg-scholar-600 border-scholar-600'
+                      : 'border-gray-400 dark:border-gray-500'
+                      }`}>
+                      {((activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) ||
+                        (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length)) && (
+                          <Check size={16} className="text-white" />
+                        )}
+                    </div>
+                  </button>
+                  <div>
+                    <span className="text-lg font-bold text-gray-700 dark:text-gray-300">
+                      {activeTab === 'notes' ? selectedNoteIds.length : uiSelectedPaperUris.length}
+                    </span>
+                    <span className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 opacity-80 ml-1">
+                      Selected
+                    </span>
+                  </div>
+                </div>
+
+                {/* RIGHT: ACTIONS */}
+                <div className="flex items-center gap-2">
+
+                  {/* COPY ACTIONS - NOTES ONLY */}
+                  {activeTab === 'notes' && (
+                    <div className="relative" ref={bulkCopyRef}>
+                      <button
+                        onClick={() => setShowBulkCopyMenu(!showBulkCopyMenu)}
+                        className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                      >
+                        <Copy size={16} />
+                        <span className="action-bar-text">Copy</span>
+                        <ChevronDown size={14} className={`text-gray-400 transition-transform ${showBulkCopyMenu ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {showBulkCopyMenu && (
+                        <div className="absolute bottom-full mb-2 right-0 w-52 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50">
+                          <button onClick={() => handleBulkCopy('raw')} className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-white hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
+                            <FileText size={16} className="text-gray-400" />
+                            Copy Quotes Only
+                          </button>
+                          <button onClick={() => handleBulkCopy('full')} className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-white hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
+                            <FileJson size={16} className="text-scholar-600 dark:text-scholar-400" />
+                            Copy Full Quotes
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* DELETE ACTION */}
+                  <button
+                    onClick={() => {
+                      if (activeTab === 'notes') {
+                        openDeleteNoteModal(selectedNoteIds);
+                      } else {
+                        // Use UI selection for papers
+                        const totalNotes = savedNotes.filter(n => uiSelectedPaperUris.includes(n.paper_uri)).length;
+                        setDeleteModal({
+                          isOpen: true,
+                          ids: [],
+                          paperUri: 'bulk',
+                          paperTitle: `${uiSelectedPaperUris.length} selected papers`,
+                          notesCount: totalNotes,
+                          isProcessing: false
+                        });
+                      }
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors action-bar-button"
+                  >
+                    <Trash2 size={16} />
+                    <span className="action-bar-text">Delete</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
+        </div>
 
-          {/* ACTION BAR ROW - ONLY WHEN ITEMS SELECTED */}
-          {((activeTab === 'notes' && selectedNoteIds.length > 0) || (activeTab === 'papers' && uiSelectedPaperUris.length > 0)) && (
-            <div className="flex items-center justify-between py-3 gap-4 border-t border-gray-100 dark:border-gray-700/50 bg-cream/30 dark:bg-dark-card/30 rounded-b-xl -mx-4 px-4">
-
-              {/* LEFT: SELECTION INFO */}
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={activeTab === 'notes' ? handleSelectAllNotes : handleSelectAllPapers}
-                  className="p-2.5 text-gray-500 dark:text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
-                  title={(activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) || (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length) ? 'Clear selection' : 'Select all on page'}
-                >
-                  <div className={`w-6 h-6 rounded border-2 transition-colors flex items-center justify-center ${(activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) ||
-                    (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length)
-                    ? 'bg-scholar-600 border-scholar-600'
-                    : 'border-gray-400 dark:border-gray-500'
-                    }`}>
-                    {((activeTab === 'notes' && selectedNoteIds.length === paginatedNotes.length) ||
-                      (activeTab === 'papers' && uiSelectedPaperUris.length === paginatedPapers.length)) && (
-                        <Check size={16} className="text-white" />
-                      )}
-                  </div>
-                </button>
-                <div>
-                  <span className="text-lg font-bold text-gray-700 dark:text-gray-300">
-                    {activeTab === 'notes' ? selectedNoteIds.length : uiSelectedPaperUris.length}
-                  </span>
-                  <span className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 opacity-80 ml-1">
-                    Selected
-                  </span>
-                </div>
+        {/* SCROLL CONTAINER - BELOW STICKY HEADER */}
+        <div
+          onScroll={handleScroll}
+          className="flex-1 overflow-auto custom-scrollbar"
+        >
+          <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
+            {activeTab === 'research' ? (
+              <div className="animate-fade-in">
+                <PaperSearch />
               </div>
-
-              {/* RIGHT: ACTIONS */}
-              <div className="flex items-center gap-2">
-
-                {/* COPY ACTIONS - NOTES ONLY */}
-                {activeTab === 'notes' && (
-                  <div className="relative" ref={bulkCopyRef}>
+            ) : (
+              <>
+                {/* Add Paper Actions */}
+                {activeTab === 'papers' && (
+                  <div className="flex items-center justify-between mb-4 mt-2 animate-in fade-in slide-in-from-top-2 duration-500 px-1">
                     <button
-                      onClick={() => setShowBulkCopyMenu(!showBulkCopyMenu)}
-                      className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
+                      onClick={() => setIsAddPaperModalOpen(true)}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-scholar-600 hover:bg-scholar-800 text-white rounded-2xl shadow-lg shadow-scholar-600/20 transition-all hover:scale-[1.02] active:scale-95 group"
                     >
-                      <Copy size={16} />
-                      <span className="action-bar-text">Copy</span>
-                      <ChevronDown size={14} className={`text-gray-400 transition-transform ${showBulkCopyMenu ? 'rotate-180' : ''}`} />
+                      <Plus size={18} />
+                      <span className="text-sm font-black uppercase tracking-widest leading-none">Add Paper</span>
                     </button>
-
-                    {showBulkCopyMenu && (
-                      <div className="absolute bottom-full mb-2 right-0 w-52 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50">
-                        <button onClick={() => handleBulkCopy('raw')} className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-white hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
-                          <FileText size={16} className="text-gray-400" />
-                          Copy Quotes Only
-                        </button>
-                        <button onClick={() => handleBulkCopy('full')} className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-white hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-3 transition-colors">
-                          <FileJson size={16} className="text-scholar-600 dark:text-scholar-400" />
-                          Copy Full Quotes
-                        </button>
-                      </div>
-                    )}
+                    <p className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest opacity-60">
+                      Total {filteredPapers.length} papers
+                    </p>
                   </div>
                 )}
 
-                {/* DELETE ACTION */}
+                {/* Paper Sub-Filters (Pills) */}
+                {activeTab === 'papers' && (
+                  <div className="flex items-center gap-2 mb-6 px-1 animate-fade-in overflow-x-auto no-scrollbar">
+                    <button
+                      onClick={() => setPaperSubFilter('all')}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border paper-pill ${paperSubFilter === 'all' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 dark:text-scholar-400 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
+                    >
+                      All <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${paperSubFilter === 'all' ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-800'}`}>{paperCounts.all}</span>
+                    </button>
+                    <button
+                      onClick={() => setPaperSubFilter('noted')}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border paper-pill ${paperSubFilter === 'noted' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 dark:text-scholar-400 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
+                    >
+                      <Bookmark size={14} /> With Notes <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${paperSubFilter === 'noted' ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-800'}`}>{paperCounts.noted}</span>
+                    </button>
+                  </div>
+                )}
+
+                {showFilters && (
+                  <div className="bg-white/60 dark:bg-dark-card/60 backdrop-blur-md border border-white dark:border-gray-700 rounded-2xl p-4 sm:p-6 mb-8 shadow-scholar animate-fade-in filter-container">
+                    <div className="flex flex-col gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-5 sm:gap-6 filters-grid filter-grid">
+                      <div className="sm:col-span-2 space-y-1.5">
+                        <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Keywords</label>
+                        <div className="relative group">
+                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-scholar-600 dark:group-focus-within:text-scholar-400 transition-colors" />
+                          <input
+                            className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl pl-11 pr-10 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-scholar-400 outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all filter-input"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder={`Search...`}
+                          />
+                          {searchQuery && (
+                            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+                              <X size={14} className="text-gray-400 dark:text-scholar-400" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {activeTab === 'notes' && (
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Source Paper</label>
+                          <select
+                            className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none filter-input"
+                            value={localFilters.source}
+                            onChange={(e) => setLocalFilters({ ...localFilters, source: e.target.value })}
+                          >
+                            <option value="all">All Sources</option>
+                            {uniqueSourcePapers.map(p => <option key={p.uri} value={p.uri}>{p.title}</option>)}
+                          </select>
+                        </div>
+                      )}
+
+                      {activeTab === 'notes' && uniqueQueries.length > 0 && (
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Research Query</label>
+                          <select
+                            className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none filter-input"
+                            value={localFilters.query}
+                            onChange={(e) => setLocalFilters({ ...localFilters, query: e.target.value })}
+                            title={localFilters.query !== 'all' ? localFilters.query : ''}
+                            style={{ whiteSpace: 'normal' }}
+                          >
+                            <option value="all">All Queries</option>
+                            {uniqueQueries.map(query => <option key={query} value={query} title={query}>{query}</option>)}
+                          </select>
+                        </div>
+                      )}
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Sort</label>
+                        <select
+                          className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none filter-input"
+                          value={`${sortColumn}-${sortDirection}`}
+                          onChange={(e) => {
+                            const [column, direction] = e.target.value.split('-');
+                            setSortColumn(column);
+                            setSortDirection(direction as 'asc' | 'desc');
+                          }}
+                        >
+                          <option value="createdAt-desc">Newest Added</option>
+                          <option value="createdAt-asc">Oldest Added</option>
+                          <option value="publishedYear-desc">Newest Published</option>
+                          <option value="publishedYear-asc">Oldest Published</option>
+                          {activeTab === 'notes' && (
+                            <>
+                              <option value="content-asc">Content A-Z</option>
+                              <option value="content-desc">Content Z-A</option>
+                            </>
+                          )}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'notes' ? (
+                  <>
+                    {/* CREATE NOTE BUTTON - MOVED DOWN */}
+                    <div className="flex items-center justify-between mb-4 mt-2 animate-in fade-in slide-in-from-top-2 duration-500">
+                      <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-scholar-600 hover:bg-scholar-800 text-white rounded-2xl shadow-lg shadow-scholar-600/20 transition-all hover:scale-[1.02] active:scale-95 group"
+                      >
+                        <Plus size={18} />
+                        <span className="text-sm font-black uppercase tracking-widest leading-none">Create Note</span>
+                      </button>
+                      <p className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest opacity-60">
+                        Total {filteredNotes.length} insights
+                      </p>
+                    </div>
+                    {viewMode === 'table' ? (
+                      <NotesTable
+                        notes={paginatedNotes}
+                        papers={savedPapers}
+                        selectedIds={selectedNoteIds}
+                        expandedIds={expandedNotes}
+                        expandedId={null} // Manager controls set
+                        sortColumn={sortColumn}
+                        sortDirection={sortDirection}
+                        onSort={(col) => {
+                          if (sortColumn === col) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                          else { setSortColumn(col); setSortDirection('asc'); }
+                        }}
+                        onSelect={handleNoteSelect}
+                        onExpand={handleToggleExpand}
+                        onDelete={(id) => openDeleteNoteModal([id])}
+                        onToggleStar={(id, s) => toggleStar(id, s)}
+                        onToggleFlag={(id, f) => toggleFlag(id, f)}
+                        onEdit={setEditingNoteId}
+                        onSaveEdit={async (id, content) => { await updateNote(id, content); setEditingNoteId(null); }}
+                        onCancelEdit={() => setEditingNoteId(null)}
+                        editingId={editingNoteId}
+                        onViewPdf={handleLocateNote}
+                      />
+                    ) : (
+                      <div className="space-y-1 sm:space-y-2">
+                        {paginatedNotes.length > 0 ? paginatedNotes.map((note) => (
+                          <NoteCard
+                            key={note.id}
+                            note={note}
+                            viewMode={'list'} // Always list if not table
+                            isSelected={selectedNoteIds.includes(note.id)}
+                            isExpanded={expandedNotes.has(note.id)}
+                            isEditing={editingNoteId === note.id}
+                            onSelect={() => handleNoteSelect(note.id)}
+                            onCardClick={() => handleToggleExpand(note.id)}
+                            onToggleStar={() => toggleStar(note.id, !note.is_starred)}
+                            onToggleFlag={() => toggleFlag(note.id, !note.is_flagged)}
+                            onEdit={() => setEditingNoteId(note.id)}
+                            onSaveEdit={async (id, content) => { await updateNote(id, content); setEditingNoteId(null); }}
+                            onCancelEdit={() => setEditingNoteId(null)}
+                            onDelete={() => openDeleteNoteModal([note.id])}
+                            paper={paperByUri.get(note.paper_uri)}
+                          />
+                        )) : (
+                          <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
+                            <Library size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300 dark:text-gray-600" />
+                            <h3 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">No notes found</h3>
+                            <p className="text-xs sm:text-sm max-w-xs leading-relaxed text-gray-500 dark:text-gray-400">Save meaningful insights from your research to populate this section.</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {viewMode === 'table' ? (
+                      <PapersTable
+                        papers={paginatedPapers}
+                        selectedUris={uiSelectedPaperUris}
+                        expandedUris={expandedPapers}
+                        sortColumn={sortColumn}
+                        sortDirection={sortDirection}
+                        onSort={(col) => {
+                          if (sortColumn === col) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                          else { setSortColumn(col); setSortDirection('asc'); }
+                        }}
+                        onSelect={(paper) => {
+                          // FIXED: Use handleUiPaperSelect to add to AgentResearcher context
+                          handleUiPaperSelect(paper.uri);
+                        }}
+                        onExpand={handleTogglePaperExpand}
+                        onDelete={openDeletePaperModal}
+                        onView={(p) => {
+                          loadPdfFromUrl(p.uri, p.title);
+                          setActivePdf(p.uri);
+                          setColumnVisibility(prev => ({ ...prev, right: true }));
+                        }}
+                        onTitleClick={(p) => setSelectedPaperForDetails(p)}
+                        getNotesCount={(uri) => notesCountByPaperUri.get(uri) || 0}
+                        isDownloading={(uri) => downloadingUris.has(uri)}
+                        isFailed={(uri) => failedUris.has(uri)}
+                      />
+                    ) : (
+                      <div className="space-y-4">
+                        {paginatedPapers.length > 0 ? paginatedPapers.map((paper) => (
+                          <LibraryPaperCard
+                            key={paper.uri}
+                            paper={paper}
+                            isSelected={uiSelectedPaperUris.includes(paper.uri)}
+                            isExpanded={expandedPapers.has(paper.uri)}
+                            onSelect={() => handleUiPaperSelect(paper.uri)}
+                            onToggleExpand={() => handleTogglePaperExpand(paper.uri)}
+                            notes={savedNotes.filter(n => n.paper_uri === paper.uri)}
+                            onDelete={() => openDeletePaperModal(paper)}
+                            onTitleClick={(p) => setSelectedPaperForDetails(p)}
+                          />
+                        )) : (
+                          <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
+                            <FileText size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300 dark:text-gray-600" />
+                            <h3 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">No papers match this filter</h3>
+                            <p className="text-xs sm:text-sm max-w-xs leading-relaxed text-gray-500 dark:text-gray-400">Try changing your sub-filter or search query.</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {(activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) > PAGE_SIZE && (
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-8 mt-12 sm:mt-16 mb-12 pagination-controls">
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="px-6 py-2 rounded-xl font-bold text-gray-500 dark:text-gray-400 bg-white/40 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400 disabled:opacity-30 transition-all text-sm shadow-sm"
+                      >
+                        Previous
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-scholar-600 dark:text-scholar-400 uppercase tracking-tighter">Page</span>
+                        <span className="text-lg font-bold text-gray-900 dark:text-white">{currentPage}</span>
+                        <span className="text-xs font-black text-gray-300 dark:text-scholar-400 uppercase tracking-tighter">of</span>
+                        <span className="text-lg font-bold text-gray-400 dark:text-scholar-400">{Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE)}</span>
+                      </div>
+
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE), p + 1))}
+                        disabled={currentPage === Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE)}
+                        className="px-6 py-2 rounded-xl font-bold text-gray-500 dark:text-gray-400 bg-white/40 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400 disabled:opacity-30 transition-all text-sm shadow-sm"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {deleteModal.isOpen && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-transparent" onClick={() => !deleteModal.isProcessing && setDeleteModal(prev => ({ ...prev, isOpen: false }))} />
+
+            <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-xl shadow-2xl ring-1 ring-gray-900/5 dark:ring-white/10 p-6 animate-in fade-in zoom-in-95 duration-200">
+              <div className="text-center mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  {deleteModal.paperUri
+                    ? (deleteModal.notesCount ? 'Delete Paper & Insights?' : 'Delete Paper?')
+                    : 'Remove Insight?'}
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                  {deleteModal.paperUri
+                    ? (deleteModal.notesCount
+                      ? `This will remove "${deleteModal.paperTitle}" and ${deleteModal.notesCount} notes.`
+                      : `Are you sure you want to remove this paper from your library?`)
+                    : `This action cannot be undone.`}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => {
-                    if (activeTab === 'notes') {
-                      openDeleteNoteModal(selectedNoteIds);
-                    } else {
-                      // Use UI selection for papers
-                      const totalNotes = savedNotes.filter(n => uiSelectedPaperUris.includes(n.paper_uri)).length;
-                      setDeleteModal({
-                        isOpen: true,
-                        ids: [],
-                        paperUri: 'bulk',
-                        paperTitle: `${uiSelectedPaperUris.length} selected papers`,
-                        notesCount: totalNotes,
-                        isProcessing: false
-                      });
-                    }
-                  }}
-                  className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors action-bar-button"
+                  onClick={() => setDeleteModal(prev => ({ ...prev, isOpen: false }))}
+                  disabled={deleteModal.isProcessing}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 >
-                  <Trash2 size={16} />
-                  <span className="action-bar-text">Delete</span>
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={deleteModal.isProcessing}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  {deleteModal.isProcessing ? <Loader2 size={16} className="animate-spin" /> : null}
+                  Delete
                 </button>
               </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* SCROLL CONTAINER - BELOW STICKY HEADER */}
-      <div
-        onScroll={handleScroll}
-        className="flex-1 overflow-auto custom-scrollbar"
-      >
-        <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
-          {activeTab === 'research' ? (
-            <div className="animate-fade-in">
-              <PaperSearch />
-            </div>
-          ) : (
-            <>
-              {/* Add Paper Actions */}
-              {activeTab === 'papers' && (
-                <div className="flex items-center justify-between mb-4 mt-2 animate-in fade-in slide-in-from-top-2 duration-500 px-1">
-                  <button
-                    onClick={() => setIsAddPaperModalOpen(true)}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-scholar-600 hover:bg-scholar-800 text-white rounded-2xl shadow-lg shadow-scholar-600/20 transition-all hover:scale-[1.02] active:scale-95 group"
-                  >
-                    <Plus size={18} />
-                    <span className="text-sm font-black uppercase tracking-widest leading-none">Add Paper</span>
-                  </button>
-                  <p className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest opacity-60">
-                    Total {filteredPapers.length} papers
-                  </p>
-                </div>
-              )}
-
-              {/* Paper Sub-Filters (Pills) */}
-              {activeTab === 'papers' && (
-                <div className="flex items-center gap-2 mb-6 px-1 animate-fade-in overflow-x-auto no-scrollbar">
-                  <button
-                    onClick={() => setPaperSubFilter('all')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border paper-pill ${paperSubFilter === 'all' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 dark:text-scholar-400 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
-                  >
-                    All <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${paperSubFilter === 'all' ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-800'}`}>{paperCounts.all}</span>
-                  </button>
-                  <button
-                    onClick={() => setPaperSubFilter('noted')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border paper-pill ${paperSubFilter === 'noted' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 dark:text-scholar-400 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
-                  >
-                    <Bookmark size={14} /> With Notes <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${paperSubFilter === 'noted' ? 'bg-white/20' : 'bg-gray-100 dark:bg-gray-800'}`}>{paperCounts.noted}</span>
-                  </button>
-                </div>
-              )}
-
-              {showFilters && (
-                <div className="bg-white/60 dark:bg-dark-card/60 backdrop-blur-md border border-white dark:border-gray-700 rounded-2xl p-4 sm:p-6 mb-8 shadow-scholar animate-fade-in filter-container">
-                  <div className="flex flex-col gap-4 sm:grid sm:grid-cols-2 lg:grid-cols-5 sm:gap-6 filters-grid filter-grid">
-                    <div className="sm:col-span-2 space-y-1.5">
-                      <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Keywords</label>
-                      <div className="relative group">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-scholar-600 dark:group-focus-within:text-scholar-400 transition-colors" />
-                        <input
-                          className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl pl-11 pr-10 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-scholar-400 outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all filter-input"
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder={`Search...`}
-                        />
-                        {searchQuery && (
-                          <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
-                            <X size={14} className="text-gray-400 dark:text-scholar-400" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {activeTab === 'notes' && (
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Source Paper</label>
-                        <select
-                          className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none filter-input"
-                          value={localFilters.source}
-                          onChange={(e) => setLocalFilters({ ...localFilters, source: e.target.value })}
-                        >
-                          <option value="all">All Sources</option>
-                          {uniqueSourcePapers.map(p => <option key={p.uri} value={p.uri}>{p.title}</option>)}
-                        </select>
-                      </div>
-                    )}
-
-                    {activeTab === 'notes' && uniqueQueries.length > 0 && (
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Research Query</label>
-                        <select
-                          className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none filter-input"
-                          value={localFilters.query}
-                          onChange={(e) => setLocalFilters({ ...localFilters, query: e.target.value })}
-                          title={localFilters.query !== 'all' ? localFilters.query : ''}
-                          style={{ whiteSpace: 'normal' }}
-                        >
-                          <option value="all">All Queries</option>
-                          {uniqueQueries.map(query => <option key={query} value={query} title={query}>{query}</option>)}
-                        </select>
-                      </div>
-                    )}
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 filter-label">Sort</label>
-                      <select
-                        className="w-full bg-white/80 dark:bg-gray-900/80 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm appearance-none filter-input"
-                        value={`${sortColumn}-${sortDirection}`}
-                        onChange={(e) => {
-                          const [column, direction] = e.target.value.split('-');
-                          setSortColumn(column);
-                          setSortDirection(direction as 'asc' | 'desc');
-                        }}
-                      >
-                        <option value="createdAt-desc">Newest Added</option>
-                        <option value="createdAt-asc">Oldest Added</option>
-                        <option value="publishedYear-desc">Newest Published</option>
-                        <option value="publishedYear-asc">Oldest Published</option>
-                        {activeTab === 'notes' && (
-                          <>
-                            <option value="content-asc">Content A-Z</option>
-                            <option value="content-desc">Content Z-A</option>
-                          </>
-                        )}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'notes' ? (
-                <>
-                  {/* CREATE NOTE BUTTON - MOVED DOWN */}
-                  <div className="flex items-center justify-between mb-4 mt-2 animate-in fade-in slide-in-from-top-2 duration-500">
-                    <button
-                      onClick={() => setIsCreateModalOpen(true)}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-scholar-600 hover:bg-scholar-800 text-white rounded-2xl shadow-lg shadow-scholar-600/20 transition-all hover:scale-[1.02] active:scale-95 group"
-                    >
-                       <Plus size={18} />
-                       <span className="text-sm font-black uppercase tracking-widest leading-none">Create Note</span>
-                    </button>
-                    <p className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest opacity-60">
-                       Total {filteredNotes.length} insights
-                    </p>
-                  </div>
-                  {viewMode === 'table' ? (
-                    <NotesTable
-                      notes={paginatedNotes}
-                      papers={savedPapers}
-                      selectedIds={selectedNoteIds}
-                      expandedIds={expandedNotes}
-                      expandedId={null} // Manager controls set
-                      sortColumn={sortColumn}
-                      sortDirection={sortDirection}
-                      onSort={(col) => {
-                        if (sortColumn === col) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-                        else { setSortColumn(col); setSortDirection('asc'); }
-                      }}
-                      onSelect={handleNoteSelect}
-                      onExpand={handleToggleExpand}
-                      onDelete={(id) => openDeleteNoteModal([id])}
-                      onToggleStar={(id, s) => toggleStar(id, s)}
-                      onToggleFlag={(id, f) => toggleFlag(id, f)}
-                      onEdit={setEditingNoteId}
-                      onSaveEdit={async (id, content) => { await updateNote(id, content); setEditingNoteId(null); }}
-                      onCancelEdit={() => setEditingNoteId(null)}
-                      editingId={editingNoteId}
-                      onViewPdf={handleLocateNote}
-                    />
-                  ) : (
-                    <div className="space-y-1 sm:space-y-2">
-                      {paginatedNotes.length > 0 ? paginatedNotes.map((note) => (
-                        <NoteCard
-                          key={note.id}
-                          note={note}
-                          viewMode={'list'} // Always list if not table
-                          isSelected={selectedNoteIds.includes(note.id)}
-                          isExpanded={expandedNotes.has(note.id)}
-                          isEditing={editingNoteId === note.id}
-                          onSelect={() => handleNoteSelect(note.id)}
-                          onCardClick={() => handleToggleExpand(note.id)}
-                          onToggleStar={() => toggleStar(note.id, !note.is_starred)}
-                          onToggleFlag={() => toggleFlag(note.id, !note.is_flagged)}
-                          onEdit={() => setEditingNoteId(note.id)}
-                          onSaveEdit={async (id, content) => { await updateNote(id, content); setEditingNoteId(null); }}
-                          onCancelEdit={() => setEditingNoteId(null)}
-                          onDelete={() => openDeleteNoteModal([note.id])}
-                          paper={paperByUri.get(note.paper_uri)}
-                        />
-                      )) : (
-                        <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
-                          <Library size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300 dark:text-gray-600" />
-                          <h3 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">No notes found</h3>
-                          <p className="text-xs sm:text-sm max-w-xs leading-relaxed text-gray-500 dark:text-gray-400">Save meaningful insights from your research to populate this section.</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
-                  {viewMode === 'table' ? (
-                    <PapersTable
-                      papers={paginatedPapers}
-                      selectedUris={uiSelectedPaperUris}
-                      expandedUris={expandedPapers}
-                      sortColumn={sortColumn}
-                      sortDirection={sortDirection}
-                      onSort={(col) => {
-                        if (sortColumn === col) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-                        else { setSortColumn(col); setSortDirection('asc'); }
-                      }}
-                      onSelect={(paper) => {
-                        // FIXED: Use handleUiPaperSelect to add to AgentResearcher context
-                        handleUiPaperSelect(paper.uri);
-                      }}
-                      onExpand={handleTogglePaperExpand}
-                      onDelete={openDeletePaperModal}
-                      onView={(p) => {
-                        loadPdfFromUrl(p.uri, p.title);
-                        setActivePdf(p.uri);
-                        setColumnVisibility(prev => ({ ...prev, right: true }));
-                      }}
-                      onTitleClick={(p) => setSelectedPaperForDetails(p)}
-                      getNotesCount={(uri) => notesCountByPaperUri.get(uri) || 0}
-                      isDownloading={(uri) => downloadingUris.has(uri)}
-                      isFailed={(uri) => failedUris.has(uri)}
-                    />
-                  ) : (
-                    <div className="space-y-4">
-                      {paginatedPapers.length > 0 ? paginatedPapers.map((paper) => (
-                        <LibraryPaperCard
-                          key={paper.uri}
-                          paper={paper}
-                          isSelected={uiSelectedPaperUris.includes(paper.uri)}
-                          isExpanded={expandedPapers.has(paper.uri)}
-                          onSelect={() => handleUiPaperSelect(paper.uri)}
-                          onToggleExpand={() => handleTogglePaperExpand(paper.uri)}
-                          notes={savedNotes.filter(n => n.paper_uri === paper.uri)}
-                          onDelete={() => openDeletePaperModal(paper)}
-                          onTitleClick={(p) => setSelectedPaperForDetails(p)}
-                        />
-                      )) : (
-                        <div className="col-span-full py-24 sm:py-48 flex flex-col items-center justify-center text-center opacity-40">
-                          <FileText size={64} className="sm:w-[96px] sm:h-[96px] mb-6 text-gray-300 dark:text-gray-600" />
-                          <h3 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">No papers match this filter</h3>
-                          <p className="text-xs sm:text-sm max-w-xs leading-relaxed text-gray-500 dark:text-gray-400">Try changing your sub-filter or search query.</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {(activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) > PAGE_SIZE && (
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-8 mt-12 sm:mt-16 mb-12 pagination-controls">
-                  <div className="flex items-center gap-4">
-                    <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="px-6 py-2 rounded-xl font-bold text-gray-500 dark:text-gray-400 bg-white/40 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400 disabled:opacity-30 transition-all text-sm shadow-sm"
-                    >
-                      Previous
-                    </button>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-scholar-600 dark:text-scholar-400 uppercase tracking-tighter">Page</span>
-                      <span className="text-lg font-bold text-gray-900 dark:text-white">{currentPage}</span>
-                      <span className="text-xs font-black text-gray-300 dark:text-scholar-400 uppercase tracking-tighter">of</span>
-                      <span className="text-lg font-bold text-gray-400 dark:text-scholar-400">{Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE)}</span>
-                    </div>
-
-                    <button
-                      onClick={() => setCurrentPage(p => Math.min(Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE), p + 1))}
-                      disabled={currentPage === Math.ceil((activeTab === 'notes' ? filteredNotes.length : filteredPapers.length) / PAGE_SIZE)}
-                      className="px-6 py-2 rounded-xl font-bold text-gray-500 dark:text-gray-400 bg-white/40 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400 disabled:opacity-30 transition-all text-sm shadow-sm"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {deleteModal.isOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-transparent" onClick={() => !deleteModal.isProcessing && setDeleteModal(prev => ({ ...prev, isOpen: false }))} />
-
-          <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-xl shadow-2xl ring-1 ring-gray-900/5 dark:ring-white/10 p-6 animate-in fade-in zoom-in-95 duration-200">
-            <div className="text-center mb-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                {deleteModal.paperUri
-                  ? (deleteModal.notesCount ? 'Delete Paper & Insights?' : 'Delete Paper?')
-                  : 'Remove Insight?'}
-              </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                {deleteModal.paperUri
-                  ? (deleteModal.notesCount
-                    ? `This will remove "${deleteModal.paperTitle}" and ${deleteModal.notesCount} notes.`
-                    : `Are you sure you want to remove this paper from your library?`)
-                  : `This action cannot be undone.`}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setDeleteModal(prev => ({ ...prev, isOpen: false }))}
-                disabled={deleteModal.isProcessing}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                disabled={deleteModal.isProcessing}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2"
-              >
-                {deleteModal.isProcessing ? <Loader2 size={16} className="animate-spin" /> : null}
-                Delete
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <CreateNoteModal 
-        isOpen={isCreateModalOpen} 
-        onClose={() => setIsCreateModalOpen(false)}
-        savedPapers={savedPapers}
-        onSave={async (note, paperMetadata) => {
-          await saveNote(note, paperMetadata);
-        }}
-      />
+        <CreateNoteModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          savedPapers={savedPapers}
+          onSave={async (note, paperMetadata) => {
+            await saveNote(note, paperMetadata);
+          }}
+        />
 
-      <AddPaperModal
-        isOpen={isAddPaperModalOpen}
-        onClose={() => setIsAddPaperModalOpen(false)}
-      />
+        <AddPaperModal
+          isOpen={isAddPaperModalOpen}
+          onClose={() => setIsAddPaperModalOpen(false)}
+        />
       </div>
 
       {/* Detail Sidebar - Now as a sibling for interactivity */}
@@ -1209,15 +1220,15 @@ interface LibraryPaperCardProps {
   onTitleClick: (paper: any) => void;
 }
 
-function LibraryPaperCard({ 
-  paper, 
-  isSelected, 
-  isExpanded, 
-  onSelect, 
-  onToggleExpand, 
-  notes, 
+function LibraryPaperCard({
+  paper,
+  isSelected,
+  isExpanded,
+  onSelect,
+  onToggleExpand,
+  notes,
   onDelete,
-  onTitleClick 
+  onTitleClick
 }: LibraryPaperCardProps) {
   const { loadPdfFromUrl, setActivePdf, setSearchHighlight, downloadingUris, failedUris } = useLibrary();
   const { setColumnVisibility, setLibraryExpanded, setLibraryOpen } = useUI();

@@ -127,17 +127,6 @@ const TOOL_SCHEMA = [
       },
       required: ['memory_ids']
     }
-  },
-  {
-    name: 'task_complete',
-    description: `Call when the task is finished. Provide the complete structured response.`,
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        response: { type: 'STRING', description: 'Your final answer.' }
-      },
-      required: ['response']
-    }
   }
 ];
 
