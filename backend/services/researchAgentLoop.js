@@ -39,7 +39,7 @@ if (config.geminiApiKey) {
   logger.warn('[ResearchAgent] No GEMINI_API_KEY set — agent will not function');
 }
 
-const MAX_ITERATIONS = 20;
+const MAX_ITERATIONS = 15;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTEXT BUILDER
@@ -110,14 +110,14 @@ Notes available: ${workspace.notes.length}`;
   let layer3 = '\nYOUR LONG-TERM STRUCTURED MEMORY (Saved Items):';
   if (sessionMemory.length > 0) {
     // 1. Group by Paper Index
-    const paperIds = [...new Set(sessionMemory.filter(m => m.paper_index !== undefined).map(m => m.paper_index))].sort((a,b) => a - b);
+    const paperIds = [...new Set(sessionMemory.filter(m => m.paper_index !== undefined).map(m => m.paper_index))].sort((a, b) => a - b);
     let structuredText = '';
 
     // Process each paper group
     for (const pIdx of paperIds) {
       structuredText += `\n\n[--- PAPER ${pIdx} ---]`;
       const pItems = sessionMemory.filter(m => m.paper_index === pIdx);
-      
+
       const meta = pItems.filter(m => m.type === 'metadata');
       const struct = pItems.filter(m => m.type === 'structure');
       const pages = pItems.filter(m => m.type === 'page').sort((a, b) => (a.page_number || 0) - (b.page_number || 0));
@@ -128,11 +128,11 @@ Notes available: ${workspace.notes.length}`;
       if (pages.length) structuredText += `\nSaved Content:\n` + pages.map(m => m.content).join('\n\n');
       if (pNotes.length) structuredText += `\nSaved Notes:\n` + pNotes.map(m => m.content).join('\n\n');
     }
-    
+
     // 2. Process General Context (no paper index)
     const general = sessionMemory.filter(m => m.paper_index === undefined);
     if (general.length > 0) {
-       structuredText += '\n\n[GENERAL CONTEXT]\n' + general.map(m => m.content).join('\n\n');
+      structuredText += '\n\n[GENERAL CONTEXT]\n' + general.map(m => m.content).join('\n\n');
     }
 
     layer3 += structuredText;
@@ -284,10 +284,10 @@ async function runAgentTask(task, workspace, workflowId) {
       });
 
       responseText = result.response.text();
-      
+
       // Log truncated response so we can see what the model is doing
-      const preview = responseText.length > 200 
-        ? responseText.substring(0, 200) + '...' 
+      const preview = responseText.length > 200
+        ? responseText.substring(0, 200) + '...'
         : responseText;
       logger.info(`[ResearchAgent] Raw Response (truncated): ${preview.replace(/\n/g, ' ')}`);
       logger.info(`[ResearchAgent] Total length: ${responseText.length} chars`);
@@ -295,7 +295,7 @@ async function runAgentTask(task, workspace, workflowId) {
     } catch (apiError) {
       logger.error(`[ResearchAgent] ❌ Error in iteration ${iteration}:`, apiError);
       recentObservations.unshift(`ERROR: Tool output/API failed: ${apiError.message || 'Unknown error'}`);
-      if (recentObservations.length > 3) recentObservations.pop();
+      if (recentObservations.length > 10) recentObservations.pop();
       continue;
     }
 

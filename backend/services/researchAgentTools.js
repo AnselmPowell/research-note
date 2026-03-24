@@ -281,7 +281,6 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
         `Title: ${paper.title || 'Unknown'}`,
         `Author: ${authorDisplay}`,
         `Total Pages: ${pageCount}`,
-        `URI: ${paper.pdfUri || paper.paper_uri || 'Unknown'}`,
         `Abstract: ${paper.abstract || 'Not extracted'}`,
         `Harvard Reference: ${paper.harvardReference || 'Not available'}`
       ].join('\n');
@@ -373,7 +372,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
 
       keywords.forEach(keyword => {
         if (!keyword || typeof keyword !== 'string' || !keyword.trim()) return;
-        const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escaped = keyword.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
         const regex = new RegExp(escaped, 'gi');
         let total = 0;
         const resultPages = [];
