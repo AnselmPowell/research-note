@@ -11,6 +11,7 @@ interface PaperDetailsProps {
     onGenerateLiteratureReview: (paper: any) => void;
     onGenerateMethodology: (paper: any) => void;
     onGenerateFindings: (paper: any) => void;
+    onGenerateHarvardReference: (paper: any) => void;
     isDownloading?: boolean;
     isAgentRunning?: boolean;
 }
@@ -22,6 +23,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
     onGenerateLiteratureReview,
     onGenerateMethodology,
     onGenerateFindings,
+    onGenerateHarvardReference,
     isDownloading,
     isAgentRunning
 }) => {
@@ -232,8 +234,14 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                             <span className="text-center">GENERATE LITERATURE REVIEW</span>
                         </button>
                         <button
+                            onClick={() => handleActionWithPrecheck(onGenerateHarvardReference)}
+                            className="flex items-center justify-center px-3 py-2.5 bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-widest text-scholar-600 dark:text-scholar-400 hover:bg-scholar-50 transition-all rounded-xl"
+                        >
+                            <span className="text-center">EXTRACT HARVARD REFERENCE</span>
+                        </button>
+                        <button
                             onClick={() => onView(paper)}
-                            className="flex items-center justify-center px-3 py-2.5 bg-scholar-600 hover:bg-scholar-500 text-white text-[11px] font-black uppercase tracking-widest rounded-xl transition-all gap-2 shadow-scholar-sm"
+                            className="col-span-2 flex items-center justify-center px-3 py-2.5 bg-scholar-600 hover:bg-scholar-500 text-white text-[11px] font-black uppercase tracking-widest rounded-xl transition-all gap-2 shadow-scholar-sm"
                         >
                             {isDownloading ? <Loader2 size={16} className="animate-spin" /> : 'VIEW PDF'}
                         </button>
@@ -281,7 +289,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                                             if (content) {
                                                 return (
                                                     <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap py-2">
-                                                        {content}
+                                                        {typeof content === 'string' ? content : JSON.stringify(content, null, 2)}
                                                     </div>
                                                 );
                                             }

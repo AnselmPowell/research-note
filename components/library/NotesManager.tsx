@@ -1175,6 +1175,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
             onGenerateLiteratureReview={(p) => handleRunAgentWorkflow(p, 'literature_review')}
             onGenerateMethodology={(p) => handleRunAgentWorkflow(p, 'get_methodology')}
             onGenerateFindings={(p) => handleRunAgentWorkflow(p, 'get_findings')}
+            onGenerateHarvardReference={(p) => handleRunAgentWorkflow(p, 'format_reference')}
             isDownloading={downloadingUris.has(liveSelectedPaper.uri)}
             isAgentRunning={agentProcessingUris.has(liveSelectedPaper.uri)}
           />
@@ -1198,6 +1199,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
               onGenerateLiteratureReview={(p) => handleRunAgentWorkflow(p, 'literature_review')}
               onGenerateMethodology={(p) => handleRunAgentWorkflow(p, 'get_methodology')}
               onGenerateFindings={(p) => handleRunAgentWorkflow(p, 'get_findings')}
+              onGenerateHarvardReference={(p) => handleRunAgentWorkflow(p, 'format_reference')}
               isDownloading={downloadingUris.has(liveSelectedPaper.uri)}
               isAgentRunning={agentProcessingUris.has(liveSelectedPaper.uri)}
             />
