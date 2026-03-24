@@ -35,6 +35,11 @@ async function initSchema() {
     harvard_reference TEXT,
     publisher TEXT,
     categories JSONB,
+    pages JSONB,
+    paper_references JSONB,
+    literature_review TEXT,
+    methodology TEXT,
+    findings TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP)`;
   
   // Create notes table
@@ -92,13 +97,22 @@ async function savePaper(paper, userId) {
   const publisher = paper.publisher || null;
   const categories = JSON.stringify(paper.categories || []);
   
+  // DEEP RESEARCH FIELDS
+  const pages = JSON.stringify(paper.pages || []);
+  const paperReferences = JSON.stringify(paper.references || paper.paper_references || []);
+  const literatureReview = paper.literature_review || null;
+  const methodology = paper.methodology || null;
+  const findings = paper.findings || null;
+  
   await getDb()`INSERT INTO papers (
     uri, title, abstract, authors, num_pages, is_explicitly_saved, user_id,
-    published_date, year, harvard_reference, publisher, categories
+    published_date, year, harvard_reference, publisher, categories,
+    pages, paper_references, literature_review, methodology, findings
   )
   VALUES (
     ${uri}, ${paper.title}, ${abstract}, ${authors}, ${numPages}, ${isSaved}, ${userId},
-    ${publishedDate}, ${year}, ${harvardReference}, ${publisher}, ${categories}
+    ${publishedDate}, ${year}, ${harvardReference}, ${publisher}, ${categories},
+    ${pages}, ${paperReferences}, ${literatureReview}, ${methodology}, ${findings}
   )
   ON CONFLICT (uri) DO UPDATE SET 
     title = EXCLUDED.title, 
@@ -110,7 +124,12 @@ async function savePaper(paper, userId) {
     year = EXCLUDED.year,
     harvard_reference = EXCLUDED.harvard_reference,
     publisher = EXCLUDED.publisher,
-    categories = EXCLUDED.categories`;
+    categories = EXCLUDED.categories,
+    pages = EXCLUDED.pages,
+    paper_references = EXCLUDED.paper_references,
+    literature_review = EXCLUDED.literature_review,
+    methodology = EXCLUDED.methodology,
+    findings = EXCLUDED.findings`;
 }
 
 async function saveNote(note, userId) {

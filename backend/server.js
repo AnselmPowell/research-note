@@ -68,10 +68,11 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`📊 Environment: ${config.nodeEnv}`);
   
   // === FIX: Set socket timeouts to allow long-running operations ===
-  // Backend filtering takes ~109 seconds, need socket timeout > that
-  server.timeout = 400000;           // 400 seconds (total socket timeout)
-  server.requestTimeout = 400000;    // 400 seconds (request timeout)
-  server.keepAliveTimeout = 65000;   // 65 seconds (keep-alive timeout)
+  // Backend analysis can take 40-120 seconds, need socket timeout > that
+  server.timeout = 500000;           // 500 seconds (total socket timeout)
+  server.requestTimeout = 500000;    // 500 seconds (request timeout)
+  server.headersTimeout = 501000;    // 501 seconds (must be > timeout)
+  server.keepAliveTimeout = 500000;  // 500 seconds (keep-alive timeout)
   
   // === INVESTIGATION: Log socket configuration ===
   console.log('\n╔════════════════════════════════════════════════════════════════╗');

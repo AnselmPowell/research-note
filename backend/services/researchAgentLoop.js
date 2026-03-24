@@ -39,7 +39,7 @@ if (config.geminiApiKey) {
   logger.warn('[ResearchAgent] No GEMINI_API_KEY set — agent will not function');
 }
 
-const MAX_ITERATIONS = 15;
+const MAX_ITERATIONS = 20;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTEXT BUILDER
@@ -72,12 +72,16 @@ OPERATING RULES:
 1. Use tools to find and read relevant content. Do NOT guess or hallucinate content.
 ${workflow
       ? '2. A GUIDELINE WORKFLOW is provided below to suggest which tools may help and in what order for this specific task. You may adapt depending on the paper.'
-      : '2. Start with get_paper_info or list_workspace to understand what is available.'}
-3. MEMORY IS SHORT-TERM by default: Page text from read_page/read_multiple_pages is only available
-   for ONE iteration — it will be gone next step. Always call save_to_memory immediately
-   after reading important content, before your next tool call.
-4. Call task_complete only when the response is fully written and complete.
-5. Always cite page numbers and paper titles when referencing content in your response.`;
+      : '2. Start with get_paper_metadata or list_workspace to understand what is available.'}
+3. MEMORY MANAGEMENT: All text fetched from tools will be tagged with a [MEMORY_ID: X]. Fetching data puts it in SHORT-TERM memory (deleted after 2 steps). To prevent forgetting, you MUST use the save_to_session_memory tool and provide the MEMORY_IDs of the chunks you wish to move to LONG-TERM structured memory. DO NOT generate text strings; only provide the array of IDs.
+4. Call task_complete ONLY when the response is fully written and complete.
+5. Always cite page numbers and paper titles when referencing content in your response.
+
+NEGATIVE CONSTRAINTS:
+1. THINKING LENGTH: Your "thinking" field MUST be under 3 sentences. Focus only on the immediate next action.
+2. NO REPETITION: Check the "RECENT TOOL OUTPUTS" or "WORKSPACE STATE" before acting. Do NOT call the same tool for the same paper if you already have the result.
+3. PARAMETER SAFETY: Any 'tool_call' for 'get_and_read_page_content', 'get_paper_metadata', or 'search_keyword' MUST include the "paper_index" from the workspace list.
+4. PAGE COORDINATES: To use 'get_and_read_page_content' or 'get_and_read_multiple_pages', you MUST specify which pages to read. NEVER call these tools without numeric page arguments.`;
 
   // ── LAYER 1: Tools Catalog ────────────────────────────────────────────────
   const toolLines = TOOL_SCHEMA
@@ -102,19 +106,42 @@ Notes available: ${workspace.notes.length}`;
     ? `\nSUGGESTED WORKFLOW GUIDELINES:\n${workflow}`
     : '';
 
-  // ── LAYER 3: Session Memory (LONG-TERM — persists all iterations) ────────
-  let layer3 = '\nSESSION MEMORY (your saved findings — available for all future iterations):';
+  // ── LAYER 3: LONG-TERM STRUCTURED MEMORY (Pinned Findings) ────────────────
+  let layer3 = '\nYOUR LONG-TERM STRUCTURED MEMORY (Saved Items):';
   if (sessionMemory.length > 0) {
-    const memList = sessionMemory
-      .map(m => `  [${m.label}]: ${m.content}`)
-      .join('\n');
-    layer3 += '\n' + memList;
+    // 1. Group by Paper Index
+    const paperIds = [...new Set(sessionMemory.filter(m => m.paper_index !== undefined).map(m => m.paper_index))].sort((a,b) => a - b);
+    let structuredText = '';
+
+    // Process each paper group
+    for (const pIdx of paperIds) {
+      structuredText += `\n\n[--- PAPER ${pIdx} ---]`;
+      const pItems = sessionMemory.filter(m => m.paper_index === pIdx);
+      
+      const meta = pItems.filter(m => m.type === 'metadata');
+      const struct = pItems.filter(m => m.type === 'structure');
+      const pages = pItems.filter(m => m.type === 'page').sort((a, b) => (a.page_number || 0) - (b.page_number || 0));
+      const pNotes = pItems.filter(m => m.type === 'note').sort((a, b) => (a.page_number || 0) - (b.page_number || 0));
+
+      if (meta.length) structuredText += `\nMetadata:\n` + meta.map(m => m.content).join('\n');
+      if (struct.length) structuredText += `\nStructure Map:\n` + struct.map(m => m.content).join('\n');
+      if (pages.length) structuredText += `\nSaved Content:\n` + pages.map(m => m.content).join('\n\n');
+      if (pNotes.length) structuredText += `\nSaved Notes:\n` + pNotes.map(m => m.content).join('\n\n');
+    }
+    
+    // 2. Process General Context (no paper index)
+    const general = sessionMemory.filter(m => m.paper_index === undefined);
+    if (general.length > 0) {
+       structuredText += '\n\n[GENERAL CONTEXT]\n' + general.map(m => m.content).join('\n\n');
+    }
+
+    layer3 += structuredText;
   } else {
-    layer3 += '\n  Empty — use save_to_memory after reading pages to store key findings.';
+    layer3 += '\n  (Memory is currently empty. Use save_to_session_memory with MEMORY_IDs to store content here.)';
   }
 
-  // ── LAYER 4: Execution Log (compact summaries only — no full page text) ──
-  let layer4 = '\nACTIONS TAKEN SO FAR:';
+  // ── LAYER 4: Task Reminder & Execution Log (compact Summaries) ──────────
+  let layer4 = `\n\n🎯 ORIGINAL USER TASK: "${task}"\n\nACTIONS TAKEN SO FAR:`;
   if (executionLog.length > 0) {
     const logLines = executionLog
       .map((e, i) => `  Step ${i + 1}: ${e.tool}(${e.paramsSummary}) → ${e.resultSummary}\n    Thought: ${e.thinking}`)
@@ -133,6 +160,8 @@ Notes available: ${workspace.notes.length}`;
 
   // ── LAYER 6: Output Contract ──────────────────────────────────────────────
   const layer6 = `\n\nYOUR RESPONSE MUST BE ONLY VALID JSON — no markdown, no explanation, no other text.
+IMPORTANT: Your ONLY allowed actions are "tool_call" and "task_complete".
+"save_to_memory" is a TOOL, not an action — it must go inside "tool" and "params".
 
 For a tool call:
 {
@@ -218,6 +247,7 @@ async function runAgentTask(task, workspace, workflowId) {
   // Session state — fresh for each task
   const executionLog = [];       // Compact summaries of all past actions
   const sessionMemory = [];      // Long-term: agent-curated key findings via save_to_memory
+  const sessionContextPool = {}; // NEW: High-capacity temporary storage for raw tool outputs (mapped to IDs)
   let recentObservations = [];   // Short-term: up to last 3 tool outputs
   let iteration = 0;
 
@@ -245,7 +275,7 @@ async function runAgentTask(task, workspace, workflowId) {
         workspace,
         executionLog,
         sessionMemory,
-        recentObservations,
+        recentObservations, // FIXED: Pass the full array as expected by buildContext
         workflow
       );
 
@@ -254,12 +284,17 @@ async function runAgentTask(task, workspace, workflowId) {
       });
 
       responseText = result.response.text();
-      logger.info(`[ResearchAgent] Response: ${responseText.length} chars`);
+      
+      // Log truncated response so we can see what the model is doing
+      const preview = responseText.length > 200 
+        ? responseText.substring(0, 200) + '...' 
+        : responseText;
+      logger.info(`[ResearchAgent] Raw Response (truncated): ${preview.replace(/\n/g, ' ')}`);
+      logger.info(`[ResearchAgent] Total length: ${responseText.length} chars`);
 
     } catch (apiError) {
-      logger.error(`[ResearchAgent] Gemini API error on iteration ${iteration}:`, apiError.message);
-      // Set as short-term error — agent will see it next iteration and try a different approach
-      recentObservations.unshift(`ERROR: API call failed (${apiError.message}). Try a simpler or different tool call.`);
+      logger.error(`[ResearchAgent] ❌ Error in iteration ${iteration}:`, apiError);
+      recentObservations.unshift(`ERROR: Tool output/API failed: ${apiError.message || 'Unknown error'}`);
       if (recentObservations.length > 3) recentObservations.pop();
       continue;
     }
@@ -272,6 +307,13 @@ async function runAgentTask(task, workspace, workflowId) {
       recentObservations.unshift('ERROR: Your response was not valid JSON. You MUST respond with ONLY the JSON format — no other text, no markdown.');
       if (recentObservations.length > 3) recentObservations.pop();
       continue;
+    }
+
+    if (decision.thinking) {
+      const thinkingPreview = decision.thinking.length > 150
+        ? decision.thinking.substring(0, 150) + '...'
+        : decision.thinking;
+      logger.info(`[ResearchAgent] Agent Thought: "${thinkingPreview.replace(/\n/g, ' ')}"`);
     }
 
     logger.info(`[ResearchAgent] Decision: action=${decision.action}, tool=${decision.tool || 'N/A'}`);
@@ -293,7 +335,8 @@ async function runAgentTask(task, workspace, workflowId) {
 
     // ── STEP D: Handle tool_call ──────────────────────────────────────────
     if (decision.action === 'tool_call' && decision.tool) {
-      const toolResult = await executeTool(decision.tool, decision.params || {}, workspace, genAI);
+      // Pass sessionContextPool to allow tools to "register" content IDs
+      const toolResult = await executeTool(decision.tool, decision.params || {}, workspace, genAI, sessionContextPool);
 
       // Guard against malformed tool result
       const observation = (toolResult && typeof toolResult.observation === 'string')
@@ -301,9 +344,13 @@ async function runAgentTask(task, workspace, workflowId) {
         : `ERROR: Tool "${decision.tool}" returned no output.`;
 
       // Handle save_to_memory or auto-saves — push to long-term session memory
-      if (toolResult?.memoryEntry) {
+      if (toolResult?.memoryEntries) {
+        // Handle array of entries (from new multi-save tool)
+        sessionMemory.push(...toolResult.memoryEntries);
+        logger.info(`[ResearchAgent] 💾 Multi-Memory saved: ${toolResult.memoryEntries.length} items`);
+      } else if (toolResult?.memoryEntry) {
         sessionMemory.push(toolResult.memoryEntry);
-        logger.info(`[ResearchAgent] 💾 Memory saved: [${toolResult.memoryEntry.label}]`);
+        logger.info(`[ResearchAgent] 💾 Memory saved: [${toolResult.memoryEntry.type}]`);
       }
 
       // Build compact param summary for the execution log
@@ -354,7 +401,7 @@ async function runAgentTask(task, workspace, workflowId) {
   // Return any partial findings from session memory
   const partialFindings = sessionMemory.length > 0
     ? '\n\nPartial findings gathered during research:\n' +
-    sessionMemory.map(m => `- [${m.label}]: ${m.content}`).join('\n')
+    sessionMemory.map(m => `- [${m.type.toUpperCase()}]: ${m.content.substring(0, 100)}...`).join('\n')
     : '';
 
   return {

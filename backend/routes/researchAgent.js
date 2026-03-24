@@ -9,6 +9,9 @@
 const express = require('express');
 const router = express.Router();
 
+// Simple in-memory lock to prevent duplicate concurrent runs
+const activeTasks = new Set();
+
 let researchAgentLoop;
 try {
   researchAgentLoop = require('../services/researchAgentLoop');
@@ -18,10 +21,23 @@ try {
 }
 
 router.post('/run-task', async (req, res, next) => {
-  try {
-    // Support both wrapped { data: {...} } and direct { task, papers, notes }
-    const { task, papers, notes, workflowId } = req.body.data || req.body;
+  const { task, papers, notes, workflowId } = req.body.data || req.body;
+  
+  // Use a unique key based on task and first paper URI to prevent "cloned" runs
+  const primaryPaperUri = papers?.[0]?.uri || 'unknown';
+  const taskKey = `${primaryPaperUri}-${workflowId || 'general'}`;
+  
+  if (activeTasks.has(taskKey)) {
+    console.log(`[ResearchAgent] ⚠️  BLOCKED: Task already in progress for this paper: ${taskKey}`);
+    return res.status(202).json({ 
+      success: true, 
+      message: 'Workflow already in progress. Please wait for the current task to finish.' 
+    });
+  }
 
+  activeTasks.add(taskKey);
+
+  try {
     if (!task || typeof task !== 'string' || !task.trim()) {
       return res.status(400).json({
         success: false,
@@ -67,6 +83,11 @@ router.post('/run-task', async (req, res, next) => {
   } catch (err) {
     console.error('[ResearchAgent Route] ❌ Error:', err.message);
     next(err);
+  } finally {
+    // Always unlock once the agent loop finishes or errors out
+    const primaryPaperUri = papers?.[0]?.uri || 'unknown';
+    const taskKey = `${primaryPaperUri}-${workflowId || 'general'}`;
+    activeTasks.delete(taskKey); 
   }
 });
 

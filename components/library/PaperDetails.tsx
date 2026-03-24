@@ -9,7 +9,10 @@ interface PaperDetailsProps {
     onClose: () => void;
     onView: (paper: any) => void;
     onGenerateLiteratureReview: (paper: any) => void;
+    onGenerateMethodology: (paper: any) => void;
+    onGenerateFindings: (paper: any) => void;
     isDownloading?: boolean;
+    isAgentRunning?: boolean;
 }
 
 export const PaperDetails: React.FC<PaperDetailsProps> = ({
@@ -17,7 +20,10 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
     onClose,
     onView,
     onGenerateLiteratureReview,
-    isDownloading
+    onGenerateMethodology,
+    onGenerateFindings,
+    isDownloading,
+    isAgentRunning
 }) => {
     const [isExtracting, setIsExtracting] = useState(false);
     const [activeTab, setActiveTab] = useState('abstract');
@@ -26,7 +32,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
     if (!paper) return null;
 
     const handleGetMetadata = async () => {
-        if (!paper?.uri || isExtracting) return;
+        if (!paper?.uri || isExtracting) return null;
 
         setIsExtracting(true);
         try {
@@ -47,16 +53,36 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                 year: extracted.metadata.year || paper.year,
                 harvardReference: extracted.metadata.harvardReference || paper.harvardReference,
                 publisher: extracted.metadata.publisher || paper.publisher,
-                categories: extracted.metadata.categories || paper.categories
+                categories: extracted.metadata.categories || paper.categories,
+                pages: extracted.pages,
+                paper_references: extracted.references || paper.paper_references || []
             };
 
             await savePaper(updatedPaper);
             console.log('[PaperDetails] Metadata updated successfully');
+            return updatedPaper;
         } catch (error) {
             console.error("[PaperDetails] Failed to extract metadata:", error);
+            return null;
         } finally {
             setIsExtracting(false);
         }
+    };
+
+    const handleActionWithPrecheck = async (action: (p: any) => void) => {
+        let activePaper = paper;
+        // If content is missing, we MUST extract it first
+        if (!paper.pages || paper.pages.length === 0) {
+            console.log('[PaperDetails] Missing page data, triggering automatic extraction before agent run...');
+            const result = await handleGetMetadata();
+            if (result) {
+                activePaper = result;
+            } else {
+                console.error('[PaperDetails] Extraction failed, cannot proceed with agent workflow');
+                return;
+            }
+        }
+        action(activePaper);
     };
 
     const authors = Array.isArray(paper.authors)
@@ -188,12 +214,10 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                                     </div>
                                 </div>
                             )}
-
-                            {/* Page Count */}
                             <div>
                                 <span className="text-[9px] font-semibold text-gray-700 uppercase tracking-wider block">Pages</span>
                                 <div className="text-gray-600 dark:text-gray-400 font-medium">
-                                    {paper.num_pages || paper.numPages || paper.pages || 'Available in PDF'}
+                                    {paper.num_pages || paper.numPages || (Array.isArray(paper.pages) ? paper.pages.length : paper.pages) || 'Available in PDF'}
                                 </div>
                             </div>
                         </div>
@@ -202,7 +226,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                     {/* Action Buttons - Brand Consistent */}
                     <div className="grid grid-cols-2 gap-4 py-4 ">
                         <button
-                            onClick={() => onGenerateLiteratureReview(paper)}
+                            onClick={() => handleActionWithPrecheck(onGenerateLiteratureReview)}
                             className="flex items-center justify-center px-3 py-2.5 bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all rounded-xl"
                         >
                             <span className="text-center">GENERATE LITERATURE REVIEW</span>
@@ -234,21 +258,54 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
 
                         <div className="min-h-[200px]">
                             {activeTab === 'abstract' ? (
-                                <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 leading-relaxed font-medium animate-fade-in">
+                                <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 leading-relaxed font-medium animate-fade-in whitespace-pre-wrap">
                                     {paper.abstract || paper.summary || "No abstract available for this document."}
                                 </p>
                             ) : (
-                                <div className="flex flex-col items-center justify-center min-h-[200px] border-gray-100 dark:border-gray-800 rounded-2xl animate-fade-in py-8 px-4 text-center">
-                                    <button
-                                        onClick={() => onGenerateLiteratureReview(paper)}
-                                        className="inline-flex items-center gap-2.5 px-6 py-5 bg-scholar-50/50 dark:bg-scholar-900/20 text-scholar-600 dark:text-scholar-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl border border-scholar-300 dark:border-scholar-800/50 hover:bg-scholar-50 dark:hover:bg-scholar-900/40 transition-all group"
-                                    >
-                                        <Sparkles size={14} className="group-hover:animate-pulse" />
-                                        {activeTab === 'lit review' ? 'GENERATE LITERATURE REVIEW' :
-                                            activeTab === 'method' ? 'GENERATE METHODOLOGY' :
-                                                activeTab === 'findings' ? 'GENERATE FINDINGS/RESULTS' :
-                                                    `GENERATE ${activeTab.toUpperCase()}`}
-                                    </button>
+                                <div className="animate-fade-in">
+                                    {isAgentRunning ? (
+                                        <div className="flex flex-col items-center justify-center min-h-[200px] py-8 text-center bg-gray-50/50 dark:bg-gray-900/20 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800">
+                                            <Loader2 size={24} className="animate-spin text-scholar-600 mb-3" />
+                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-scholar-600">Researching Document...</p>
+                                            <p className="text-[9px] text-gray-400 mt-1">Collecting data and synthesising findings</p>
+                                        </div>
+                                    ) : (
+                                        (() => {
+                                            const fieldMap: Record<string, string> = {
+                                                'lit review': 'literature_review',
+                                                'method': 'methodology',
+                                                'findings': 'findings'
+                                            };
+                                            const content = paper[fieldMap[activeTab]];
+
+                                            if (content) {
+                                                return (
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap py-2">
+                                                        {content}
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <div className="flex flex-col items-center justify-center min-h-[200px] border-gray-100 dark:border-gray-800 rounded-2xl py-8 px-4 text-center">
+                                                    <button
+                                                        onClick={() => {
+                                                            if (activeTab === 'lit review') handleActionWithPrecheck(onGenerateLiteratureReview);
+                                                            else if (activeTab === 'method') handleActionWithPrecheck(onGenerateMethodology);
+                                                            else if (activeTab === 'findings') handleActionWithPrecheck(onGenerateFindings);
+                                                        }}
+                                                        className="inline-flex items-center gap-2.5 px-6 py-5 bg-scholar-50/50 dark:bg-scholar-900/20 text-scholar-600 dark:text-scholar-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl border border-scholar-300 dark:border-scholar-800/50 hover:bg-scholar-50 dark:hover:bg-scholar-900/40 transition-all group"
+                                                    >
+                                                        <Sparkles size={14} className="group-hover:animate-pulse" />
+                                                        {activeTab === 'lit review' ? 'GENERATE LITERATURE REVIEW' :
+                                                            activeTab === 'method' ? 'GENERATE METHODOLOGY' :
+                                                                activeTab === 'findings' ? 'GENERATE FINDINGS/RESULTS' :
+                                                                    `GENERATE ${activeTab.toUpperCase()}`}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })()
+                                    )}
                                 </div>
                             )}
                         </div>

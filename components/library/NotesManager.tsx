@@ -36,6 +36,7 @@ import { NotesTable } from './NotesTable';
 import { CreateNoteModal } from './CreateNoteModal';
 import { AddPaperModal } from './AddPaperModal';
 import { PaperDetails } from './PaperDetails';
+import { api } from '../../services/apiClient';
 
 interface NotesManagerProps {
   activeView: string;
@@ -66,7 +67,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     toggleFlag,
     updateNote,
     deletePaper,
-    saveNote
+    saveNote,
+    savePaper
   } = useDatabase();
 
   const {
@@ -145,6 +147,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAddPaperModalOpen, setIsAddPaperModalOpen] = useState(false);
   const [selectedPaperForDetails, setSelectedPaperForDetails] = useState<any>(null); // State for the details sidebar
+  const [agentProcessingUris, setAgentProcessingUris] = useState<Set<string>>(new Set()); // Track papers being processed by agent
 
   // LIVE SYNC: Derive the paper for details from the reactive savedPapers array
   // This ensures that when metadata is extracted, the sidebar updates immediately
@@ -152,6 +155,63 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     if (!selectedPaperForDetails) return null;
     return savedPapers.find(p => p.uri === selectedPaperForDetails.uri) || selectedPaperForDetails;
   }, [selectedPaperForDetails, savedPapers]);
+
+  // Handler for running agent workflows (Lit Review, Method, Findings)
+  const handleRunAgentWorkflow = useCallback(async (paper: any, workflowId: string) => {
+    if (!paper.uri || agentProcessingUris.has(paper.uri)) return;
+    
+    // 1. Mark as processing
+    setAgentProcessingUris(prev => new Set(prev).add(paper.uri));
+
+    try {
+      console.log(`[NotesManager] Triggering Agent Workflow: ${workflowId} for ${paper.title}`);
+      
+      // 2. Prepare workspace for the agent
+      // Set a long timeout for the agent process (8 minutes)
+      const agentPromise = api.researchAgent.runTask(
+        `Perform ${workflowId} analysis for the paper: "${paper.title}"`,
+        [paper],
+        savedNotes.filter(n => (n.paper_uri || n.pdfUri) === paper.uri),
+        workflowId
+      );
+
+      const response = await Promise.race([
+        agentPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Analysis is taking longer than expected. Please wait a moment or check if the paper content is too large.')), 480000))
+      ]) as any;
+
+      if (response && response.response) {
+        // 3. Map workflowId to the correct database field
+        const fieldMap: Record<string, string> = {
+          'summarise_paper': 'abstract', // fallback/improvement
+          'literature_review': 'literature_review',
+          'get_methodology': 'methodology',
+          'get_findings': 'findings'
+        };
+
+        const targetField = fieldMap[workflowId];
+        if (targetField) {
+            const updatedPaper = {
+                ...paper,
+                [targetField]: response.response
+            };
+            
+            // 4. Persistence
+            await savePaper(updatedPaper);
+            console.log(`[NotesManager] Agent successfully updated ${targetField} for ${paper.title}`);
+        }
+      }
+    } catch (error) {
+      console.error(`[NotesManager] Agent Workflow ${workflowId} failed:`, error);
+    } finally {
+      // 5. Unmark as processing
+      setAgentProcessingUris(prev => {
+        const next = new Set(prev);
+        next.delete(paper.uri);
+        return next;
+      });
+    }
+  }, [savePaper, savedNotes]);
 
   const PAGE_SIZE = activeTab === 'notes' && viewMode === 'grid' ? 12 : 10;
 
@@ -1101,11 +1161,11 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
               setActivePdf(p.uri);
               setColumnVisibility(prev => ({ ...prev, right: true }));
             }}
-            onGenerateLiteratureReview={(p) => {
-              // Logic to trigger literature review workflow
-              console.log("Generating literature review for:", p.title);
-            }}
+            onGenerateLiteratureReview={(p) => handleRunAgentWorkflow(p, 'literature_review')}
+            onGenerateMethodology={(p) => handleRunAgentWorkflow(p, 'get_methodology')}
+            onGenerateFindings={(p) => handleRunAgentWorkflow(p, 'get_findings')}
             isDownloading={downloadingUris.has(liveSelectedPaper.uri)}
+            isAgentRunning={agentProcessingUris.has(liveSelectedPaper.uri)}
           />
         </div>
       )}
@@ -1124,11 +1184,11 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                 setColumnVisibility(prev => ({ ...prev, right: true }));
                 setSelectedPaperForDetails(null);
               }}
-              onGenerateLiteratureReview={(p) => {
-                console.log("Generating literature review for:", p.title);
-                setSelectedPaperForDetails(null);
-              }}
+              onGenerateLiteratureReview={(p) => handleRunAgentWorkflow(p, 'literature_review')}
+              onGenerateMethodology={(p) => handleRunAgentWorkflow(p, 'get_methodology')}
+              onGenerateFindings={(p) => handleRunAgentWorkflow(p, 'get_findings')}
               isDownloading={downloadingUris.has(liveSelectedPaper.uri)}
+              isAgentRunning={agentProcessingUris.has(liveSelectedPaper.uri)}
             />
           </div>
         </div>

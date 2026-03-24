@@ -8,208 +8,133 @@
 
 const TOOL_SCHEMA = [
   {
-    name: 'read_page',
-    description: `Read the full text of a single page from a paper. Returns the text content.
-      This is SHORT-TERM: the text is only available for ONE iteration.
-      If you find important information, use save_to_memory to store key findings before moving on.`,
+    name: 'get_and_read_page_content',
+    description: `Read the full text of a single page from a paper. 
+      This is SHORT-TERM: the text is only available for maximum 2 iterations.
+      The output will contain a [MEMORY_ID: X]. To keep this page in your LONG-TERM memory, 
+      you MUST call 'save_to_session_memory' with that ID.`,
     parameters: {
       type: 'OBJECT',
       properties: {
-        paper_index: {
-          type: 'NUMBER',
-          description: 'Index of the paper in the papers array (0-based).'
-        },
-        page_number: {
-          type: 'NUMBER',
-          description: 'Page number to read (1-based, as displayed to user).'
-        }
+        paper_index: { type: 'NUMBER', description: 'Index of the paper (0-based).' },
+        page_number: { type: 'NUMBER', description: 'Page number (1-based).' }
       },
       required: ['paper_index', 'page_number']
     }
   },
-
   {
-    name: 'read_multiple_pages',
-    description: `Read a range of consecutive pages from a paper. Returns combined text with page markers.
-      This is SHORT-TERM: the text is only available for ONE iteration.
-      Use save_to_memory to keep important findings after reading.`,
+    name: 'get_and_read_multiple_pages',
+    description: `Read a range of consecutive pages. 
+      Each page will be tagged with its own [MEMORY_ID: X].
+      This is SHORT-TERM. Use 'save_to_session_memory' with the specific IDs you want to keep.`,
     parameters: {
       type: 'OBJECT',
       properties: {
-        paper_index: {
-          type: 'NUMBER',
-          description: 'Index of the paper (0-based).'
-        },
-        start_page: {
-          type: 'NUMBER',
-          description: 'Starting page number (1-based, inclusive).'
-        },
-        end_page: {
-          type: 'NUMBER',
-          description: 'Ending page number (1-based, inclusive).'
-        }
+        paper_index: { type: 'NUMBER', description: 'Index of the paper (0-based).' },
+        start_page: { type: 'NUMBER', description: 'Starting page (1-based, inclusive).' },
+        end_page: { type: 'NUMBER', description: 'Ending page (1-based, inclusive).' }
       },
       required: ['paper_index', 'start_page', 'end_page']
     }
   },
-
   {
-    name: 'get_paper_info',
-    description: `Get metadata about a paper: title, author, total pages, abstract,
-      harvard reference, and whether it has a reference list.
-      Use this FIRST to understand a paper's structure before reading pages.`,
+    name: 'get_paper_metadata',
+    description: `Get title, authors, abstract, and bibliography status.
+      This tool automatically saves its findings to your LONG-TERM memory under the paper's section.`,
     parameters: {
       type: 'OBJECT',
       properties: {
-        paper_index: {
-          type: 'NUMBER',
-          description: 'Index of the paper (0-based).'
-        }
+        paper_index: { type: 'NUMBER', description: 'Index of the paper (0-based).' }
       },
       required: ['paper_index']
     }
   },
   {
-    name: 'get_paper_structure',
-    description: `Generates a table of contents mapping the logical structure of a paper (Introduction, Methods, Results, Discussion, Conclusion) to page numbers.
-      Use this if you are struggling to find the right pages to read or if keyword searches fail to locate useful sections. This tool will return the Title, Abstract and Table of Contents.
-      IMPORTANT: This tool automatically saves its findings to your LONG-TERM session memory.`,
+    name: 'get_paper_structure_map',
+    description: `Generates a Table of Contents mapping sections (Intro, Results, etc.) to page numbers.
+      Automatically saves to your LONG-TERM session memory. Use this to navigate large papers.`,
     parameters: {
       type: 'OBJECT',
       properties: {
-        paper_index: {
-          type: 'NUMBER',
-          description: 'Index of the paper (0-based).'
-        }
+        paper_index: { type: 'NUMBER', description: 'Index of the paper (0-based).' }
       },
       required: ['paper_index']
     }
   },
-
   {
     name: 'search_keyword',
-    description: `Search for a keyword across all pages of a paper.
-      Returns which pages contain the keyword and how many times it appears.
-      Use this to locate sections like "methodology", "results", "conclusion", "discussion".`,
+    description: `Search for a keyword across all pages of a paper.`,
     parameters: {
       type: 'OBJECT',
       properties: {
-        paper_index: {
-          type: 'NUMBER',
-          description: 'Index of the paper (0-based).'
-        },
-        keyword: {
-          type: 'STRING',
-          description: 'Keyword or phrase to search for (case-insensitive).'
-        }
+        paper_index: { type: 'NUMBER', description: 'Index of the paper (0-based).' },
+        keyword: { type: 'STRING', description: 'Keyword to search for.' }
       },
       required: ['paper_index', 'keyword']
     }
   },
-
   {
     name: 'search_multiple_keyword',
-    description: `Search for multiple keywords across all pages of a paper in a single action.
-      Returns which pages contain each keyword and how many times they appear.
-      Use this instead of calling search_keyword multiple times to save iterations.`,
+    description: `Search for multiple terms across all pages. Useful for finding sections quickly.`,
     parameters: {
       type: 'OBJECT',
       properties: {
-        paper_index: {
-          type: 'NUMBER',
-          description: 'Index of the paper (0-based).'
-        },
-        keywords: {
-          type: 'ARRAY',
-          items: { type: 'STRING' },
-          description: 'A list of keywords or phrases to search for (e.g. ["methodology", "methods", "data"]).'
-        }
+        paper_index: { type: 'NUMBER', description: 'Index of the paper (0-based).' },
+        keywords: { type: 'ARRAY', items: { type: 'STRING' }, description: 'e.g. ["methodology", "data"]' }
       },
       required: ['paper_index', 'keywords']
     }
   },
-
   {
     name: 'get_references',
-    description: `Get the extracted reference list from a paper.
-      Returns the array of reference strings found at the end of the paper.
-      Use this when the student asks about citations or bibliographies.`,
+    description: `Get the bibliography/references list for a paper.`,
     parameters: {
       type: 'OBJECT',
       properties: {
-        paper_index: {
-          type: 'NUMBER',
-          description: 'Index of the paper (0-based).'
-        }
+        paper_index: { type: 'NUMBER', description: 'Index of the paper (0-based).' }
       },
       required: ['paper_index']
     }
   },
-
   {
     name: 'list_workspace',
-    description: `List everything in the student's workspace.
-      Returns all loaded papers (with titles, authors, page counts) and all saved notes.
-      Use this to understand what resources are available before starting any task.`,
-    parameters: {
-      type: 'OBJECT',
-      properties: {},
-      required: []
-    }
+    description: `List all papers and notes available to you. ALWAYS call this first.`,
+    parameters: { type: 'OBJECT', properties: {}, required: [] }
   },
-
   {
     name: 'get_notes_for_paper',
-    description: `Get all saved notes associated with a specific paper.
-      Returns notes with their quotes, justifications, tags, and page numbers.
-      Use this to see what the student has already extracted from a paper.`,
+    description: `Get saved student notes for a paper. Individual notes will be tagged with MEMORY_IDs for pinning.`,
     parameters: {
       type: 'OBJECT',
       properties: {
-        paper_uri: {
-          type: 'STRING',
-          description: 'The URI identifier of the paper to get notes for.'
-        }
+        paper_uri: { type: 'STRING', description: 'The paper URI identifier.' }
       },
       required: ['paper_uri']
     }
   },
-
   {
-    name: 'save_to_memory',
-    description: `Save an important finding to your LONG-TERM session memory.
-      This information will persist for the entire task — all future iterations.
-      Use this after reading pages to store key findings, quotes, or summaries.
-      WITHOUT this, page text disappears after one iteration.
-      Always include the source (paper title, page numbers) in what you save.`,
+    name: 'save_to_session_memory',
+    description: `CRITICAL: Move temporary content to LONG-TERM memory using their [MEMORY_ID: X].
+      Provide an array of IDs you want to keep (e.g. ["Paper_0_Page_12_A9B1", "Note_3_X1Y2"]).`,
     parameters: {
       type: 'OBJECT',
       properties: {
-        content: {
-          type: 'STRING',
-          description: 'The key finding or information to remember. Include source (paper title, page numbers).'
-        },
-        label: {
-          type: 'STRING',
-          description: 'A short label to identify this memory (e.g. "methodology_summary", "key_finding_1").'
+        memory_ids: {
+          type: 'ARRAY',
+          items: { type: 'STRING' },
+          description: 'A list of MEMORY_ID strings to save.'
         }
       },
-      required: ['content', 'label']
+      required: ['memory_ids']
     }
   },
-
   {
     name: 'task_complete',
-    description: `Call ONLY when the student's task is fully completed.
-      Provide your complete, well-formatted response as the "response" parameter.
-      This ends the agent loop and returns the answer to the student.`,
+    description: `Call when the task is finished. Provide the complete structured response.`,
     parameters: {
       type: 'OBJECT',
       properties: {
-        response: {
-          type: 'STRING',
-          description: 'Your complete, well-formatted response to the student.'
-        }
+        response: { type: 'STRING', description: 'Your final answer.' }
       },
       required: ['response']
     }
@@ -224,44 +149,85 @@ const TOOL_SCHEMA = [
  * @param {object} params
  * @param {object} workspace - { papers: [], notes: [] }
  * @param {object} genAI - The GenAI service instance for sub-models
- * @returns {Promise<{ observation: string, memoryType: 'short_term'|'long_term', memoryEntry?: {label, content} }>}
+ * @param {object} sessionContextPool - (NEW) temporary pool to store content by ID
+ * @returns {Promise<{ observation: string, memoryType: 'short_term'|'long_term', memoryEntry?: object, memoryEntries?: object[] }>}
  */
-async function executeTool(toolName, params, workspace, genAI) {
+async function executeTool(toolName, params, workspace, genAI, sessionContextPool = {}) {
   const { papers, notes } = workspace;
+
+  const generateId = (type, pIdx, pageNum) => {
+    const hash = Math.random().toString(36).substring(2, 7).toUpperCase();
+    return `${type}_P${pIdx}_${pageNum ? `Pg${pageNum}_` : ''}${hash}`;
+  };
 
   switch (toolName) {
 
-    case 'read_page': {
+    case 'get_and_read_page_content': {
       const { paper_index, page_number } = params;
-      if (paper_index < 0 || paper_index >= papers.length) {
+      if (typeof paper_index !== 'number' || paper_index < 0 || paper_index >= papers.length) {
         return {
-          observation: `ERROR: Paper index ${paper_index} is out of range. Available: 0 to ${papers.length - 1}.`,
+          observation: `ERROR: "paper_index" is required and must be a number from 0 to ${papers.length - 1}. Provided: ${paper_index}`,
+          memoryType: 'short_term'
+        };
+      }
+      if (typeof page_number !== 'number' || isNaN(page_number)) {
+        return {
+          observation: 'ERROR: "page_number" is required as a number. Provided: ' + JSON.stringify(page_number),
           memoryType: 'short_term'
         };
       }
       const paper = papers[paper_index];
-      const pageIdx = page_number - 1; // convert 1-based to 0-based
+      if (!paper.pages || !Array.isArray(paper.pages)) {
+        return {
+          observation: `ERROR: Full text content is not available for "${paper.title}". You cannot read pages.`,
+          memoryType: 'short_term'
+        };
+      }
+      const pageIdx = page_number - 1; // 1-based to 0-based
       if (pageIdx < 0 || pageIdx >= paper.pages.length) {
         return {
           observation: `ERROR: Page ${page_number} does not exist. "${paper.title}" has ${paper.pages.length} pages.`,
           memoryType: 'short_term'
         };
       }
+
+      const memId = generateId('Page', paper_index, page_number);
+      const content = `[Page ${page_number}]:\n${paper.pages[pageIdx]}`;
+      
+      sessionContextPool[memId] = {
+        type: 'page',
+        paper_index: paper_index,
+        page_number: page_number,
+        content: content
+      };
+
       return {
-        observation: `PAGE ${page_number} of "${paper.title}":\n${paper.pages[pageIdx]}`,
+        observation: `[MEMORY_ID: ${memId}]\n${content}\n\nSYSTEM HINT: If this is important, use 'save_to_session_memory' with this [MEMORY_ID].`,
         memoryType: 'short_term'
       };
     }
 
-    case 'read_multiple_pages': {
+    case 'get_and_read_multiple_pages': {
       const { paper_index, start_page, end_page } = params;
-      if (paper_index < 0 || paper_index >= papers.length) {
+      if (typeof paper_index !== 'number' || paper_index < 0 || paper_index >= papers.length) {
         return {
-          observation: `ERROR: Paper index ${paper_index} is out of range. Available: 0 to ${papers.length - 1}.`,
+          observation: `ERROR: "paper_index" is required and must be a number from 0 to ${papers.length - 1}. Provided: ${paper_index}`,
+          memoryType: 'short_term'
+        };
+      }
+      if (typeof start_page !== 'number' || typeof end_page !== 'number' || isNaN(start_page) || isNaN(end_page)) {
+        return {
+          observation: 'ERROR: "start_page" and "end_page" are required and must be numbers.',
           memoryType: 'short_term'
         };
       }
       const paper = papers[paper_index];
+      if (!paper.pages || !Array.isArray(paper.pages)) {
+        return {
+          observation: `ERROR: Full text content is not available for "${paper.title}". You cannot read pages.`,
+          memoryType: 'short_term'
+        };
+      }
       const startIdx = Math.max(0, start_page - 1);
       const endIdx = Math.min(paper.pages.length, end_page);
 
@@ -273,45 +239,69 @@ async function executeTool(toolName, params, workspace, genAI) {
       }
 
       const selectedPages = paper.pages.slice(startIdx, endIdx);
-      const result = selectedPages
-        .map((text, i) => `--- PAGE ${startIdx + i + 1} ---\n${text}`)
-        .join('\n\n');
+      const resultBlocks = [];
+
+      for (let i = 0; i < selectedPages.length; i++) {
+        const pageNum = startIdx + i + 1;
+        const memId = generateId('Page', paper_index, pageNum);
+        const textChunk = `[Page ${pageNum}]:\n${selectedPages[i]}`;
+        
+        sessionContextPool[memId] = {
+          type: 'page',
+          paper_index: paper_index,
+          page_number: pageNum,
+          content: textChunk
+        };
+        
+        resultBlocks.push(`[MEMORY_ID: ${memId}]\n${textChunk}`);
+      }
 
       return {
-        observation: `PAGES ${start_page}-${Math.min(end_page, paper.pages.length)} of "${paper.title}":\n\n${result}`,
+        observation: `READ ${selectedPages.length} PAGES.\n\n${resultBlocks.join('\n\n')}\n\nSYSTEM HINT: Use 'save_to_session_memory' with these IDs to keep them in long-term context.`,
         memoryType: 'short_term'
       };
     }
 
-    case 'get_paper_info': {
+    case 'get_paper_metadata': {
       const { paper_index } = params;
-      if (paper_index < 0 || paper_index >= papers.length) {
+      if (typeof paper_index !== 'number' || paper_index < 0 || paper_index >= papers.length) {
         return {
-          observation: `ERROR: Paper index ${paper_index} out of range.`,
+          observation: `ERROR: "paper_index" is required and must be a number from 0 to ${papers.length - 1}. Provided: ${paper_index}`,
           memoryType: 'short_term'
         };
       }
       const paper = papers[paper_index];
+      
+      // Support both singular/plural naming and database naming
+      const authorsRaw = paper.author || paper.authors;
+      const authorDisplay = Array.isArray(authorsRaw) ? authorsRaw.join(', ') : (authorsRaw || 'Unknown');
+      const pageCount = paper.totalPages || paper.num_pages || paper.numPages || 'Unknown';
+
+      const metadataContent = [
+        `Title: ${paper.title || 'Unknown'}`,
+        `Author: ${authorDisplay}`,
+        `Total Pages: ${pageCount}`,
+        `URI: ${paper.pdfUri || paper.paper_uri || 'Unknown'}`,
+        `Abstract: ${paper.abstract || 'Not extracted'}`,
+        `Harvard Reference: ${paper.harvardReference || 'Not available'}`
+      ].join('\n');
+
       return {
-        observation: [
-          `PAPER INFO [${paper_index}]:`,
-          `Title: ${paper.title || 'Unknown'}`,
-          `Author: ${paper.author || 'Unknown'}`,
-          `Total Pages: ${paper.totalPages}`,
-          `URI: ${paper.uri}`,
-          `Abstract: ${paper.abstract || 'Not extracted'}`,
-          `Harvard Reference: ${paper.harvardReference || 'Not available'}`,
-          `Has Reference List: ${paper.references && paper.references.length > 0 ? `Yes (${paper.references.length} references)` : 'No'}`
-        ].join('\n'),
-        memoryType: 'short_term'
+        observation: `PAPER METADATA FOUND. (This has been AUTO-SAVED to your structured long-term memory under Paper ${paper_index}).\n\n${metadataContent}`,
+        memoryType: 'long_term',
+        memoryEntry: {
+          type: 'metadata',
+          paper_index: paper_index,
+          content: metadataContent
+        }
       };
     }
 
     case 'search_keyword': {
       const { paper_index, keyword } = params;
-      if (paper_index < 0 || paper_index >= papers.length) {
+      if (typeof paper_index !== 'number' || paper_index < 0 || paper_index >= papers.length) {
         return {
-          observation: `ERROR: Paper index ${paper_index} out of range.`,
+          observation: `ERROR: "paper_index" is required and must be a number from 0 to ${papers.length - 1}. Provided: ${paper_index}`,
           memoryType: 'short_term'
         };
       }
@@ -322,6 +312,12 @@ async function executeTool(toolName, params, workspace, genAI) {
         };
       }
       const paper = papers[paper_index];
+      if (!paper.pages || !Array.isArray(paper.pages)) {
+        return {
+          observation: `ERROR: Full text content is not available for "${paper.title}". You cannot perform keyword searches.`,
+          memoryType: 'short_term'
+        };
+      }
       const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escaped, 'gi');
       const results = [];
@@ -354,9 +350,9 @@ async function executeTool(toolName, params, workspace, genAI) {
 
     case 'search_multiple_keyword': {
       const { paper_index, keywords } = params;
-      if (paper_index < 0 || paper_index >= papers.length) {
+      if (typeof paper_index !== 'number' || paper_index < 0 || paper_index >= papers.length) {
         return {
-          observation: `ERROR: Paper index ${paper_index} out of range.`,
+          observation: `ERROR: "paper_index" is required and must be a number from 0 to ${papers.length - 1}. Provided: ${paper_index}`,
           memoryType: 'short_term'
         };
       }
@@ -367,11 +363,17 @@ async function executeTool(toolName, params, workspace, genAI) {
         };
       }
       const paper = papers[paper_index];
+      if (!paper.pages || !Array.isArray(paper.pages)) {
+        return {
+          observation: `ERROR: Full text content is not available for "${paper.title}". You cannot perform searches.`,
+          memoryType: 'short_term'
+        };
+      }
       const allResults = [];
 
       keywords.forEach(keyword => {
         if (!keyword || typeof keyword !== 'string' || !keyword.trim()) return;
-        const escaped = keyword.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
+        const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regex = new RegExp(escaped, 'gi');
         let total = 0;
         const resultPages = [];
@@ -392,54 +394,62 @@ async function executeTool(toolName, params, workspace, genAI) {
       });
 
       return {
-        observation: `MULTI-SEARCH RESULTS for "${paper.title}":\n${allResults.join('\\n')}`,
+        observation: `MULTI-SEARCH RESULTS for "${paper.title}":\n${allResults.join('\n')}`,
         memoryType: 'short_term'
       };
     }
 
     case 'get_references': {
       const { paper_index } = params;
-      if (paper_index < 0 || paper_index >= papers.length) {
+      if (typeof paper_index !== 'number' || paper_index < 0 || paper_index >= papers.length) {
         return {
-          observation: `ERROR: Paper index ${paper_index} out of range.`,
+          observation: `ERROR: "paper_index" is required and must be a number from 0 to ${papers.length - 1}. Provided: ${paper_index}`,
           memoryType: 'short_term'
         };
       }
       const paper = papers[paper_index];
-      if (!paper.references || paper.references.length === 0) {
+      const refs = paper.paper_references || paper.references;
+      if (!refs || refs.length === 0) {
         return {
           observation: `No reference list was extracted for "${paper.title}".`,
           memoryType: 'short_term'
         };
       }
-      const refList = paper.references
+      const refList = refs
         .map((ref, i) => `[${i + 1}] ${ref}`)
-        .join('\\n');
+        .join('\n');
       return {
-        observation: `REFERENCES for "${paper.title}" (${paper.references.length} total):\\n${refList}`,
+        observation: `REFERENCES for "${paper.title}" (${refs.length} total):\n${refList}`,
         memoryType: 'short_term'
       };
     }
 
-    case 'get_paper_structure': {
+    case 'get_paper_structure_map': {
       const { paper_index } = params;
-      if (paper_index < 0 || paper_index >= papers.length) {
-        return { observation: `ERROR: Paper index out of range.`, memoryType: 'short_term' };
+      if (typeof paper_index !== 'number' || paper_index < 0 || paper_index >= papers.length) {
+        return {
+          observation: `ERROR: "paper_index" is required and must be a number.`,
+          memoryType: 'short_term'
+        };
       }
       if (!genAI) {
-        return { observation: `ERROR: AI service not available for structure generation.`, memoryType: 'short_term' };
+        return { observation: `ERROR: AI service not available.`, memoryType: 'short_term' };
       }
 
       const paper = papers[paper_index];
+      if (!paper.pages || !Array.isArray(paper.pages)) {
+        return {
+          observation: `ERROR: No text content available for mapping.`,
+          memoryType: 'short_term'
+        };
+      }
+      
       const pagesToAnalyze = paper.pages.slice(0, 50);
-      const textToAnalyze = pagesToAnalyze.map((text, i) => `--- PAGE ${i + 1} ---\\n${text}`).join('\\n\\n');
+      const textToAnalyze = pagesToAnalyze.map((text, i) => `--- PAGE ${i + 1} ---\n${text}`).join('\n\n');
 
-      const prompt = `Analyze the following academic text (up to 50 pages) and construct a simple Table of Contents mapping the logical structure of the paper to page numbers. 
-Identify key sections such as Introduction, Methodology, Results, Discussion, Conclusion. 
-If explicit headings don't exist, infer where these sections begin. 
-Respond ONLY with a clear, concise bulleted list mapping sections to page numbers.
+      const prompt = `Analyze the following academic text (up to 50 pages) and construct a simple Table of Contents mapping logical sections to page numbers. Respond ONLY with a bulleted list.
 
-TEXT TO ANALYZE:
+TEXT:
 ${textToAnalyze}`;
 
       try {
@@ -448,15 +458,16 @@ ${textToAnalyze}`;
         const structure = result.response.text();
 
         return {
-          observation: `GENERATED STRUCTURE FOR "${paper.title}":\\n${structure}\\n(This has been auto-saved to your session memory).`,
+          observation: `GENERATED STRUCTURE MAP:\n${structure}\n(This has been AUTO-SAVED to your long-term memory).`,
           memoryType: 'long_term',
           memoryEntry: {
-            label: `structure_paper_${paper_index}`,
-            content: `Structure of "${paper.title}":\\n${structure}`
+            type: 'structure',
+            paper_index: paper_index,
+            content: `Document Structure:\n${structure}`
           }
         };
       } catch (err) {
-        return { observation: `ERROR analyzing paper structure: ${err.message}`, memoryType: 'short_term' };
+        return { observation: `ERROR: ${err.message}`, memoryType: 'short_term' };
       }
     }
 
@@ -496,32 +507,55 @@ ${textToAnalyze}`;
         };
       }
 
-      const noteList = paperNotes
-        .map((n, i) => [
-          `[NOTE ${i + 1}] Page ${n.pageNumber}:`,
-          `  Quote: "${(n.quote || '').substring(0, 150)}..."`,
-          `  Tags: ${(n.tags || []).join(', ') || 'none'}`
-        ].join('\n'))
-        .join('\n\n');
+      const results = [];
+      paperNotes.forEach((n, i) => {
+        const memId = generateId('Note', 99, i); // Use 99 for student notes for now
+        const text = `Quote: "${n.quote}" (Pg ${n.pageNumber})`;
+        
+        sessionContextPool[memId] = {
+          type: 'note',
+          paper_index: 99, 
+          page_number: n.pageNumber,
+          content: text
+        };
+
+        results.push(`[MEMORY_ID: ${memId}]\n${text}`);
+      });
 
       return {
-        observation: `NOTES for paper (${paperNotes.length} total):\n\n${noteList}`,
+        observation: `FOUND ${paperNotes.length} NOTES:\n\n${results.join('\n\n')}\n\nSYSTEM HINT: Use 'save_to_session_memory' with IDs to pin your favorite notes.`,
         memoryType: 'short_term'
       };
     }
 
-    case 'save_to_memory': {
-      const { content, label } = params;
-      if (!content || !label) {
-        return {
-          observation: 'ERROR: save_to_memory requires both "content" and "label".',
-          memoryType: 'short_term'
-        };
+    case 'save_to_session_memory': {
+      const { memory_ids } = params;
+      if (!Array.isArray(memory_ids) || memory_ids.length === 0) {
+        return { observation: 'ERROR: provide an array of memory_ids.', memoryType: 'short_term' };
       }
+
+      const savedEntries = [];
+      const notFound = [];
+
+      for (const id of memory_ids) {
+        if (sessionContextPool[id]) {
+          savedEntries.push({ id, ...sessionContextPool[id] });
+        } else {
+          notFound.push(id);
+        }
+      }
+
+      if (savedEntries.length === 0) {
+        return { observation: `ERROR: No valid IDs found. Provided: ${memory_ids.join(', ')}`, memoryType: 'short_term' };
+      }
+
+      let obs = `SUCCESS: Saved ${savedEntries.length} items to long-term memory.`;
+      if (notFound.length > 0) obs += `\nWarning: IDs not found: ${notFound.join(', ')}`;
+
       return {
-        observation: `SAVED TO MEMORY [${label}]: "${content.substring(0, 100)}${content.length > 100 ? '...' : ''}"`,
+        observation: obs,
         memoryType: 'long_term',
-        memoryEntry: { label, content }
+        memoryEntries: savedEntries
       };
     }
 
