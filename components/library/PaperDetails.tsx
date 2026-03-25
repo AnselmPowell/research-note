@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Edit2, FileText, File, BookText, Loader2, X, Sparkles, Check, Copy } from 'lucide-react';
+import { Edit2, FileText, File, BookText, Loader2, X, Sparkles, Check, Copy, RotateCcw } from 'lucide-react';
 import { fetchPdfBuffer, extractPdfData } from '../../services/pdfService';
 import { useDatabase } from '../../database/DatabaseContext';
 
@@ -195,13 +195,31 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
             'method': 'methodology',
             'findings': 'findings'
         };
-        const content = paper[fieldMap[activeTab]] || paper.summary;
+        const content = paper[fieldMap[activeTab]] || (activeTab === 'abstract' ? paper.summary : null);
         if (content) {
             navigator.clipboard.writeText(typeof content === 'string' ? content : JSON.stringify(content, null, 2));
             setJustCopied(true);
             setTimeout(() => setJustCopied(false), 2000);
         }
     };
+
+    const handleRegenerateContent = () => {
+        if (activeTab === 'lit review') handleActionWithPrecheck(onGenerateLiteratureReview);
+        else if (activeTab === 'method') handleActionWithPrecheck(onGenerateMethodology);
+        else if (activeTab === 'findings') handleActionWithPrecheck(onGenerateFindings);
+    };
+
+    const hasAnyContent = useMemo(() => {
+        const fieldMap: Record<string, string> = {
+            'abstract': 'abstract',
+            'lit review': 'literature_review',
+            'method': 'methodology',
+            'findings': 'findings'
+        };
+        return !!(paper[fieldMap[activeTab]] || (activeTab === 'abstract' && paper.summary));
+    }, [paper, activeTab]);
+
+    const isAISynthesizedTab = activeTab !== 'abstract';
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-dark-card border-l border-gray-200 dark:border-gray-800 shadow-xl z-30 animate-slide-in-right font-quicksand">
@@ -365,15 +383,31 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                                 ))}
                             </div>
 
-                            {/* Copy Button */}
-                            <button
-                                onClick={handleCopyContent}
-                                className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-scholar-600 dark:text-gray-500 dark:hover:text-scholar-400 transition-all rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
-                                title="Copy content to clipboard"
-                            >
-                                {justCopied ? <Check size={20} className="text-scholar-600 dark:text-scholar-400" /> : <Copy size={20} />}
-                                <span>{justCopied ? 'Copied' : ''}</span>
-                            </button>
+                            {/* Content Controls: Copy & Regenerate */}
+                            {hasAnyContent && !isAgentRunning && (
+                                <div className="flex items-center gap-1">
+                                    {/* Copy Button */}
+                                    <button
+                                        onClick={handleCopyContent}
+                                        className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-scholar-600 dark:text-gray-500 dark:hover:text-scholar-400 transition-all rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+                                        title="Copy content to clipboard"
+                                    >
+                                        {justCopied ? <Check size={20} className="text-scholar-600 dark:text-scholar-400" /> : <Copy size={20} />}
+                                        <span>{justCopied ? 'Copied' : ''}</span>
+                                    </button>
+
+                                    {/* Regenerate Button (Only for synthesized tabs) */}
+                                    {isAISynthesizedTab && (
+                                        <button
+                                            onClick={handleRegenerateContent}
+                                            className="p-1 px-2 text-gray-400 hover:text-scholar-600 dark:text-gray-500 dark:hover:text-scholar-400 transition-all rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+                                            title="Regenerate this section"
+                                        >
+                                            <RotateCcw size={20} />
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         <div className="min-h-[200px]">
@@ -385,9 +419,9 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                                 <div className="animate-fade-in">
                                     {isAgentRunning ? (
                                         <div className="flex flex-col items-center justify-center min-h-[200px] py-8 text-center bg-gray-50/50 dark:bg-gray-900/20 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800">
-                                            <Loader2 size={24} className="animate-spin text-scholar-600 mb-3" />
-                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-scholar-600">Researching Document...</p>
-                                            <p className="text-[9px] text-gray-400 mt-1">Analysing paper and synthesising findings</p>
+                                            <Loader2 size={24} className="animate-spin text-scholar-600 dark:text-scholar-400 mb-3" />
+                                            <p className="text-[16px] font-black uppercase tracking-[0.2em] text-scholar-600 dark:text-scholar-400">Researching Document...</p>
+                                            <p className="text-[12px] text-gray-600 dark:text-gray-100 mt-1">Analysing paper and synthesising findings</p>
                                         </div>
                                     ) : (
                                         (() => {
