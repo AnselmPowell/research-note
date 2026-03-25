@@ -397,20 +397,34 @@ async function runAgentTask(task, workspace, workflowId) {
 
       if (act.action === 'tool_call' && act.tool) {
         // Pass sessionContextPool to allow tools to "register" content IDs
-        const toolResult = await executeTool(act.tool, act.params || {}, workspace, genAI, sessionContextPool);
+        // AND pass sessionMemory for deduplication checks
+        const toolResult = await executeTool(act.tool, act.params || {}, workspace, genAI, sessionContextPool, sessionMemory);
 
         // Guard against malformed tool result
         const observation = (toolResult && typeof toolResult.observation === 'string')
           ? toolResult.observation
           : `ERROR: Tool "${act.tool}" returned no output.`;
 
+        // Define deduplicating push gate
+        const safePush = (entry) => {
+          if (!entry || !entry.id) {
+            // If entry has no ID (unlikely now), we push it but can't deduplicate
+            sessionMemory.push(entry);
+            return;
+          }
+          const isDuplicate = sessionMemory.some(m => m.id === entry.id);
+          if (!isDuplicate) {
+            sessionMemory.push(entry);
+          }
+        };
+
         // Handle save_to_memory or auto-saves — push to long-term session memory
         if (toolResult?.memoryEntries) {
-          sessionMemory.push(...toolResult.memoryEntries);
-          logger.info(`[ResearchAgent] 💾 Multi-Memory saved: ${toolResult.memoryEntries.length} items`);
+          toolResult.memoryEntries.forEach(safePush);
+          logger.info(`[ResearchAgent] 💾 Multi-Memory saved: ${toolResult.memoryEntries.length} items (after deduplication check)`);
         } else if (toolResult?.memoryEntry) {
-          sessionMemory.push(toolResult.memoryEntry);
-          logger.info(`[ResearchAgent] 💾 Memory saved: [${toolResult.memoryEntry.type}]`);
+          safePush(toolResult.memoryEntry);
+          logger.info(`[ResearchAgent] 💾 Memory saved: [${toolResult.memoryEntry.type}] (after deduplication check)`);
         }
 
         // Build compact param summary for the execution log

@@ -115,8 +115,8 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
 }) => {
     const [isExtracting, setIsExtracting] = useState(false);
     const [activeTab, setActiveTab] = useState('abstract');
-    const [justCopied, setJustCopied] = useState(false);
-    const [justCopiedMeta, setJustCopiedMeta] = useState(false);
+    const [copiedContent, setCopiedContent] = useState(false);
+    const [copiedMeta, setCopiedMeta] = useState(false);
     const { savePaper } = useDatabase();
 
     if (!paper) return null;
@@ -201,8 +201,8 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
         const content = paper[fieldMap[activeTab]] || (activeTab === 'abstract' ? paper.summary : null);
         if (content) {
             navigator.clipboard.writeText(typeof content === 'string' ? content : JSON.stringify(content, null, 2));
-            setJustCopied(true);
-            setTimeout(() => setJustCopied(false), 2000);
+            setCopiedContent(true);
+            setTimeout(() => setCopiedContent(false), 2000);
         }
     };
 
@@ -221,8 +221,8 @@ ${paper.abstract || paper.summary || 'No abstract available'}
 `.trim();
 
         navigator.clipboard.writeText(metaText);
-        setJustCopiedMeta(true);
-        setTimeout(() => setJustCopiedMeta(false), 2000);
+        setCopiedMeta(true);
+        setTimeout(() => setCopiedMeta(false), 2000);
     };
 
     const handleRegenerateContent = () => {
@@ -260,14 +260,14 @@ ${paper.abstract || paper.summary || 'No abstract available'}
 
                 <button
                     onClick={handleCopyMetadata}
-                    className={`flex items-center gap-2 px-3 py-1.5 text-[12px] font-black uppercase tracking-widest transition-all rounded-xl  ${justCopiedMeta
+                    className={`flex items-center gap-2 px-3 py-1.5 text-[12px] font-black uppercase tracking-widest transition-all rounded-xl  ${copiedMeta
                         ? 'bg-scholar-50 border dark:bg-scholar-900/30 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400'
                         : '   text-gray-500 dark:text-gray-400  dark:hover:text-scholar-400'
                         }`}
                     title="Copy all metadata"
                 >
-                    {justCopiedMeta ? <Check size={28} className="text-scholar-600 dark:text-scholar-400" /> : <Copy size={28} />}
-                    <span>{justCopiedMeta ? 'Copied' : 'Copy'}</span>
+                    {copiedMeta ? <Check size={28} className="text-scholar-600 dark:text-scholar-400" /> : <Copy size={28} />}
+                    <span>{copiedMeta ? 'Copied' : 'Copy'}</span>
                 </button>
             </div>
 
@@ -420,7 +420,7 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                                         className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-scholar-600 dark:text-gray-500 dark:hover:text-scholar-400 transition-all rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
                                         title="Copy content to clipboard"
                                     >
-                                        {justCopied ? <Check size={20} className="text-scholar-600 dark:text-scholar-400" /> : <Copy size={20} />}
+                                        {copiedContent ? <Check size={20} className="text-scholar-600 dark:text-scholar-400" /> : <Copy size={20} />}
 
                                     </button>
 

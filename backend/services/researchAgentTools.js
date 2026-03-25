@@ -141,12 +141,12 @@ const TOOL_SCHEMA = [
  * @param {object} sessionContextPool - (NEW) temporary pool to store content by ID
  * @returns {Promise<{ observation: string, memoryType: 'short_term'|'long_term', memoryEntry?: object, memoryEntries?: object[] }>}
  */
-async function executeTool(toolName, params, workspace, genAI, sessionContextPool = {}) {
+async function executeTool(toolName, params, workspace, genAI, sessionContextPool = {}, sessionMemory = []) {
   const { papers, notes } = workspace;
 
   const generateId = (type, pIdx, pageNum) => {
-    const hash = Math.random().toString(36).substring(2, 7).toUpperCase();
-    return `${type}_P${pIdx}_${pageNum ? `Pg${pageNum}_` : ''}${hash}`;
+    // Remove Math.random() to make IDs deterministic for the same content
+    return `${type}_P${pIdx}${pageNum ? `_Pg${pageNum}` : ''}`;
   };
 
   switch (toolName) {
@@ -278,6 +278,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
         observation: `PAPER METADATA FOUND. (This has been AUTO-SAVED to your structured long-term memory under Paper ${paper_index}).\n\n${metadataContent}`,
         memoryType: 'long_term',
         memoryEntry: {
+          id: `Meta_P${paper_index}`, // Explicit deterministic ID
           type: 'metadata',
           paper_index: paper_index,
           content: metadataContent
@@ -449,6 +450,7 @@ ${textToAnalyze}`;
           observation: `GENERATED STRUCTURE MAP:\n${structure}\n(This has been AUTO-SAVED to your long-term memory).`,
           memoryType: 'long_term',
           memoryEntry: {
+            id: `Struct_P${paper_index}`, // Explicit deterministic ID
             type: 'structure',
             paper_index: paper_index,
             content: `Document Structure:\n${structure}`
@@ -523,25 +525,32 @@ ${textToAnalyze}`;
       }
 
       const savedEntries = [];
+      const alreadySaved = [];
       const notFound = [];
 
       for (const id of memory_ids) {
-        if (sessionContextPool[id]) {
+        if (sessionMemory.some(m => m.id === id)) {
+          alreadySaved.push(id);
+        } else if (sessionContextPool[id]) {
           savedEntries.push({ id, ...sessionContextPool[id] });
         } else {
           notFound.push(id);
         }
       }
 
-      if (savedEntries.length === 0) {
-        return { observation: `ERROR: No valid IDs found. Provided: ${memory_ids.join(', ')}`, memoryType: 'short_term' };
+      if (savedEntries.length === 0 && alreadySaved.length === 0) {
+        return { observation: `ERROR: No valid or existing IDs found. Provided: ${memory_ids.join(', ')}`, memoryType: 'short_term' };
       }
 
-      let obs = `SUCCESS: Saved ${savedEntries.length} items to long-term memory.`;
+      let obs = savedEntries.length > 0 
+        ? `SUCCESS: Saved ${savedEntries.length} new items to long-term memory. ` 
+        : `No new items to save. `;
+      
+      if (alreadySaved.length > 0) obs += `\nNote: The following IDs were ALREADY in memory: ${alreadySaved.join(', ')}`;
       if (notFound.length > 0) obs += `\nWarning: IDs not found: ${notFound.join(', ')}`;
 
       return {
-        observation: obs,
+        observation: obs.trim(),
         memoryType: 'long_term',
         memoryEntries: savedEntries
       };
