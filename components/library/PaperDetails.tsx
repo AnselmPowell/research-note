@@ -96,6 +96,7 @@ interface PaperDetailsProps {
     onGenerateMethodology: (paper: any) => void;
     onGenerateFindings: (paper: any) => void;
     onGenerateHarvardReference: (paper: any) => void;
+    onGenerateAbstract: (paper: any) => void;
     isDownloading?: boolean;
     isAgentRunning?: boolean;
 }
@@ -108,6 +109,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
     onGenerateMethodology,
     onGenerateFindings,
     onGenerateHarvardReference,
+    onGenerateAbstract,
     isDownloading,
     isAgentRunning
 }) => {
@@ -204,7 +206,8 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
     };
 
     const handleRegenerateContent = () => {
-        if (activeTab === 'lit review') handleActionWithPrecheck(onGenerateLiteratureReview);
+        if (activeTab === 'abstract') handleActionWithPrecheck(onGenerateAbstract);
+        else if (activeTab === 'lit review') handleActionWithPrecheck(onGenerateLiteratureReview);
         else if (activeTab === 'method') handleActionWithPrecheck(onGenerateMethodology);
         else if (activeTab === 'findings') handleActionWithPrecheck(onGenerateFindings);
     };
@@ -219,7 +222,6 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
         return !!(paper[fieldMap[activeTab]] || (activeTab === 'abstract' && paper.summary));
     }, [paper, activeTab]);
 
-    const isAISynthesizedTab = activeTab !== 'abstract';
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-dark-card border-l border-gray-200 dark:border-gray-800 shadow-xl z-30 animate-slide-in-right font-quicksand">
@@ -396,70 +398,64 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                                         <span>{justCopied ? 'Copied' : ''}</span>
                                     </button>
 
-                                    {/* Regenerate Button (Only for synthesized tabs) */}
-                                    {isAISynthesizedTab && (
-                                        <button
-                                            onClick={handleRegenerateContent}
-                                            className="p-1 px-2 text-gray-400 hover:text-scholar-600 dark:text-gray-500 dark:hover:text-scholar-400 transition-all rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
-                                            title="Regenerate this section"
-                                        >
-                                            <RotateCcw size={20} />
-                                        </button>
-                                    )}
+                                    <button
+                                        onClick={handleRegenerateContent}
+                                        className="p-1 px-2 text-gray-400 hover:text-scholar-600 dark:text-gray-500 dark:hover:text-scholar-400 transition-all rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+                                        title="Regenerate this section"
+                                    >
+                                        <RotateCcw size={20} />
+                                    </button>
                                 </div>
                             )}
                         </div>
 
                         <div className="min-h-[200px]">
-                            {activeTab === 'abstract' ? (
-                                <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 leading-relaxed font-medium animate-fade-in whitespace-pre-wrap">
-                                    {paper.abstract || paper.summary || "No abstract available for this document."}
-                                </p>
-                            ) : (
-                                <div className="animate-fade-in">
-                                    {isAgentRunning ? (
-                                        <div className="flex flex-col items-center justify-center min-h-[200px] py-8 text-center bg-gray-50/50 dark:bg-gray-900/20 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800">
-                                            <Loader2 size={24} className="animate-spin text-scholar-600 dark:text-scholar-400 mb-3" />
-                                            <p className="text-[16px] font-black uppercase tracking-[0.2em] text-scholar-600 dark:text-scholar-400">Researching Document...</p>
-                                            <p className="text-[12px] text-gray-600 dark:text-gray-100 mt-1">Analysing paper and synthesising findings</p>
-                                        </div>
-                                    ) : (
-                                        (() => {
-                                            const fieldMap: Record<string, string> = {
-                                                'lit review': 'literature_review',
-                                                'method': 'methodology',
-                                                'findings': 'findings'
-                                            };
-                                            const content = paper[fieldMap[activeTab]];
+                            <div className="animate-fade-in">
+                                {isAgentRunning ? (
+                                    <div className="flex flex-col items-center justify-center min-h-[200px] py-8 text-center bg-gray-50/50 dark:bg-gray-900/20 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800">
+                                        <Loader2 size={24} className="animate-spin text-scholar-600 dark:text-scholar-400 mb-3" />
+                                        <p className="text-[16px] font-black uppercase tracking-[0.2em] text-scholar-600 dark:text-scholar-400">Researching Document...</p>
+                                        <p className="text-[12px] text-gray-600 dark:text-gray-100 mt-1">Analysing paper and synthesising findings</p>
+                                    </div>
+                                ) : (
+                                    (() => {
+                                        const fieldMap: Record<string, string> = {
+                                            'abstract': 'abstract',
+                                            'lit review': 'literature_review',
+                                            'method': 'methodology',
+                                            'findings': 'findings'
+                                        };
+                                        const content = paper[fieldMap[activeTab]] || (activeTab === 'abstract' ? paper.summary : null);
 
-                                            if (content) {
-                                                return (
-                                                    <AgentResponseFormatter content={typeof content === 'string' ? content : JSON.stringify(content, null, 2)} />
-                                                );
-                                            }
-
+                                        if (content) {
                                             return (
-                                                <div className="flex flex-col items-center justify-center min-h-[200px] border-gray-100 dark:border-gray-800 rounded-2xl py-8 px-4 text-center">
-                                                    <button
-                                                        onClick={() => {
-                                                            if (activeTab === 'lit review') handleActionWithPrecheck(onGenerateLiteratureReview);
-                                                            else if (activeTab === 'method') handleActionWithPrecheck(onGenerateMethodology);
-                                                            else if (activeTab === 'findings') handleActionWithPrecheck(onGenerateFindings);
-                                                        }}
-                                                        className="inline-flex items-center gap-2.5 px-6 py-5 bg-scholar-50/50 dark:bg-scholar-900/20 text-scholar-600 dark:text-scholar-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl border border-scholar-300 dark:border-scholar-800/50 hover:bg-scholar-50 dark:hover:bg-scholar-900/40 transition-all group"
-                                                    >
-                                                        <Sparkles size={14} className="group-hover:animate-pulse" />
-                                                        {activeTab === 'lit review' ? 'GENERATE LITERATURE REVIEW' :
+                                                <AgentResponseFormatter content={typeof content === 'string' ? content : JSON.stringify(content, null, 2)} />
+                                            );
+                                        }
+
+                                        return (
+                                            <div className="flex flex-col items-center justify-center min-h-[200px] border-gray-100 dark:border-gray-800 rounded-2xl py-8 px-4 text-center">
+                                                <button
+                                                    onClick={() => {
+                                                        if (activeTab === 'abstract') handleActionWithPrecheck(onGenerateAbstract);
+                                                        else if (activeTab === 'lit review') handleActionWithPrecheck(onGenerateLiteratureReview);
+                                                        else if (activeTab === 'method') handleActionWithPrecheck(onGenerateMethodology);
+                                                        else if (activeTab === 'findings') handleActionWithPrecheck(onGenerateFindings);
+                                                    }}
+                                                    className="inline-flex items-center gap-2.5 px-6 py-5 bg-scholar-50/50 dark:bg-scholar-900/20 text-scholar-600 dark:text-scholar-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl border border-scholar-300 dark:border-scholar-800/50 hover:bg-scholar-50 dark:hover:bg-scholar-900/40 transition-all group"
+                                                >
+                                                    <Sparkles size={14} className="group-hover:animate-pulse" />
+                                                    {activeTab === 'abstract' ? 'GENERATE ABSTRACT' :
+                                                        activeTab === 'lit review' ? 'GENERATE LITERATURE REVIEW' :
                                                             activeTab === 'method' ? 'GENERATE METHODOLOGY' :
                                                                 activeTab === 'findings' ? 'GENERATE FINDINGS/RESULTS' :
                                                                     `GENERATE ${activeTab.toUpperCase()}`}
-                                                    </button>
-                                                </div>
-                                            );
-                                        })()
-                                    )}
-                                </div>
-                            )}
+                                                </button>
+                                            </div>
+                                        );
+                                    })()
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>

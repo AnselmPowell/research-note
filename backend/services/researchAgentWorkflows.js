@@ -24,27 +24,23 @@ const WORKFLOWS = {
   // SUMMARISE PAPER
   // ───────────────────────────────────────────────────────────────────────
   summarise_paper: `
-You have been asked to write a clear, academic summary of a targeted research paper.
-Here is a suggested approach you can adapt depending on the paper's structure:
+You have been asked to write a clear, academic summary or extract the official abstract of a research paper.
+Follow this priority-based logic carefully:
 
-SUGGESTED STEP 1 — Get paper metadata
-  Action: Call get_paper_metadata for the target paper you are summarising.
-  Purpose: Learn the title, author, total page count, and abstract.
-  Note: This tool auto-saves results to your long-term memory.
+PRIORITY 1 — Find and Copy the Existing Abstract
+  Action: Use get_and_read_multiple_pages (start_page=1, end_page=5).
+  Logic: Look for the section explicitly titled "Abstract" or "Summary". 
+  If found, COPY IT WORD FOR WORD. Do not summarize or change the tone.
 
-SUGGESTED STEP 2 — Read the introduction
-  Action: Use get_and_read_multiple_pages to read the first few pages (e.g. start_page=1, end_page=3).
-  Purpose: Uncover the research problem and the paper's aim.
-  Tip: Use save_to_session_memory with the [MEMORY_ID] of the intro pages to keep them.
+PRIORITY 2 — Keyword Search
+  Action: If not found in the first 5 pages, use search_multiple_keyword with keywords=["Abstract", "Summary", "Executive Summary", "Synopsis"].
+  Action: Read the identified pages using get_and_read_page_content and copy the content word for word.
 
-SUGGESTED STEP 3 — Locate and read findings/conclusions
-  Action: Use search_multiple_keyword for keywords=["conclusion", "discussion", "findings"]. 
-  If you are struggling to find sections, use the get_paper_structure_map tool.
-  Once located, use get_and_read_multiple_pages for those specific pages.
-  Tip: Save relevant IDs using save_to_session_memory.
+PRIORITY 3 — Structural Synthesis (Last Resort)
+  Action: If no explicit abstract exists, use get_paper_structure_map to locate "Introduction", "Results", and "Conclusion" / "Discussion".
+  Action: Read these sections and synthesize a high-quality academic abstract (max 300 words) that describes the Aim, Method, Results, and Conclusions.
 
-SUGGESTED STEP 4 — Compile and Complete
-  Call task_complete with a structured response that includes research aim, key contributions, and main findings.`,
+Call task_complete with the extracted or synthesized abstract text.`,
 
 
   // ───────────────────────────────────────────────────────────────────────
