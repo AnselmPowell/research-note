@@ -29,7 +29,7 @@ const DesktopButton = ({ col, icon: Icon, label, tooltipIcon, isActive, onToggle
     <button
       onClick={() => onToggle(col)}
       className={`group relative p-2 md:p-2.5 rounded-lg transition-all duration-200 ${isActive
-        ? 'bg-scholar-50 dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400 '
+        ? 'bg-scholar-100 dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400 '
         : 'text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
         }`}
     >

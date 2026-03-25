@@ -45,7 +45,7 @@ const NavItem: React.FC<{
   <div
     className={`
       flex items-center py-3 px-4 cursor-pointer transition-all duration-200 text-base rounded-xl mx-2 group
-      ${isActive ? 'bg-gray-100/60 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/40'}
+      ${isActive ? 'bg-scholar-100 dark:bg-gray-700' : 'hover:bg-gray-50 dark:hover:bg-gray-800/40'}
     `}
     onClick={onClick}
   >

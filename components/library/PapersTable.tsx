@@ -10,7 +10,8 @@ import {
     Bookmark,
     Trash2,
     ArrowUpDown,
-    FileText
+    FileText,
+    StickyNote
 } from 'lucide-react';
 import { DeepResearchResult, DeepResearchNote } from '../../types';
 import { useState } from 'react';
@@ -113,9 +114,9 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                         const isSelected = selectedUris.includes(paper.uri);
                         const isExpanded = expandedUris.has(paper.uri);
                         const notesCount = getNotesCount(paper.uri);
-                        const year = paper.year ? paper.year : 
-                          (paper.publishedDate ? new Date(paper.publishedDate).getFullYear() : 
-                          (paper.created_at ? new Date(paper.created_at).getFullYear() : '—'));
+                        const year = paper.year ? paper.year :
+                            (paper.publishedDate ? new Date(paper.publishedDate).getFullYear() :
+                                (paper.created_at ? new Date(paper.created_at).getFullYear() : '—'));
                         const authors = Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || 'Unknown');
 
                         return (
@@ -135,7 +136,7 @@ export const PapersTable: React.FC<PapersTableProps> = ({
 
                                     <td className="py-5 px-4">
                                         <div className="flex flex-col gap-1">
-                                            <span 
+                                            <span
                                                 onClick={(e) => { e.stopPropagation(); onTitleClick(paper); }}
                                                 className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug hover:text-scholar-600 transition-colors cursor-pointer"
                                             >
@@ -176,6 +177,13 @@ export const PapersTable: React.FC<PapersTableProps> = ({
 
                                     <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex items-center justify-end gap-1">
+                                            <button
+                                                onClick={() => onTitleClick(paper)}
+                                                className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all"
+                                                title="View Paper Details"
+                                            >
+                                                <FileText size={16} />
+                                            </button>
                                             <button
                                                 onClick={() => onView(paper)}
                                                 className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all"

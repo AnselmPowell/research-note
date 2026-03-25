@@ -25,7 +25,8 @@ import {
   FileJson,
   Loader2,
   Sparkles,
-  Plus
+  Plus,
+  StickyNote
 } from 'lucide-react';
 import { PaperSearch } from '../research/PaperSearch';
 import { useDatabase } from '../../database/DatabaseContext';
@@ -1163,7 +1164,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
       {/* Detail Sidebar - Now as a sibling for interactivity */}
       {liveSelectedPaper && (
-        <div className="absolute right-0 top-0 w-[580px] h-full hidden xl:block shadow-2xl ring-1 ring-black/5 z-20">
+        <div className="absolute right-0 top-0 w-[580px] h-full hidden xl:block shadow-2xl ring-1 ring-black/5 z-[997]">
           <PaperDetails
             paper={liveSelectedPaper}
             onClose={() => setSelectedPaperForDetails(null)}
@@ -1171,6 +1172,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
               loadPdfFromUrl(p.uri, p.title);
               setActivePdf(p.uri);
               setColumnVisibility(prev => ({ ...prev, right: true }));
+              setSelectedPaperForDetails(null);
             }}
             onGenerateLiteratureReview={(p) => handleRunAgentWorkflow(p, 'literature_review')}
             onGenerateMethodology={(p) => handleRunAgentWorkflow(p, 'get_methodology')}
@@ -1183,31 +1185,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
         </div>
       )}
 
-      {/* Overlay for smaller screens */}
-      {liveSelectedPaper && (
-        <div className="xl:hidden absolute inset-0 z-[100] flex justify-end">
-          <div className="absolute inset-0 bg-black/10 transition-opacity" onClick={() => setSelectedPaperForDetails(null)} />
-          <div className="relative w-full max-w-md h-full">
-            <PaperDetails
-              paper={liveSelectedPaper}
-              onClose={() => setSelectedPaperForDetails(null)}
-              onView={(p) => {
-                loadPdfFromUrl(p.uri, p.title);
-                setActivePdf(p.uri);
-                setColumnVisibility(prev => ({ ...prev, right: true }));
-                setSelectedPaperForDetails(null);
-              }}
-              onGenerateLiteratureReview={(p) => handleRunAgentWorkflow(p, 'literature_review')}
-              onGenerateMethodology={(p) => handleRunAgentWorkflow(p, 'get_methodology')}
-              onGenerateFindings={(p) => handleRunAgentWorkflow(p, 'get_findings')}
-              onGenerateHarvardReference={(p) => handleRunAgentWorkflow(p, 'format_reference')}
-              onGenerateAbstract={(p) => handleRunAgentWorkflow(p, 'summarise_paper')}
-              isDownloading={downloadingUris.has(liveSelectedPaper.uri)}
-              isAgentRunning={agentProcessingUris.has(liveSelectedPaper.uri)}
-            />
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };
@@ -1289,6 +1267,13 @@ function LibraryPaperCard({
                 <span className="hidden sm:inline truncate opacity-40 text-[10px]">{domain}</span>
 
                 <div className="flex items-center gap-2 ml-4 opacity-100 sm:opacity-0 sm:group-hover/paper:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onTitleClick(paper); }}
+                    className="flex items-center gap-1 text-xs font-bold text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30 px-2 py-1 rounded-md transition-colors border border-scholar-100 dark:border-scholar-800"
+                    title="Paper details"
+                  >
+                    <StickyNote size={12} /> Paper
+                  </button>
                   <button onClick={handleOpenPdf} className="flex items-center gap-1 text-xs font-bold text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30 px-2 py-1 rounded-md transition-colors border border-scholar-100 dark:border-scholar-800">
                     <BookText size={12} /> View
                   </button>

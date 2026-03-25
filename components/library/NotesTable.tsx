@@ -15,7 +15,8 @@ import {
     Copy,
     FileText,
     FileJson,
-    MoreHorizontal
+    MoreHorizontal,
+    TextSearch
 } from 'lucide-react';
 import { DeepResearchNote, DeepResearchResult } from '../../types';
 
@@ -23,7 +24,7 @@ interface NotesTableProps {
     notes: DeepResearchNote[];
     papers: DeepResearchResult[];
     selectedIds: number[];
-    expandedId: number | null; 
+    expandedId: number | null;
     expandedIds: Set<number>;
     sortColumn: string;
     sortDirection: 'asc' | 'desc';
@@ -43,7 +44,7 @@ interface NotesTableProps {
 const formatFullNote = (note: DeepResearchNote, paper: DeepResearchResult | undefined) => {
     const authors = paper?.authors ? (Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors) : '';
     const citationLines = note.citations?.map((c: any) => `${c.inline} ${c.full}`).join('\n') || '';
-  
+
     return `
   Title: ${paper?.title || 'Untitled Paper'}
   ${authors ? `Authors: ${authors}` : ''}
@@ -75,7 +76,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
     editingId,
     onViewPdf
 }) => {
-    
+
     // Local state for editing content
     const [editContent, setEditContent] = useState('');
     const [actionMenuOpen, setActionMenuOpen] = useState<number | null>(null);
@@ -91,9 +92,9 @@ export const NotesTable: React.FC<NotesTableProps> = ({
     // Close menu when clicking outside
     React.useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-             if (actionMenuOpen !== null && !(event.target as Element).closest('.action-menu-trigger')) {
-                 setActionMenuOpen(null);
-             }
+            if (actionMenuOpen !== null && !(event.target as Element).closest('.action-menu-trigger')) {
+                setActionMenuOpen(null);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -187,7 +188,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                         return (
                             <React.Fragment key={note.id}>
                                 <tr
-                                    className={`group transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer ${isExpanded ? 'bg-gray-50 dark:bg-gray-800/30' : ''}`}
+                                    className={`group transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer ${isExpanded ? 'bg-gray-50 dark:bg-gray-800/30 overflow-visible' : ''}`}
                                     onClick={() => onExpand(note.id!)}
                                 >
                                     <td className="py-5 pl-4 vertical-top" onClick={(e) => e.stopPropagation()}>
@@ -203,28 +204,28 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                         <div className="flex flex-col gap-1">
                                             {editingId === note.id ? (
                                                 <div className="space-y-2">
-                                                   <textarea
-                                                     className="w-full p-3 bg-scholar-50 dark:bg-gray-900 border border-scholar-200 dark:border-gray-700 rounded-lg outline-none text-sm font-sans italic text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-scholar-500/20 transition-all resize-y"
-                                                     value={editContent}
-                                                     onChange={(e) => setEditContent(e.target.value)}
-                                                     rows={3}
-                                                     autoFocus
-                                                     onClick={(e) => e.stopPropagation()}
-                                                   />
-                                                   <div className="flex items-center gap-2">
-                                                     <button
-                                                       onClick={(e) => { e.stopPropagation(); handleSave(note.id!); }}
-                                                       className="px-3 py-1 bg-scholar-600 hover:bg-scholar-700 text-white text-xs font-bold rounded-md transition-colors shadow-sm"
-                                                     >
-                                                       Save
-                                                     </button>
-                                                     <button
-                                                       onClick={(e) => { e.stopPropagation(); onCancelEdit(); }}
-                                                       className="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-md transition-colors"
-                                                     >
-                                                       Cancel
-                                                     </button>
-                                                   </div>
+                                                    <textarea
+                                                        className="w-full p-3 bg-scholar-50 dark:bg-gray-900 border border-scholar-200 dark:border-gray-700 rounded-lg outline-none text-sm font-sans italic text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-scholar-500/20 transition-all resize-y"
+                                                        value={editContent}
+                                                        onChange={(e) => setEditContent(e.target.value)}
+                                                        rows={3}
+                                                        autoFocus
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleSave(note.id!); }}
+                                                            className="px-3 py-1 bg-scholar-600 hover:bg-scholar-700 text-white text-xs font-bold rounded-md transition-colors shadow-sm"
+                                                        >
+                                                            Save
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); onCancelEdit(); }}
+                                                            className="px-3 py-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-md transition-colors"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ) : (
                                                 <>
@@ -243,18 +244,18 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                     </td>
 
                                     <td className="hidden lg:table-cell py-5 px-4 vertical-top">
-                                         <Tooltip text={Array.isArray(paper?.authors) ? paper?.authors.join(', ') : paper?.authors || ''}>
+                                        <Tooltip text={Array.isArray(paper?.authors) ? paper?.authors.join(', ') : paper?.authors || ''}>
                                             <span className="text-xs text-gray-600 dark:text-gray-400 font-medium line-clamp-1 cursor-help">
                                                 {Array.isArray(paper?.authors) ? (paper?.authors[0] + (paper!.authors.length > 1 ? ' et al.' : '')) : (paper?.authors || 'Unknown')}
                                             </span>
                                         </Tooltip>
                                     </td>
-                                    
+
                                     <td className="hidden lg:table-cell py-5 px-4 vertical-top">
                                         <span className="text-xs text-gray-500 font-mono">
-                                            {paper?.year ? paper.year : 
-                                              (paper?.publishedDate ? new Date(paper.publishedDate).getFullYear() : 
-                                              (paper?.created_at ? new Date(paper.created_at).getFullYear() : '—'))}
+                                            {paper?.year ? paper.year :
+                                                (paper?.publishedDate ? new Date(paper.publishedDate).getFullYear() :
+                                                    (paper?.created_at ? new Date(paper.created_at).getFullYear() : '—'))}
                                         </span>
                                     </td>
 
@@ -307,7 +308,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                 className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all"
                                                 title="View in PDF"
                                             >
-                                                <BookOpen size={16} />
+                                                <TextSearch size={17} />
                                             </button>
                                             <button
                                                 onClick={() => onEdit(note.id!)}
@@ -316,7 +317,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                             >
                                                 <Edit3 size={16} />
                                             </button>
-                                            
+
                                             <div className="relative">
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); setActionMenuOpen(actionMenuOpen === note.id ? null : note.id!); }}
@@ -325,9 +326,9 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                 >
                                                     <Copy size={16} />
                                                 </button>
-                                                
+
                                                 {actionMenuOpen === note.id && (
-                                                    <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-50 animate-fade-in overflow-hidden">
+                                                    <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-[997] animate-fade-in  overflow-visible">
                                                         <button
                                                             onClick={(e) => handleCopy(e, note, false)}
                                                             className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"

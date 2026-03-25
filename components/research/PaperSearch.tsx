@@ -488,8 +488,8 @@ const ResearchCardNote: React.FC<{
           <button onClick={handleContextToggle} className={`p-1.5 rounded-md ${isInContext ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30' : 'text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title="Add to Context">
             <BookmarkPlus size={16} />
           </button>
-          <button onClick={handleViewPdf} className="p-1.5 rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-scholar-600 dark:hover:text-scholar-400" title="View in PDF Viewer">
-            <BookText size={16} />
+          <button onClick={handleViewPdf} className="p-1.5 rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-scholar-600 dark:hover:text-scholar-400" title="View text in PDF">
+            <TextSearch size={16} />
           </button>
           <button onClick={handleCopy} className="p-1.5 rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" title="Copy text">
             {justCopied ? <Check size={16} /> : <Copy size={16} />}
@@ -1397,7 +1397,7 @@ export const PaperSearch: React.FC = () => {
                 Remove from Results?
               </h3>
               <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                Remove <span className="font-medium text-gray-700 dark:text-gray-200">"{deletePaperModal.paperTitle}"</span> from current results? 
+                Remove <span className="font-medium text-gray-700 dark:text-gray-200">"{deletePaperModal.paperTitle}"</span> from current results?
                 Unsaved notes for this paper will be lost.
               </p>
             </div>

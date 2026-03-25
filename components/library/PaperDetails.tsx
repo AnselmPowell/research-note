@@ -116,6 +116,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
     const [isExtracting, setIsExtracting] = useState(false);
     const [activeTab, setActiveTab] = useState('abstract');
     const [justCopied, setJustCopied] = useState(false);
+    const [justCopiedMeta, setJustCopiedMeta] = useState(false);
     const { savePaper } = useDatabase();
 
     if (!paper) return null;
@@ -205,6 +206,25 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
         }
     };
 
+    const handleCopyMetadata = () => {
+        const authorDisplay = Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || 'Unknown');
+        const metaText = `
+Title: ${paper.title || 'Unknown'}
+Authors: ${authorDisplay}
+Harvard Reference: ${paper.harvardReference || 'N/A'}
+Year: ${paper.year || 'N/A'}
+Publisher: ${paper.publisher || 'N/A'}
+Pages: ${paper.num_pages || paper.numPages || (Array.isArray(paper.pages) ? paper.pages.length : paper.pages) || 'Available in PDF'}
+---
+Abstract:
+${paper.abstract || paper.summary || 'No abstract available'}
+`.trim();
+
+        navigator.clipboard.writeText(metaText);
+        setJustCopiedMeta(true);
+        setTimeout(() => setJustCopiedMeta(false), 2000);
+    };
+
     const handleRegenerateContent = () => {
         if (activeTab === 'abstract') handleActionWithPrecheck(onGenerateAbstract);
         else if (activeTab === 'lit review') handleActionWithPrecheck(onGenerateLiteratureReview);
@@ -226,17 +246,29 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
     return (
         <div className="flex flex-col h-full bg-white dark:bg-dark-card border-l border-gray-200 dark:border-gray-800 shadow-xl z-30 animate-slide-in-right font-quicksand">
             {/* Header */}
-            <div className="flex items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/40">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/40">
                 <div className="flex items-center gap-2">
                     <button
                         onClick={onClose}
                         className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-red-900/20 rounded-lg transition-all"
                         title="Close details"
                     >
-                        <X size={18} />
+                        <X size={24} />
                     </button>
+                    <h4 className="text-sm font-black text-gray-400 dark:text-scholar-400 uppercase tracking-[0.2em] ml-2">Paper Details</h4>
                 </div>
-                <h4 className="text-xs ml-8 font-black text-gray-500 dark:text-scholar-400 uppercase tracking-[0.2em]">Paper Details</h4>
+
+                <button
+                    onClick={handleCopyMetadata}
+                    className={`flex items-center gap-2 px-3 py-1.5 text-[12px] font-black uppercase tracking-widest transition-all rounded-xl  ${justCopiedMeta
+                        ? 'bg-scholar-50 border dark:bg-scholar-900/30 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400'
+                        : '   text-gray-500 dark:text-gray-400  dark:hover:text-scholar-400'
+                        }`}
+                    title="Copy all metadata"
+                >
+                    {justCopiedMeta ? <Check size={28} className="text-scholar-600 dark:text-scholar-400" /> : <Copy size={28} />}
+                    <span>{justCopiedMeta ? 'Copied' : 'Copy'}</span>
+                </button>
             </div>
 
             {/* Content Container */}
@@ -273,7 +305,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                                 {/* Source URI */}
                                 {!isLocal && paper.uri && (
                                     <div>
-                                        <span className="text-[9px] font-semibold  text-gray-700 uppercase tracking-wider ">Source</span>
+                                        <span className="text-[9px] font-semibold  text-gray-700 dark:text-gray-400 uppercase tracking-wider ">Source</span>
                                         <a
                                             href={paper.uri}
                                             target="_blank"
@@ -310,13 +342,13 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                                 <div className="grid grid-cols-2">
                                     {paper.year && (
                                         <div>
-                                            <span className="text-[9px]  font-semibold  text-gray-700 uppercase tracking-wider block"> Year</span>
+                                            <span className="text-[9px]  font-semibold dark:text-gray-400  text-gray-700 uppercase tracking-wider block"> Year</span>
                                             <div className="text-gray-600 dark:text-gray-400 font-medium">{paper.year}</div>
                                         </div>
                                     )}
                                     {paper.publisher && (
                                         <div>
-                                            <span className="text-[9px]  font-semibold text-gray-700 uppercase tracking-wider block">Publisher</span>
+                                            <span className="text-[9px]  font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider block">Publisher</span>
                                             <div className="text-gray-600 dark:text-gray-400 font-medium truncate">{paper.publisher}</div>
                                         </div>
                                     )}
@@ -326,7 +358,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                             {/* Categories */}
                             {paper.categories && paper.categories.length > 0 && (
                                 <div>
-                                    <span className="text-[9px]  font-semibold text-gray-700 uppercase tracking-wider block">Categories</span>
+                                    <span className="text-[9px]  font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider block">Categories</span>
                                     <div className="flex flex-wrap gap-1.5 mt-1">
                                         {(Array.isArray(paper.categories) ? paper.categories : [paper.categories]).map((cat: string, i: number) => (
                                             <span key={i} className="text-[10px] px-2 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-full">
@@ -337,7 +369,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                                 </div>
                             )}
                             <div>
-                                <span className="text-[9px] font-semibold text-gray-700 uppercase tracking-wider block">Pages</span>
+                                <span className="text-[9px] font-semibold text-gray-700 dark:text-gray-400 uppercase tracking-wider block">Pages</span>
                                 <div className="text-gray-600 dark:text-gray-400 font-medium">
                                     {paper.num_pages || paper.numPages || (Array.isArray(paper.pages) ? paper.pages.length : paper.pages) || 'Available in PDF'}
                                 </div>
@@ -346,22 +378,16 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                     </div>
 
                     {/* Action Buttons - Brand Consistent */}
-                    <div className="grid grid-cols-2 gap-4 py-4 ">
+                    <div className="grid grid-cols-2 gap-3 py-4 ">
                         <button
                             onClick={() => handleActionWithPrecheck(onGenerateLiteratureReview)}
-                            className="flex items-center justify-center px-3 py-2.5 bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all rounded-xl"
+                            className="flex items-center justify-center px-3 py-4 bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-[12px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all rounded-xl"
                         >
                             <span className="text-center">GENERATE LITERATURE REVIEW</span>
                         </button>
                         <button
-                            onClick={() => handleActionWithPrecheck(onGenerateHarvardReference)}
-                            className="flex items-center justify-center px-3 py-2.5 bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-[10px] font-black uppercase tracking-widest text-scholar-600 dark:text-scholar-400 hover:bg-scholar-50 transition-all rounded-xl"
-                        >
-                            <span className="text-center">EXTRACT HARVARD REFERENCE</span>
-                        </button>
-                        <button
                             onClick={() => onView(paper)}
-                            className="col-span-2 flex items-center justify-center px-3 py-2.5 bg-scholar-600 hover:bg-scholar-500 text-white text-[11px] font-black uppercase tracking-widest rounded-xl transition-all gap-2 shadow-scholar-sm"
+                            className="flex items-center justify-center px-3 py-4 bg-scholar-600 hover:bg-scholar-500 text-white text-[12px] font-black uppercase tracking-widest rounded-xl transition-all gap-2 shadow-scholar-sm"
                         >
                             {isDownloading ? <Loader2 size={16} className="animate-spin" /> : 'VIEW PDF'}
                         </button>
@@ -395,7 +421,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
                                         title="Copy content to clipboard"
                                     >
                                         {justCopied ? <Check size={20} className="text-scholar-600 dark:text-scholar-400" /> : <Copy size={20} />}
-                                        <span>{justCopied ? 'Copied' : ''}</span>
+
                                     </button>
 
                                     <button
