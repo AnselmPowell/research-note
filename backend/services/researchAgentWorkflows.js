@@ -130,22 +130,22 @@ SUGGESTED STEP 4 — Compile and Complete
   // LITERATURE REVIEW
   // ───────────────────────────────────────────────────────────────────────
   literature_review: `
-You have been asked to write a thematic academic literature review synthesising papers.
-A literature review SYNTHESISES and groups by themes — it should not just summarise author-by-author.
+You have been asked to write a thematic academic literature review synthesising the research in the workspace.
+Whether there is one paper or multiple, your goal is to identify core themes, debates, and contributions.
 
-SUGGESTED STEP 1 — List papers
-  Action: Call list_workspace(). Note indices for papers and URI for student notes.
+SUGGESTED STEP 1 — Understand the scope
+  Action: Call list_workspace(). Note the paper indices and student notes available.
 
 SUGGESTED STEP 2 — Populate your structured memory
-  Action: Loop through papers. Call get_paper_metadata and get_paper_structure_map for each.
-  If student notes exist, call get_notes_for_paper(paper_uri) and pin the useful Note IDs using save_to_session_memory.
-  Read abstracts and conclusions for all papers, and pin their IDs to your long-term memory.
+  Action: For every paper available, call get_paper_metadata and get_paper_structure_map (these auto-save).
+  If student notes exist for a paper, call get_notes_for_paper(paper_uri) and pin useful Note IDs using save_to_session_memory.
+  Read abstracts and conclusions/discussions for all content and pin relevant segments to long-term memory.
 
-SUGGESTED STEP 3 — Identify cross-cutting themes
-  Scrutinise your LONG-TERM STRUCTURED MEMORY. Group authors by shared themes, debates, or methodologies.
+SUGGESTED STEP 3 — Identify key themes
+  Scrutinise your LONG-TERM STRUCTURED MEMORY. If multiple papers, group by shared themes. If one paper, identify the distinct thematic contributions.
 
 SUGGESTED STEP 4 — Synthesise and Complete
-  Write in formal academic third-person. Call task_complete with sections covering Introduction, Thematic Debates, Gaps, and Conclusion.`,
+  Write in formal academic third-person. Call task_complete with sections covering Introduction, Thematic Analysis/Debates, Gaps/Limitations, and Conclusion.`,
 
 };
 

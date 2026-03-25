@@ -305,7 +305,7 @@ const App: React.FC = () => {
 
       {/* Layout Controls - Always visible, positioned at top-right */}
       {isHeaderVisible === false && (
-        <div className="absolute top-2 right-2 z-[100] flex items-center">
+        <div className="absolute top-3 right-3 z-[100] flex items-center">
           <LayoutControls />
         </div>
       )}

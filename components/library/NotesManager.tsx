@@ -1163,7 +1163,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
       {/* Detail Sidebar - Now as a sibling for interactivity */}
       {liveSelectedPaper && (
-        <div className="w-[480px] h-full hidden xl:block shadow-2xl ring-1 ring-black/5 z-20">
+        <div className="absolute right-0 top-0 w-[580px] h-full hidden xl:block shadow-2xl ring-1 ring-black/5 z-20">
           <PaperDetails
             paper={liveSelectedPaper}
             onClose={() => setSelectedPaperForDetails(null)}
