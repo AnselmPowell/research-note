@@ -1,8 +1,92 @@
 
 import React, { useState, useMemo } from 'react';
-import { Edit2, FileText, File, BookText, Loader2, X, Sparkles, Check } from 'lucide-react';
+import { Edit2, FileText, File, BookText, Loader2, X, Sparkles, Check, Copy } from 'lucide-react';
 import { fetchPdfBuffer, extractPdfData } from '../../services/pdfService';
 import { useDatabase } from '../../database/DatabaseContext';
+
+/**
+ * Lightweight markdown-style formatter for Agent responses
+ * Renders headers, lists, and bold text with Scholar-themed styling
+ */
+const AgentResponseFormatter: React.FC<{ content: string }> = ({ content }) => {
+    if (!content || typeof content !== 'string') return null;
+
+    // Helper to render bold text within any block
+    const renderContent = (text: string) => {
+        const parts = text.split(/(\*\*.*?\*\*)/g);
+        return parts.map((part, i) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return (
+                    <strong key={i} className="font-bold text-scholar-800 dark:text-scholar-200">
+                        {part.slice(2, -2)}
+                    </strong>
+                );
+            }
+            return part;
+        });
+    };
+
+    return (
+        <div className="space-y-1.5 py-2 animate-fade-in font-quicksand">
+            {content.split('\n').map((line, idx) => {
+                const trimmedLine = line.trim();
+
+                // Empty line
+                if (!trimmedLine) return <div key={idx} className="h-1" />;
+
+                // Separator (e.g., ####### or ##################)
+                if (trimmedLine.startsWith('###') && trimmedLine.length > 10) {
+                    return <div key={idx} className="h-px w-full bg-gradient-to-r from-transparent via-gray-200 dark:via-gray-800 to-transparent my-6" />;
+                }
+
+                // Level 2 Header (## Section)
+                if (line.startsWith('## ')) {
+                    return (
+                        <h2 key={idx} className="text-sm font-black uppercase tracking-[0.25em] text-scholar-600 dark:text-white mt-6 mb-2 pb-1 border-b-2 border-scholar-100 dark:border-scholar-900/50">
+                            {renderContent(line.replace('## ', ''))}
+                        </h2>
+                    );
+                }
+
+                // Main Header (### Section)
+                if (line.startsWith('### ')) {
+                    return (
+                        <h3 key={idx} className="text-xs font-black uppercase tracking-[0.15em] text-gray-800 dark:text-scholar-400 mt-4 mb-2 border-b pb-1 border-gray-100 dark:border-gray-800">
+                            {renderContent(line.replace('### ', ''))}
+                        </h3>
+                    );
+                }
+
+                // Sub Header (#### Subsection)
+                if (line.startsWith('#### ')) {
+                    return (
+                        <h4 key={idx} className="text-[11px] font-bold text-scholar-600 dark:text-scholar-300 uppercase tracking-widest mt-3 mb-1 italic">
+                            {renderContent(line.replace('#### ', ''))}
+                        </h4>
+                    );
+                }
+
+                // Bullet List Items (Processes bold text internally)
+                if (trimmedLine.startsWith('* ') || trimmedLine.startsWith('- ')) {
+                    const textContent = trimmedLine.substring(2);
+                    return (
+                        <div key={idx} className="flex gap-3 text-sm text-gray-700 dark:text-gray-300 pl-4 py-0.5 leading-relaxed">
+                            <span className="text-scholar-600 dark:text-scholar-500 font-bold select-none">•</span>
+                            <span className="flex-1">{renderContent(textContent)}</span>
+                        </div>
+                    );
+                }
+
+                // Regular Paragraph
+                return (
+                    <p key={idx} className="text-sm leading-relaxed text-gray-700 dark:text-gray-300 mb-0.5 font-medium">
+                        {renderContent(line)}
+                    </p>
+                );
+            })}
+        </div>
+    );
+};
 
 interface PaperDetailsProps {
     paper: any; // Using any for now to avoid type issues, will refine if possible
@@ -29,6 +113,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
 }) => {
     const [isExtracting, setIsExtracting] = useState(false);
     const [activeTab, setActiveTab] = useState('abstract');
+    const [justCopied, setJustCopied] = useState(false);
     const { savePaper } = useDatabase();
 
     if (!paper) return null;
@@ -102,6 +187,21 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
 
         return hasAbstract && hasRef && hasYear && hasPages && hasRealAuthors;
     }, [paper, authors]);
+
+    const handleCopyContent = () => {
+        const fieldMap: Record<string, string> = {
+            'abstract': 'abstract',
+            'lit review': 'literature_review',
+            'method': 'methodology',
+            'findings': 'findings'
+        };
+        const content = paper[fieldMap[activeTab]] || paper.summary;
+        if (content) {
+            navigator.clipboard.writeText(typeof content === 'string' ? content : JSON.stringify(content, null, 2));
+            setJustCopied(true);
+            setTimeout(() => setJustCopied(false), 2000);
+        }
+    };
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-dark-card border-l border-gray-200 dark:border-gray-800 shadow-xl z-30 animate-slide-in-right font-quicksand">
@@ -249,19 +349,31 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
 
                     {/* Tabs Section - Replacing Abstract Section */}
                     <div className="space-y-4 border-t pt-4 border-gray-400 dark:border-gray-500">
-                        <div className="flex flex-wrap gap-x-6 gap-y-2">
-                            {['abstract', 'lit review', 'method', 'findings'].map((tab) => (
-                                <button
-                                    key={tab}
-                                    onClick={() => setActiveTab(tab)}
-                                    className={`uppercase tracking-[0.2em] font-black transition-all ${activeTab === tab
-                                        ? 'text-md font-black uppercase tracking-[0.25em] text-gray-600 dark:text-gray-300 underline underline-offset-4'
-                                        : 'text-[10px] text-gray-500 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-600'
-                                        }`}
-                                >
-                                    {tab}
-                                </button>
-                            ))}
+                        <div className="flex items-center justify-between gap-x-6 gap-y-2">
+                            <div className="flex flex-wrap gap-x-6 gap-y-2">
+                                {['abstract', 'lit review', 'method', 'findings'].map((tab) => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        className={`uppercase tracking-[0.2em] font-black transition-all ${activeTab === tab
+                                            ? 'text-md font-black uppercase tracking-[0.25em] text-gray-600 dark:text-gray-300 underline underline-offset-4'
+                                            : 'text-[10px] text-gray-500 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-600'
+                                            }`}
+                                    >
+                                        {tab}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Copy Button */}
+                            <button
+                                onClick={handleCopyContent}
+                                className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-scholar-600 dark:text-gray-500 dark:hover:text-scholar-400 transition-all rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+                                title="Copy content to clipboard"
+                            >
+                                {justCopied ? <Check size={20} className="text-scholar-600 dark:text-scholar-400" /> : <Copy size={20} />}
+                                <span>{justCopied ? 'Copied' : ''}</span>
+                            </button>
                         </div>
 
                         <div className="min-h-[200px]">
@@ -288,9 +400,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
 
                                             if (content) {
                                                 return (
-                                                    <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap py-2">
-                                                        {typeof content === 'string' ? content : JSON.stringify(content, null, 2)}
-                                                    </div>
+                                                    <AgentResponseFormatter content={typeof content === 'string' ? content : JSON.stringify(content, null, 2)} />
                                                 );
                                             }
 
