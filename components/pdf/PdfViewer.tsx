@@ -351,7 +351,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
     const [toastMessage, setToastMessage] = useState('');
     const toastTimer = useRef<number | null>(null);
     const textDivsRef = useRef<HTMLElement[]>([]);
-    const [isUiVisible, setIsUiVisible] = useState(true);
+    // UI is always visible (tab bar and control bar are no longer hidden)
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     const [pageInput, setPageInput] = useState(currentPage.toString());
 
@@ -427,17 +427,14 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
         const scrollEl = scrollContainerRef.current;
         if (!scrollEl) return;
 
+        // Notify parent about scroll activity (used to close menus, etc.)
         const handleScroll = () => {
-            // Keep UI visible when user is interacting with controls OR when search is expanded
-            if (isUiVisible && !isInteractingWithUi.current && !isSearchExpanded) {
-                setIsUiVisible(false);
-                if (onScrollActivity) onScrollActivity();
-            }
+            if (onScrollActivity) onScrollActivity();
         };
 
         scrollEl.addEventListener('scroll', handleScroll, { passive: true });
         return () => scrollEl.removeEventListener('scroll', handleScroll);
-    }, [isUiVisible, onScrollActivity, isSearchExpanded]);
+    }, [onScrollActivity]);
 
     // Keep the control bar positioned and sized to the viewer container (responsive)
     useEffect(() => {
@@ -820,30 +817,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
             )}
 
             <div
-                className={`absolute bottom-0 left-0 right-0 h-24 z-[40] transition-opacity ${isUiVisible ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'}`}
-                onMouseEnter={() => setIsUiVisible(true)}
-            />
-
-            {!isUiVisible && (
-                <button
-                    onClick={() => setIsUiVisible(true)}
-                    className="sm:hidden fixed bottom-10 right-6 p-3 bg-scholar-600 text-white rounded-full shadow-lg z-[70] animate-fade-in"
-                >
-                    <Menu size={24} />
-                </button>
-            )}
-
-            {/* Control hint text when controls are hidden */}
-            {!isUiVisible && (
-                <div className="fixed bottom-5 w-auto text-lg text-gray-400 dark:text-gray-500 bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm px-3 py-2  dark:border-gray-600/50 animate-fade-in pointer-events-none z-[30]">
-                    Hover here for controls
-                </div>
-            )}
-
-            <div
                 ref={controlBarRef}
                 style={controlBarStyle || undefined}
-                className={`fixed bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-full shadow-xl px-3 py-1.5 flex items-center justify-center gap-1 z-[60] transition-all duration-300 transform ${isUiVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'} flex-nowrap overflow-hidden`}
+                className={`fixed bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-full shadow-xl px-3 py-1.5 flex items-center justify-center gap-1 z-[60] transition-all duration-300 transform translate-y-0 opacity-100 flex-nowrap overflow-hidden`}
                 onMouseEnter={() => { isInteractingWithUi.current = true; }}
                 onMouseLeave={() => { isInteractingWithUi.current = false; }}
                 onFocus={() => { isInteractingWithUi.current = true; }}

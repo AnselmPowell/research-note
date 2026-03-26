@@ -186,9 +186,11 @@ For completing the task, the action is "task_complete". The "response" param mus
 // code fences, and very long task_complete responses.
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+
 /**
  * Extracts and parses the JSON decision object from the LLM response text.
- * Tries multiple strategies to handle LLM formatting quirks.
+ * Tries multiple strategies to handle LLM formatting quirks. The next step of the llm is to move forward with the upgrade
  *
  * @param {string} responseText - Raw text from Gemini
  * @returns {{ decision: object, error: string|null }}
@@ -209,7 +211,7 @@ function extractDecision(responseText) {
     try {
       const decision = JSON.parse(cleaned.substring(firstBrace, lastBrace + 1));
       return { decision, error: null };
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // Strategy 3: Try finding an array [...] in case the LLM forgets the object wrapper
@@ -221,7 +223,7 @@ function extractDecision(responseText) {
       if (Array.isArray(decisionArr)) {
         return { decision: { actions: decisionArr }, error: null };
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // Attempt raw parse fallback
@@ -364,7 +366,7 @@ async function runAgentTask(task, workspace, workflowId) {
       // SAFEGUARD 1: Immediately return if task_complete
       if (act.action === 'task_complete') {
         let finalResponse = act.params?.response || 'Task completed.';
-        
+
         // CATCH-ALL: Ensure finalResponse is a string to prevent React rendering crashes
         if (typeof finalResponse === 'object' && finalResponse !== null) {
           logger.warn(`[ResearchAgent] ⚠️  Agent returned an object for task_complete. Converting to string.`);

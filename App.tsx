@@ -138,9 +138,18 @@ const App: React.FC = () => {
   // Extracted here so middleContent useMemo does NOT depend on openColumn/loadPdfFromUrl/setActivePdf
   // directly — those can change reference and would cause ResearchView to remount, resetting activeTab.
   const handleViewPdf = useCallback((paper: any) => {
+    // Start loading the PDF before activating the viewer to avoid race conditions
+    const loadPromise = loadPdfFromUrl(paper.pdfUri, paper.title, paper.authors.join(', '));
+
+    // Open the right column without closing other columns (preserve Library/NotesManager)
+    setColumnVisibility(prev => ({ ...prev, right: true }));
+    // Hide header to match openColumn side-effect
+    setHeaderVisible(false);
+
+    // Activate the viewer after initiating the load
     setActivePdf(paper.pdfUri);
-    openColumn('right');
-    loadPdfFromUrl(paper.pdfUri, paper.title, paper.authors.join(', ')).then((result: any) => {
+
+    loadPromise.then((result: any) => {
       if (!result.success && result.error) {
         setActivePdf(null);
       }

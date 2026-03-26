@@ -93,7 +93,13 @@ export const LibraryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         subject: extractedData.metadata.subject  // Preserve subject field
       };
 
-      const filename = uri.split('/').pop()?.split('?')[0] || 'document.pdf';
+      // Prefer metadata title as filename when available (sanitize to safe filesystem chars)
+      const sanitize = (s: string) => s.replace(/[\\\/\?%\*:|"<>]/g, '').trim().slice(0, 200);
+      let filename = uri.split('/').pop()?.split('?')[0] || 'document.pdf';
+      if (finalMetadata && finalMetadata.title) {
+        const safe = sanitize(finalMetadata.title);
+        if (safe) filename = safe.endsWith('.pdf') ? safe : `${safe}.pdf`;
+      }
       const file = new File([new Blob([arrayBuffer])], filename, { type: 'application/pdf' });
 
       const newPdf: LoadedPdf = {

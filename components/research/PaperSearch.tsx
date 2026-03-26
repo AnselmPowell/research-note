@@ -622,7 +622,7 @@ export const PaperSearch: React.FC = () => {
     );
   }, []);
 
-  const { setActivePdf } = useLibrary();
+  const { setActivePdf, loadPdfFromUrl } = useLibrary();
   const { openColumn, setColumnVisibility } = useUI();
 
   // ─── Local Sort State ─────────────────────────────────────────────────────────
@@ -959,10 +959,23 @@ export const PaperSearch: React.FC = () => {
   }, [onSearchQueryChange, onLocalFiltersChange]);
 
   const handleViewPdf = useCallback((paper: ArxivPaper) => {
-    setActivePdf(paper.pdfUri);
+    // Start loading the PDF first, then open the viewer so the workspace sees the download
+    const loadPromise = loadPdfFromUrl(paper.pdfUri, paper.title);
+
     // Open viewer alongside results, close sources sidebar
     setColumnVisibility(prev => ({ ...prev, left: false, right: true }));
-  }, [setActivePdf, setColumnVisibility]);
+
+    // Activate the viewer after initiating load
+    setActivePdf(paper.pdfUri);
+
+    loadPromise.then(result => {
+      if (result && !result.success) {
+        setActivePdf(null);
+      }
+    }).catch(() => {
+      setActivePdf(null);
+    });
+  }, [loadPdfFromUrl, setActivePdf, setColumnVisibility]);
 
   return (
     <>

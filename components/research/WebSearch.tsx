@@ -133,18 +133,24 @@ export const WebSearch: React.FC<WebSearchdProps> = ({
       loadedPdf = result.pdf;
     }
 
-    // Save the paper to database using correct PDF reference
+    // Determine canonical URI for saved record (prefer loaded PDF URI)
+    const canonicalUri = loadedPdf ? loadedPdf.uri : source.uri;
+
+    // Save the paper to database using canonical PDF reference (ensure pdfUri/uri exist)
     savePaper({
       ...source,
+      uri: canonicalUri,
+      pdfUri: canonicalUri,
+      title: source.title || (loadedPdf?.metadata?.title ?? source.title),
       numPages: loadedPdf ? loadedPdf.numPages : undefined
     });
 
     // ✅ Also add to GLOBAL selection for visibility across all components
-    addToSelectionByUri(source.uri);
+    addToSelectionByUri(canonicalUri);
 
-    // Sync: Also add to AI context if not present
-    if (!isPdfInContext(source.uri)) {
-      togglePdfContext(source.uri, source.title);
+    // Sync: Also add to AI context if not present (use canonical URI)
+    if (!isPdfInContext(canonicalUri)) {
+      togglePdfContext(canonicalUri, source.title || loadedPdf?.metadata?.title);
     }
   };
 
@@ -214,10 +220,17 @@ export const WebSearch: React.FC<WebSearchdProps> = ({
                     e.preventDefault();
                     e.stopPropagation();
                     setViewFailed(false);
-                    setActivePdf(source.uri);
+
+                    // Start loading first, then open the viewer to avoid race conditions
+                    const loadPromise = loadPdfFromUrl(source.uri, source.title);
+
                     // Explicitly close left sidebar when viewing from middle
                     setColumnVisibility(prev => ({ ...prev, left: false, right: true }));
-                    loadPdfFromUrl(source.uri, source.title).then(result => {
+
+                    // Activate viewer after initiating load
+                    setActivePdf(source.uri);
+
+                    loadPromise.then(result => {
                       // @ts-ignore
                       if (result && !result.success && result.error) {
                         setViewFailed(true);

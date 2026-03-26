@@ -25,7 +25,7 @@ export const AgentFAB: React.FC<AgentFABProps> = ({
     const contextCount = contextUris.size + selectedArxivIds.size;
 
     return (
-        <div className="fixed bottom-6 right-6 z-[50] flex flex-col items-end gap-3">
+        <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end gap-3">
             {/* Menu item: Deep Research */}
             {isMenuOpen && (
                 <div className="flex items-center gap-3 animate-slide-up origin-bottom">
@@ -37,7 +37,7 @@ export const AgentFAB: React.FC<AgentFABProps> = ({
                         className={`w-12 h-12 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center transition-transform hover:scale-105 ${activeTool === 'deep'
                             ? 'bg-scholar-600 text-white'
                             : 'bg-white dark:bg-gray-800 text-scholar-600 dark:text-scholar-400'
-                        }`}
+                            }`}
                     >
                         <BookOpenText size={20} />
                     </button>
@@ -55,7 +55,7 @@ export const AgentFAB: React.FC<AgentFABProps> = ({
                         className={`w-12 h-12 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center transition-transform hover:scale-105 ${activeTool === 'chat'
                             ? 'bg-scholar-600 text-white'
                             : 'bg-white dark:bg-gray-800 text-scholar-600 dark:text-scholar-400'
-                        }`}
+                            }`}
                     >
                         <MessageSquareText size={20} />
                     </button>
@@ -68,7 +68,7 @@ export const AgentFAB: React.FC<AgentFABProps> = ({
                 className={`relative flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-xl transition-all duration-300 ${isMenuOpen || activeTool
                     ? 'bg-gray-800 hover:bg-gray-900'
                     : 'bg-scholar-600 hover:bg-scholar-700'
-                } text-white hover:scale-105`}
+                    } text-white hover:scale-105`}
             >
                 {isMenuOpen ? (
                     <X size={28} />

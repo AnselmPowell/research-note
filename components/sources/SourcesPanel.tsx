@@ -64,10 +64,16 @@ export const SourcesPanel: React.FC = () => {
 
 
     const handleOpenPaper = useCallback((uri: string, title: string) => {
-        setActivePdf(uri);
+        // Start the download first, then activate the viewer to avoid race conditions
+        const loadPromise = loadPdfFromUrl(uri, title);
+
         // Keep Sources panel open while opening the viewer, preserve middle column state
         setColumnVisibility(prev => ({ ...prev, left: true, right: true }));
-        loadPdfFromUrl(uri, title).then(result => {
+
+        // Activate the viewer after starting the load so workspace sees the download
+        setActivePdf(uri);
+
+        loadPromise.then(result => {
             if (!result.success && result.error) {
                 setActivePdf(null);
             }

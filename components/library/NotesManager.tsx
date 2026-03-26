@@ -38,6 +38,7 @@ import { CreateNoteModal } from './CreateNoteModal';
 import { AddPaperModal } from './AddPaperModal';
 import { PaperDetails } from './PaperDetails';
 import { api } from '../../services/apiClient';
+import { r } from '@/dist/assets/vendor-B--z-fyW';
 
 interface NotesManagerProps {
   activeView: string;
@@ -588,6 +589,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
         togglePdfContext(paperUri, paper.title);
       }
     }
+  
   }, [uiSelectedPaperUris, paperByUri, isPdfInContext, togglePdfContext, loadPdfFromUrl]);
 
   const handleNoteSelect = useCallback((id: number) => {
@@ -623,6 +625,54 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
     all: savedPapers.length,
     noted: Array.from(new Set(savedNotes.map(n => n.paper_uri))).length
   }), [savedPapers, savedNotes]);
+
+  const View_FilterOptions = useMemo(() => {
+  if (activeTab === 'notes' || activeTab === 'papers') {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
+          <button
+            onClick={() => setViewMode('table')}
+            className={`p-2 rounded-lg transition-all ${
+              viewMode === 'table'
+                ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400'
+                : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'
+            }`}
+            title="Table View"
+          >
+            <TableIcon size={18} />
+          </button>
+
+          <button
+            onClick={() => setViewMode('list')}
+            className={`p-2 rounded-lg transition-all ${
+              viewMode === 'list'
+                ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400'
+                : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'
+            }`}
+            title="List View"
+          >
+            <LayoutList size={18} />
+          </button>
+        </div>
+
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition-all ${
+            showFilters
+              ? 'bg-scholar-50 dark:bg-scholar-900/30 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400'
+              : 'bg-white/60 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400'
+          }`}
+        >
+          <Filter size={18} className="flex-shrink-0" />
+          <span className="tab-label">Filters</span>
+        </button>
+      </div>
+    );
+  }
+
+  return null;
+}, [activeTab, viewMode, showFilters]);
 
 
 
@@ -703,35 +753,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                 </button>
               </div>
 
-              {/* RIGHT: VIEW TOGGLES AND FILTERS */}
-              {(activeTab === 'notes' || activeTab === 'papers') && (
-                <div className="flex items-center gap-2">
-                  <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
-                    <button
-                      onClick={() => setViewMode('table')}
-                      className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400' : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
-                      title="Table View"
-                    >
-                      <TableIcon size={18} />
-                    </button>
-                    <button
-                      onClick={() => setViewMode('list')}
-                      className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400' : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
-                      title="List View"
-                    >
-                      <LayoutList size={18} />
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={() => setShowFilters(!showFilters)}
-                    className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition-all ${showFilters ? 'bg-scholar-50 dark:bg-scholar-900/30 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400' : 'bg-white/60 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
-                  >
-                    <Filter size={18} className="flex-shrink-0" />
-                    <span className="tab-label">Filters</span>
-                  </button>
-                </div>
-              )}
+        
             </div>
 
             {/* ACTION BAR ROW - ONLY WHEN ITEMS SELECTED */}
@@ -830,7 +852,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
           onScroll={handleScroll}
           className="flex-1 overflow-auto custom-scrollbar"
         >
-          <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
+          <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8 pt-2 sm:pt-2">
             {activeTab === 'research' ? (
               <div className="animate-fade-in">
                 <PaperSearch />
@@ -839,7 +861,11 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
               <>
                 {/* Add Paper Actions */}
                 {activeTab === 'papers' && (
-                  <div className="flex items-center justify-between mb-4 mt-2 animate-in fade-in slide-in-from-top-2 duration-500 px-1">
+                  <>
+                  <p className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest opacity-60">
+                      Total {filteredPapers.length} papers
+                  </p> 
+                  <div className="flex items-center justify-between mb-4 mt-2 ">
                     <button
                       onClick={() => setIsAddPaperModalOpen(true)}
                       className="flex items-center gap-2 px-5 py-2.5 bg-scholar-600 hover:bg-scholar-800 text-white rounded-2xl shadow-lg shadow-scholar-600/20 transition-all hover:scale-[1.02] active:scale-95 group"
@@ -847,15 +873,16 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                       <Plus size={18} />
                       <span className="text-sm font-black uppercase tracking-widest leading-none">Add Paper</span>
                     </button>
-                    <p className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest opacity-60">
-                      Total {filteredPapers.length} papers
-                    </p>
+
+                     {/* RIGHT: VIEW TOGGLES AND FILTERS */}
+                    {View_FilterOptions}
                   </div>
+                  </>
                 )}
 
                 {/* Paper Sub-Filters (Pills) */}
                 {activeTab === 'papers' && (
-                  <div className="flex items-center gap-2 mb-6 px-1 animate-fade-in overflow-x-auto no-scrollbar">
+                  <div className="flex items-center gap-2 mb-6 animate-fade-in overflow-x-auto no-scrollbar">
                     <button
                       onClick={() => setPaperSubFilter('all')}
                       className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border paper-pill ${paperSubFilter === 'all' ? 'bg-scholar-600 text-white border-scholar-600 shadow-sm' : 'bg-white dark:bg-dark-card text-gray-500 dark:text-scholar-400 border-gray-200 dark:border-gray-700 hover:border-scholar-300'}`}
@@ -951,8 +978,11 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
                 {activeTab === 'notes' ? (
                   <>
+                    <p className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest opacity-60">
+                        Total {filteredNotes.length} insights
+                    </p>
                     {/* CREATE NOTE BUTTON - MOVED DOWN */}
-                    <div className="flex items-center justify-between mb-4 mt-2 animate-in fade-in slide-in-from-top-2 duration-500">
+                    <div className="flex items-center justify-between mb-4 mt-2">
                       <button
                         onClick={() => setIsCreateModalOpen(true)}
                         className="flex items-center gap-2 px-5 py-2.5 bg-scholar-600 hover:bg-scholar-800 text-white rounded-2xl shadow-lg shadow-scholar-600/20 transition-all hover:scale-[1.02] active:scale-95 group"
@@ -960,9 +990,9 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                         <Plus size={18} />
                         <span className="text-sm font-black uppercase tracking-widest leading-none">Create Note</span>
                       </button>
-                      <p className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest opacity-60">
-                        Total {filteredNotes.length} insights
-                      </p>
+
+                        {/* RIGHT: VIEW TOGGLES AND FILTERS */}
+                        {View_FilterOptions }
                     </div>
                     {viewMode === 'table' ? (
                       <NotesTable

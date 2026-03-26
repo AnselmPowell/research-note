@@ -24,20 +24,19 @@ interface InternalPdf {
     zoomLevel: number;
 }
 
-const TabBar = ({ internalPdfs, activePdfUri, onTabChange, onClosePdf, onAddClick, isVisible }: {
+const TabBar = ({ internalPdfs, activePdfUri, onTabChange, onClosePdf, onAddClick }: {
     internalPdfs: InternalPdf[],
     activePdfUri: string | null,
     onTabChange: (id: string) => void,
     onClosePdf: (id: string) => void,
     onAddClick: (e: React.MouseEvent) => void,
-    isVisible: boolean
 }) => (
-    <div className={`w-full max-w-5xl px-4 pt-2 transition-all duration-300 transform origin-top z-30 bg-cream dark:bg-dark-bg ${isVisible ? 'translate-y-0 opacity-100 relative' : '-translate-y-full opacity-0 pointer-events-none absolute top-0'}`}>
+    <div className={`w-full max-w-5xl px-4 pt-2 transition-all duration-300 transform origin-top z-30 bg-cream dark:bg-dark-bg translate-y-0 opacity-100 relative`}>
         <div className="flex items-center pb-4 border-b border-gray-300 dark:border-gray-700 overflow-x-auto no-scrollbar">
             {internalPdfs.map(pdf => (
                 <div key={pdf.id} onClick={() => onTabChange(pdf.id)} className={`flex items-center cursor-pointer px-4 py-2 border-b-2 -mb-px whitespace-nowrap ${activePdfUri === pdf.id ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400 dark:border-scholar-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>
                     <FileText size={14} className="mr-1 opacity-70" />
-                    <span className="text-sm font-medium truncate max-w-[120px]">{pdf.file.name}</span>
+                    <span className="text-sm font-medium truncate max-w-[120px]">{pdf.metadata?.title || pdf.file.name}</span>
                     <button onClick={(e) => { e.stopPropagation(); onClosePdf(pdf.id); }} className="ml-2 p-0.5 rounded-full text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"><X className="w-3 h-3" /></button>
                 </div>
             ))}
@@ -189,13 +188,12 @@ function convertMatchToSearchResult(
 }
 
 export const PdfWorkspace: React.FC = () => {
-    const { loadedPdfs, activePdfUri, loadPdfFromUrl, addRemotePdf, addLocalPdf, addPdfFile, removePdf, setActivePdf, searchHighlight, setSearchHighlight, failedUrlErrors } = useLibrary();
+    const { loadedPdfs, activePdfUri, loadPdfFromUrl, addRemotePdf, addLocalPdf, addPdfFile, removePdf, setActivePdf, searchHighlight, setSearchHighlight, failedUrlErrors, downloadingUris, failedUris } = useLibrary();
 
     const [internalPdfs, setInternalPdfs] = useState<InternalPdf[]>([]);
     const [pdfjsLib, setPdfjsLib] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
-    const [isUiVisible, setIsUiVisible] = useState(true);
-
+    const [uploadError, setUploadError] = useState<string | null>(null);    
     // Add Menu state
     const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
     const [addMenuCoords, setAddMenuCoords] = useState<{ left: number; top: number } | null>(null);
@@ -213,6 +211,7 @@ export const PdfWorkspace: React.FC = () => {
 
     const activePdf = internalPdfs.find(p => p.id === activePdfUri) || null;
     const isNewPdfLoading = activePdfUri !== null && !internalPdfs.some(p => p.id === activePdfUri);
+    const isRemoteDownloadInProgress = !!activePdfUri && downloadingUris.has(activePdfUri);
 
     useEffect(() => { setPdfjsLib(pdfjsLibWeb); }, []);
 
@@ -243,6 +242,21 @@ export const PdfWorkspace: React.FC = () => {
         syncPdfs();
     }, [loadedPdfs, pdfjsLib, internalPdfs.length]);
 
+    // Auto-start: if an activePdfUri exists but it is neither downloading nor loaded nor failed,
+    // start an idempotent background load. This makes the workspace tolerant to callers that
+    // only setActivePdf without starting a load.
+    useEffect(() => {
+        if (!activePdfUri) return;
+        const alreadyLoaded = loadedPdfs.some(p => p.uri === activePdfUri);
+        const isDownloading = downloadingUris.has(activePdfUri);
+        const isFailed = failedUris.has(activePdfUri);
+
+        if (!alreadyLoaded && !isDownloading && !isFailed) {
+            // Start load in background; LibraryContext guards against duplicate downloads.
+            loadPdfFromUrl(activePdfUri).catch(() => { /* errors handled in LibraryContext */ });
+        }
+    }, [activePdfUri, loadedPdfs, downloadingUris, failedUris, loadPdfFromUrl]);
+
     const resetSearchState = () => {
         setSearchQuery(''); setSearchResults([]); setActiveResultIndex(null); documentTextIndexCache.current = null;
     }
@@ -257,9 +271,8 @@ export const PdfWorkspace: React.FC = () => {
             });
         }
         if (event.target) event.target.value = '';
-    };
-
     const [uploadError, setUploadError] = useState<string | null>(null);
+    }
 
     const handleUrlSubmit = async (url: string) => {
         if (internalPdfs.length >= 10) { alert('Limit of open PDFs reached.'); return; }
@@ -302,11 +315,9 @@ export const PdfWorkspace: React.FC = () => {
     }, [activePdfUri]);
 
     const handleScrollActivity = useCallback(() => {
-        if (isUiVisible) {
-            setIsUiVisible(false);
-            setIsAddMenuOpen(false); // Close menu on scroll
-        }
-    }, [isUiVisible]);
+        // Close add menu on any scroll activity
+        setIsAddMenuOpen(false);
+    }, []);
 
     const openAddMenuAt = (e: React.MouseEvent) => {
         const target = e.currentTarget as HTMLElement | null;
@@ -331,6 +342,18 @@ export const PdfWorkspace: React.FC = () => {
         if (isAddMenuOpen) document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isAddMenuOpen]);
+
+    // If a load has failed in LibraryContext, surface the friendly error and stop showing the spinner
+    useEffect(() => {
+        if (activePdfUri && failedUris.has(activePdfUri)) {
+            const err = failedUrlErrors[activePdfUri];
+            setUploadError(err ? `${err.reason}: ${err.actionableMsg}` : 'Failed to load PDF');
+            setIsLoading(false);
+        } else {
+            // Clear any previous upload error when switching PDFs
+            setUploadError(null);
+        }
+    }, [activePdfUri, failedUris, failedUrlErrors]);
 
     const performSearch = useCallback(async (query: string) => {
         if (!activePdf || !query) {
@@ -539,15 +562,9 @@ export const PdfWorkspace: React.FC = () => {
         <div className={`h-full flex flex-col bg-cream dark:bg-dark-bg text-gray-900 dark:text-gray-100 font-sans group/workspace relative`}>
             <input id="pdf-upload-hidden" type="file" accept="application/pdf" onChange={handleFileChange} ref={fileInputRef} className="hidden" />
 
-            {/* Top Hover Zone */}
-            {internalPdfs.length > 0 && (
-                <div
-                    className={`absolute top-0 left-0 right-0 h-16 z-[40] transition-opacity ${isUiVisible ? 'pointer-events-none opacity-0' : 'pointer-events-auto opacity-100'}`}
-                    onMouseEnter={() => setIsUiVisible(true)}
-                />
-            )}
+            {/* Top Hover Zone removed — tab bar is always visible */}
 
-            {isLoading || isIndexing || (isNewPdfLoading && internalPdfs.length === 0) ? (
+            {isLoading || isIndexing || (isNewPdfLoading && internalPdfs.length === 0 && !failedUris.has(activePdfUri)) ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-4"><Loader2 className="w-10 h-10 text-scholar-600 animate-spin" /><p className="text-sm font-medium text-gray-500 dark:text-gray-400">{isIndexing ? 'Indexing...' : 'Preparing document...'}</p></div>
             ) : internalPdfs.length === 0 ? (
                 <div className="flex-1 flex items-center justify-center bg-cream dark:bg-dark-bg p-6">
@@ -568,7 +585,6 @@ export const PdfWorkspace: React.FC = () => {
                         onTabChange={handleTabChange}
                         onClosePdf={handleClosePdf}
                         onAddClick={(e) => openAddMenuAt(e)}
-                        isVisible={isUiVisible}
                     />
 
                     {/* ADD MENU DROPDOWN */}
@@ -652,6 +668,7 @@ export const PdfWorkspace: React.FC = () => {
                                 onScrollActivity={handleScrollActivity}
                             />
                         ) : isNewPdfLoading ? (
+                            // Show preparing spinner as soon as a new PDF is activated
                             <div className="flex-1 flex flex-col items-center justify-center gap-4">
                                 <Loader2 className="w-10 h-10 text-scholar-600 animate-spin" />
                                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Preparing document...</p>
