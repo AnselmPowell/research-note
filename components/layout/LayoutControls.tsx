@@ -103,10 +103,7 @@ export const LayoutControls: React.FC<LayoutControlsProps> = ({ inSidebar = fals
 
         {isMobileMenuOpen && (
           <div className={`absolute ${inSidebar ? 'left-0' : 'right-0'} top-full mt-2 w-52 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 overflow-hidden animate-fade-in ${inSidebar ? 'origin-top-left' : 'origin-top-right'} ring-1 ring-black/5`}>
-            <div className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-gray-800">
-              Layout Options
-            </div>
-
+        
             <button onClick={() => handleToggle('left')} className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
               <FolderOpen size={18} className={columnVisibility.left ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
               <span className={`text-sm ${columnVisibility.left ? "font-semibold text-scholar-600 dark:text-scholar-400" : "text-gray-600 dark:text-white"}`}>Sources</span>

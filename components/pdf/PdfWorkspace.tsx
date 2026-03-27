@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import * as pdfjsLibWeb from 'pdfjs-dist';
 import { PdfViewer } from './PdfViewer';
 import PdfUploader from './PdfUploader';
@@ -24,19 +25,24 @@ interface InternalPdf {
     zoomLevel: number;
 }
 
-const TabBar = ({ internalPdfs, activePdfUri, onTabChange, onClosePdf, onAddClick }: {
+const TabBar = ({ internalPdfs, activePdfUri, onTabChange, onClosePdf, onAddClick,   }: {
     internalPdfs: InternalPdf[],
     activePdfUri: string | null,
     onTabChange: (id: string) => void,
     onClosePdf: (id: string) => void,
     onAddClick: (e: React.MouseEvent) => void,
+    
 }) => (
-    <div className={`w-full max-w-5xl px-4 pt-2 transition-all duration-300 transform origin-top z-30 bg-cream dark:bg-dark-bg translate-y-0 opacity-100 relative`}>
+    <div className={`w-full max-w-5xl px-4 pt-2 transition-all duration-300 z-[50] bg-cream dark:bg-dark-bg opacity-100 relative `}>
         <div className="flex items-center pb-4 border-b border-gray-300 dark:border-gray-700 overflow-x-auto no-scrollbar">
             {internalPdfs.map(pdf => (
-                <div key={pdf.id} onClick={() => onTabChange(pdf.id)} className={`flex items-center cursor-pointer px-4 py-2 border-b-2 -mb-px whitespace-nowrap ${activePdfUri === pdf.id ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400 dark:border-scholar-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>
-                    <FileText size={14} className="mr-1 opacity-70" />
-                    <span className="text-sm font-medium truncate max-w-[120px]">{pdf.metadata?.title || pdf.file.name}</span>
+                <div
+                    key={pdf.id}
+                    onClick={() => onTabChange(pdf.id)}
+                    
+                   
+                    className={`flex items-center cursor-pointer px-4 py-2 border-b-2 -mb-px whitespace-nowrap group hover:z-[999] ${activePdfUri === pdf.id ? 'border-scholar-600 text-scholar-600 dark:text-scholar-400 dark:border-scholar-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>
+                    <span className="text-sm font-medium truncate max-w-[120px]">{(pdf as any).metadata?.title || pdf.file.name}</span>
                     <button onClick={(e) => { e.stopPropagation(); onClosePdf(pdf.id); }} className="ml-2 p-0.5 rounded-full text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"><X className="w-3 h-3" /></button>
                 </div>
             ))}
@@ -210,6 +216,7 @@ export const PdfWorkspace: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const activePdf = internalPdfs.find(p => p.id === activePdfUri) || null;
+
     const isNewPdfLoading = activePdfUri !== null && !internalPdfs.some(p => p.id === activePdfUri);
     const isRemoteDownloadInProgress = !!activePdfUri && downloadingUris.has(activePdfUri);
 
@@ -300,6 +307,9 @@ export const PdfWorkspace: React.FC = () => {
         removePdf(id);
         resetSearchState();
     };
+
+
+   
 
     const handlePageChange = useCallback((page: number) => {
         setInternalPdfs(prev => prev.map(pdf => pdf.id === activePdfUri ? { ...pdf, currentPage: page } : pdf));
@@ -586,6 +596,8 @@ export const PdfWorkspace: React.FC = () => {
                         onClosePdf={handleClosePdf}
                         onAddClick={(e) => openAddMenuAt(e)}
                     />
+
+                    
 
                     {/* ADD MENU DROPDOWN */}
                     {isAddMenuOpen && (

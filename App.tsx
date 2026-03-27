@@ -285,7 +285,7 @@ const App: React.FC = () => {
       {!isHeaderVisible && !allColumnsClosed && (
         <button
           onClick={() => setHeaderVisible(true)}
-          className="fixed top-0 left-1/2 -translate-x-1/2 z-[100] bg-white dark:bg-gray-800 px-6 py-2.5 rounded-b-2xl shadow-xl border-x border-b border-gray-200 dark:border-gray-700 animate-slide-down hover:pb-4 transition-all group"
+          className="fixed top-0 left-1/2 -translate-x-1/2 z-[101] bg-white dark:bg-gray-800 px-6 py-2.5 rounded-b-2xl shadow-xl border-x border-b border-gray-200 dark:border-gray-700 animate-slide-down hover:pb-4 transition-all group"
           aria-label="Restore Search Header"
         >
           <Search size={20} className="text-scholar-600 dark:text-scholar-400 group-hover:scale-110 transition-transform" />
