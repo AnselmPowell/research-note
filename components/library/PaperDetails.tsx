@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Edit2, FileText, File, BookText, Loader2, X, Sparkles, Check, Copy, RotateCcw, AlertCircle } from 'lucide-react';
 import { fetchPdfBuffer, extractPdfData } from '../../services/pdfService';
 import { useDatabase } from '../../database/DatabaseContext';
@@ -8,7 +8,7 @@ import { useDatabase } from '../../database/DatabaseContext';
  * Lightweight markdown-style formatter for Agent responses
  * Renders headers, lists, and bold text with Scholar-themed styling
  */
-const AgentResponseFormatter: React.FC<{ content: string }> = ({ content }) => {
+export const AgentResponseFormatter: React.FC<{ content: string }> = ({ content }) => {
     if (!content || typeof content !== 'string') return null;
 
     // Helper to render bold text within any block
@@ -124,6 +124,21 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
     const [copiedContent, setCopiedContent] = useState(false);
     const [copiedMeta, setCopiedMeta] = useState(false);
     const { savePaper } = useDatabase();
+    
+    const detailsRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (detailsRef.current && !detailsRef.current.contains(event.target as Node)) {
+                onClose();
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [onClose]);
 
     if (!paper) return null;
 
@@ -256,7 +271,7 @@ ${paper.abstract || paper.summary || 'No abstract available'}
     };
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-dark-card border-l border-gray-200 dark:border-gray-800 shadow-xl z-30 animate-slide-in-right font-quicksand">
+        <div ref={detailsRef} className="flex flex-col h-full bg-white dark:bg-dark-card border-l border-gray-200 dark:border-gray-800 shadow-xl z-30 animate-slide-in-right font-quicksand">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/40">
                 <div className="flex items-center gap-2">

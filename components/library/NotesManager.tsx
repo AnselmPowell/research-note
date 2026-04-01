@@ -38,6 +38,7 @@ import { CreateNoteModal } from './CreateNoteModal';
 import { AddPaperModal } from './AddPaperModal';
 import { PaperDetails } from './PaperDetails';
 import { api } from '../../services/apiClient';
+import { fetchPdfBuffer, extractPdfData } from '../../services/pdfService';
 import { r } from '@/dist/assets/vendor-B--z-fyW';
 
 interface NotesManagerProps {
@@ -128,6 +129,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
   const [uiSelectedPaperUris, setUiSelectedPaperUris] = useState<string[]>([]); // NEW: UI-only selection
   const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set());
   const [expandedPapers, setExpandedPapers] = useState<Set<string>>(new Set());
+  const [extractingUris, setExtractingUris] = useState<Set<string>>(new Set()); // NEW: Track PDF metadata extraction
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [showBulkCopyMenu, setShowBulkCopyMenu] = useState(false);
@@ -173,7 +175,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
       const taskDescriptions: Record<string, string> = {
         'literature_review': `Write a thematic academic literature review synthesising this paper: "${paper.title}"`,
         'get_methodology': `Extract and analyze the methodology used in this paper: "${paper.title}"`,
-        'get_findings': `Extract and synthesize the key results, findings, and conclusions from this paper: "${paper.title}"`,
+        'get_findings': `Identify the core questions the paper asks, summarize the key findings/results, and highlight any gaps in the research: "${paper.title}"`,
         'format_reference': `Format a professional Harvard reference for the paper: "${paper.title}".`,
         'summarise_paper': `Provide a clear, academic summary/abstract of this paper: "${paper.title}"`
       };
@@ -205,7 +207,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
           'literature_review': 'literature_review',
           'get_methodology': 'methodology',
           'get_findings': 'findings',
-          'format_reference': 'harvard_reference'
+          'format_reference': 'harvardReference'
         };
 
         const targetField = fieldMap[workflowId];
@@ -226,6 +228,46 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
       });
     }
   }, [savePaper, savedNotes]);
+
+  const handleExtractMetadata = useCallback(async (paper: any) => {
+    if (!paper?.uri || extractingUris.has(paper.uri)) return;
+
+    setExtractingUris(prev => new Set(prev).add(paper.uri));
+    try {
+      console.log('[NotesManager] Starting metadata extraction for:', paper.uri);
+      const buffer = await fetchPdfBuffer(paper.uri);
+      const extracted = await extractPdfData(buffer);
+
+      // Map extracted data to the database schema
+      const authorString = extracted.metadata.author || '';
+      const authorList = authorString.split(/[,;]|\s+and\s+/).map((a: string) => a.trim()).filter(Boolean);
+
+      const updatedPaper = {
+        ...paper,
+        title: extracted.metadata.title || paper.title,
+        authors: authorList.length > 0 ? authorList : paper.authors,
+        abstract: extracted.text || paper.abstract || paper.summary,
+        num_pages: extracted.numPages || paper.num_pages,
+        year: extracted.metadata.year || paper.year,
+        harvardReference: extracted.metadata.harvardReference || paper.harvardReference,
+        publisher: extracted.metadata.publisher || paper.publisher,
+        categories: extracted.metadata.categories || paper.categories,
+        pages: extracted.pages,
+        paper_references: extracted.references || paper.paper_references || []
+      };
+
+      await savePaper(updatedPaper);
+      console.log('[NotesManager] Metadata updated successfully');
+    } catch (error) {
+      console.error("[NotesManager] Failed to extract metadata:", error);
+    } finally {
+      setExtractingUris(prev => {
+        const next = new Set(prev);
+        next.delete(paper.uri);
+        return next;
+      });
+    }
+  }, [savePaper, extractingUris]);
 
   const PAGE_SIZE = activeTab === 'notes' && viewMode === 'grid' ? 12 : 10;
 
@@ -1058,6 +1100,10 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                         expandedUris={expandedPapers}
                         sortColumn={sortColumn}
                         sortDirection={sortDirection}
+                        onRunAgentWorkflow={handleRunAgentWorkflow}
+                        agentRunningTasks={agentRunningTasks}
+                        onExtractMetadata={handleExtractMetadata}
+                        extractingUris={extractingUris}
                         onSort={(col) => {
                           if (sortColumn === col) setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
                           else { setSortColumn(col); setSortDirection('asc'); }

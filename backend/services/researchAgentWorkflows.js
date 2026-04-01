@@ -68,21 +68,24 @@ SUGGESTED STEP 4 — Compile and Complete
   // GET FINDINGS / RESULTS
   // ───────────────────────────────────────────────────────────────────────
   get_findings: `
-You have been asked to extract key findings and results from a targeted academic paper.
+You have been asked to identify the research questions, extract key findings, and highlight any gaps in a targeted academic paper.
 
 SUGGESTED STEP 1 — Get paper metadata
   Action: Call get_paper_metadata.
 
-SUGGESTED STEP 2 — Locate the results section
-  Action: Use get_paper_structure_map to find where "Results" or "Findings" starts.
-  If needed, use search_multiple_keyword for keywords=["results", "findings", "outcomes"].
+SUGGESTED STEP 2 — Locate key sections
+  Action: Use get_paper_structure_map to find the "Introduction", "Results"/"Findings", and "Discussion"/"Conclusion".
+  If needed, use search_multiple_keyword for keywords=["results", "findings", "research questions", "future research", "limitations"].
 
-SUGGESTED STEP 3 — Read and Pin findings
-  Action: Use get_and_read_multiple_pages on the results pages. 
-  Tip: Use save_to_session_memory with the provided [MEMORY_IDs] to move these findings to your long-term dossier.
+SUGGESTED STEP 3 — Read and Pin
+  Action: Use get_and_read_multiple_pages on the relevant pages to identify the core questions asked, the main results, and the research gaps.
+  Tip: Use save_to_session_memory with the provided [MEMORY_IDs] to move these points to your long-term dossier.
 
 SUGGESTED STEP 4 — Compile and Complete
-  Call task_complete with key findings, supporting evidence, and interpretations.`,
+  Call task_complete with a structured analysis detailing: 
+  1. The questions/topics the paper focuses on.
+  2. The key findings and results.
+  3. The research gaps or unanswered questions.`,
 
 
   // ───────────────────────────────────────────────────────────────────────

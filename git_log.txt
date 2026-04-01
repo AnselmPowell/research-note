@@ -1,0 +1,30 @@
+9d19b55 small improvmement to pdfservices
+66746af small improvmement to agent flow 3
+30649bd small improvmement to agent flow 2
+38ed69a small improvmement to agent flow
+293aa89 small improvmement to paperDetail
+1531172 small improvmement muliple places
+013eae9 small improvmement muliple places
+9ae4a40 samll  improvements of our agent researcher session memory
+fa40fc5 samll  improvements paperdetail 2
+882089a samll  improvements paperdetail added regen of abstract
+c3382a6 samll  improvements paperdetail added regenaration button
+e955901 samll  improvements paperdetail added copy button
+ff5b112 samll  improvements of our agent researcher 2
+a8972d7 add documentation
+ea446bd samll  improvements of our agent researcher
+7bda8a1  improved our agent researcher to excute differet prompts
+1d2c911  improved our agent researcher to excute multiple actions
+0b129ef samll  improvements of our agent researcher harenss and context window
+df860b1 complete improvement of our agent researcher harenss and context window
+3aec67e small improvements to paperdetail view 2
+ba732f6 small improvements to paperdetail view
+d2bd65a Created paperDetail view
+a40d8be small improvements to overflow
+408cb12 added new agent harness the researchAgent
+b175f71 added create notes feature to note manager
+ec6b73a small improvements 9 to note manager researcher
+37c75d9 restructured agent researcher
+c2bfde2 small improvements 8 agent FAB
+d19d422 small improvements 7 agent research bar
+0feefdd small improvements 6 agent research bar

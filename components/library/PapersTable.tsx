@@ -11,10 +11,13 @@ import {
     Trash2,
     ArrowUpDown,
     FileText,
-    StickyNote
+    StickyNote,
+    Sparkles,
+    PlusCircle
 } from 'lucide-react';
 import { DeepResearchResult, DeepResearchNote } from '../../types';
 import { useState } from 'react';
+import { AgentResponseFormatter } from './PaperDetails';
 
 interface PapersTableProps {
     papers: DeepResearchResult[];
@@ -31,6 +34,10 @@ interface PapersTableProps {
     getNotesCount: (uri: string) => number;
     isDownloading: (uri: string) => boolean;
     isFailed: (uri: string) => boolean;
+    onRunAgentWorkflow: (paper: any, workflowId: string) => void;
+    agentRunningTasks: Record<string, string>;
+    onExtractMetadata: (paper: any) => void;
+    extractingUris: Set<string>;
 }
 
 export const PapersTable: React.FC<PapersTableProps> = ({
@@ -46,7 +53,11 @@ export const PapersTable: React.FC<PapersTableProps> = ({
     onView,
     onTitleClick, // Added onTitleClick
     getNotesCount,
-    isDownloading
+    isDownloading,
+    onRunAgentWorkflow,
+    agentRunningTasks,
+    onExtractMetadata,
+    extractingUris
 }) => {
 
     const SortIcon = ({ column }: { column: string }) => {
@@ -213,48 +224,15 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                                 {isExpanded && (
                                     <tr className="bg-gray-50/50 dark:bg-gray-800/20 animate-slide-down">
                                         <td colSpan={6} className="p-0">
-                                            <div className="px-4 py-4 sm:px-14 pb-6 space-y-4">
-                                                {/* Harvard Reference */}
-                                                {paper.harvardReference && (
-                                                    <p className="text-xs text-gray-600 dark:text-gray-400 italic">
-                                                        {paper.harvardReference}
-                                                    </p>
-                                                )}
-
-                                                <div className="flex flex-wrap gap-2 mb-2">
-                                                    {/* Mobile badges shown in expanded view */}
-                                                    <div className="sm:hidden flex items-center gap-2">
-                                                        {notesCount > 0 && (
-                                                            <span className="bg-white border border-gray-200 text-gray-600 text-[10px] font-bold uppercase px-2 py-1 rounded-md flex items-center gap-1">
-                                                                <FileText size={10} /> {notesCount} Notes
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                <div>
-                                                    <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Abstract</h4>
-                                                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-serif">
-                                                        {paper.abstract || "No abstract available for this document."}
-                                                    </p>
-                                                </div>
-
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-100 dark:border-gray-800">
-                                                    <div>
-                                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Full Authors</h4>
-                                                        <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">
-                                                            {Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || 'Unknown')}
-                                                        </p>
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Details</h4>
-                                                        <p className="text-xs text-gray-500">
-                                                            Source: {new URL(paper.uri).hostname}
-                                                            {paper.published ? ` • Published: ${new Date(paper.published).toLocaleDateString()}` : ''}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            <ExpandedRowContent 
+                                                paper={paper} 
+                                                notesCount={notesCount} 
+                                                onRunAgentWorkflow={onRunAgentWorkflow} 
+                                                agentRunningTasks={agentRunningTasks}
+                                                onExtractMetadata={onExtractMetadata}
+                                                extractingUris={extractingUris}
+                                                onTitleClick={onTitleClick}
+                                            />
                                         </td>
                                     </tr>
                                 )}
@@ -273,6 +251,101 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                     )}
                 </tbody>
             </table>
+        </div>
+    );
+};
+
+const ExpandedRowContent = ({ 
+    paper, 
+    notesCount, 
+    onRunAgentWorkflow, 
+    agentRunningTasks,
+    onTitleClick
+}: any) => {
+    const [activeTab, setActiveTab] = useState<'abstract' | 'findings'>('abstract');
+
+    return (
+        <div className="px-4 py-4 sm:px-14 pb-6 space-y-4">
+            {/* Mobile badges shown in expanded view */}
+            <div className="sm:hidden flex items-center gap-2 mb-2">
+                {notesCount > 0 && (
+                    <span className="bg-white border border-gray-200 text-gray-600 text-[10px] font-bold uppercase px-2 py-1 rounded-md flex items-center gap-1">
+                        <FileText size={10} /> {notesCount} Notes
+                    </span>
+                )}
+            </div>
+
+            {/* Tab Navigation Menu */}
+            <div className="flex border-b border-gray-100 dark:border-gray-800 mb-4 items-center">
+                <div className="flex space-x-6 items-center">
+                    <button 
+                      onClick={() => setActiveTab('abstract')}
+                      className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'abstract' ? 'border-b-2 border-scholar-600 text-scholar-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                      Abstract
+                    </button>
+                    <button 
+                      onClick={() => setActiveTab('findings')}
+                      className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'findings' ? 'border-b-2 border-scholar-600 text-scholar-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                      Key Findings
+                    </button>
+                    
+                    {/* The Plus Button to open PaperDetails */}
+                    <button 
+                        onClick={() => onTitleClick(paper)}
+                        className="p-1 mb-2 text-gray-400 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors ml-4"
+                        title="Open Paper Details">
+                        <PlusCircle size={18} />
+                    </button>
+                </div>
+            </div>
+
+            {/* TAB PANELS */}
+            {activeTab === 'abstract' && (
+                <div className="animate-fade-in">
+                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-serif pb-4">
+                        {paper.abstract || "No abstract available for this document."}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                        <div>
+                            <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Full Authors</h4>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">
+                                {Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || 'Unknown')}
+                            </p>
+                        </div>
+                        <div>
+                            <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Details</h4>
+                            <p className="text-xs text-gray-500">
+                                Source: {new URL(paper.uri).hostname}
+                                {paper.published ? ` • Published: ${new Date(paper.published).toLocaleDateString()}` : ''}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Unified Findings Panel */}
+            {activeTab === 'findings' && (
+                <div className="animate-fade-in flex flex-col items-center">
+                    {paper.findings ? (
+                        <div className="text-sm max-w-4xl w-full py-2">
+                            <AgentResponseFormatter content={paper.findings} />
+                        </div>
+                    ) : (
+                        <div className="flex justify-center w-full my-10">
+                            <button 
+                                onClick={() => onRunAgentWorkflow(paper, 'get_findings')}
+                                disabled={agentRunningTasks[paper.uri] === 'get_findings'}
+                                className="px-10 py-3 bg-scholar-600 text-white rounded-lg hover:bg-scholar-700 transition-all font-bold text-sm shadow-sm flex items-center gap-2">
+                                {agentRunningTasks[paper.uri] === 'get_findings' ? (
+                                    <><Loader2 size={16} className="animate-spin" /> Generating Findings...</>
+                                ) : (
+                                    'Generate Findings'
+                                )}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
