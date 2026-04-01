@@ -438,7 +438,7 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                         <div className="min-h-[200px]">
                             <div className="animate-fade-in">
                                 {isAgentRunning ? (
-                                    <div className="flex flex-col items-center justify-center min-h-[200px] py-8 text-center bg-gray-50/50 dark:bg-gray-900/20 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800">
+                                    <div className="flex flex-col items-center justify-center min-h-[200px] py-8 text-center  rounded-2xl">
                                         <Loader2 size={24} className="animate-spin text-scholar-600 dark:text-scholar-400 mb-3" />
                                         <p className="text-[16px] font-black uppercase tracking-[0.2em] text-scholar-600 dark:text-scholar-400">Researching Document...</p>
                                         <p className="text-[12px] text-gray-600 dark:text-gray-100 mt-1">Analysing paper and synthesising findings</p>
