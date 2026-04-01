@@ -149,7 +149,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAddPaperModalOpen, setIsAddPaperModalOpen] = useState(false);
   const [selectedPaperForDetails, setSelectedPaperForDetails] = useState<any>(null); // State for the details sidebar
-  const [agentProcessingUris, setAgentProcessingUris] = useState<Set<string>>(new Set()); // Track papers being processed by agent
+  const [agentRunningTasks, setAgentRunningTasks] = useState<Record<string, string>>({}); // Track which workflow is running for each paper
   const [agentWorkflowError, setAgentWorkflowError] = useState<string | null>(null); // Clean error message for the user
 
   // LIVE SYNC: Derive the paper for details from the reactive savedPapers array
@@ -161,15 +161,15 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
   // Handler for running agent workflows (Lit Review, Method, Findings)
   const handleRunAgentWorkflow = useCallback(async (paper: any, workflowId: string) => {
-    if (!paper.uri || agentProcessingUris.has(paper.uri)) return;
+    if (!paper.uri || agentRunningTasks[paper.uri]) return;
 
-    // 1. Mark as processing
-    setAgentProcessingUris(prev => new Set(prev).add(paper.uri));
+    // 1. Mark as processing with specific workflow
+    setAgentRunningTasks(prev => ({ ...prev, [paper.uri]: workflowId }));
 
     try {
       console.log(`[NotesManager] Triggering Agent Workflow: ${workflowId} for ${paper.title}`);
 
-      // 2. Prepare descriptive task prompts for the agent
+      // 2. Prepare descriptive task prompts... (omitted for brevity in replacement but usually better to include enough context)
       const taskDescriptions: Record<string, string> = {
         'literature_review': `Write a thematic academic literature review synthesising this paper: "${paper.title}"`,
         'get_methodology': `Extract and analyze the methodology used in this paper: "${paper.title}"`,
@@ -180,10 +180,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
       const taskPrompt = taskDescriptions[workflowId] || `Perform ${workflowId} analysis for the paper: "${paper.title}"`;
 
-      // Clear any previous error at the start of a new run
       setAgentWorkflowError(null);
 
-      // 3. Set a long timeout for the agent process (8 minutes)
       const agentPromise = api.researchAgent.runTask(
         taskPrompt,
         [paper],
@@ -193,18 +191,15 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
       const response = await Promise.race([
         agentPromise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Analysis is taking longer than expected. Please wait a moment.')), 480000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Analysis is taking longer than expected.')), 480000))
       ]) as any;
 
-      // Gate: if the agent returned success:false, surface a clean error — do NOT save to DB
       if (!response || response.success === false) {
-        console.error(`[NotesManager] Agent returned failure for workflow "${workflowId}". No data saved.`);
         setAgentWorkflowError('Seems to have had an issue generating your response, please try again.');
         return;
       }
 
       if (response && response.response) {
-        // 4. Map workflowId to the correct database field
         const fieldMap: Record<string, string> = {
           'summarise_paper': 'abstract',
           'literature_review': 'literature_review',
@@ -215,14 +210,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
 
         const targetField = fieldMap[workflowId];
         if (targetField) {
-          const updatedPaper = {
-            ...paper,
-            [targetField]: response.response
-          };
-
-          // 5. Persistence (Triggers re-render via liveSelectedPaper memo)
+          const updatedPaper = { ...paper, [targetField]: response.response };
           await savePaper(updatedPaper);
-          console.log(`[NotesManager] Agent successfully updated ${targetField} for ${paper.title}`);
         }
       }
     } catch (error: any) {
@@ -230,9 +219,9 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
       setAgentWorkflowError('Seems to have had an issue generating your response, please try again.');
     } finally {
       // 6. Unmark as processing
-      setAgentProcessingUris(prev => {
-        const next = new Set(prev);
-        next.delete(paper.uri);
+      setAgentRunningTasks(prev => {
+        const next = { ...prev };
+        delete next[paper.uri];
         return next;
       });
     }
@@ -1222,7 +1211,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
             onGenerateHarvardReference={(p) => handleRunAgentWorkflow(p, 'format_reference')}
             onGenerateAbstract={(p) => handleRunAgentWorkflow(p, 'summarise_paper')}
             isDownloading={downloadingUris.has(liveSelectedPaper.uri)}
-            isAgentRunning={agentProcessingUris.has(liveSelectedPaper.uri)}
+            isAgentRunning={!!agentRunningTasks[liveSelectedPaper.uri]}
+            runningWorkflowId={agentRunningTasks[liveSelectedPaper.uri]}
             agentError={agentWorkflowError}
             onDismissAgentError={() => setAgentWorkflowError(null)}
           />

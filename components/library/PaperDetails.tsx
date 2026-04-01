@@ -99,6 +99,7 @@ interface PaperDetailsProps {
     onGenerateAbstract: (paper: any) => void;
     isDownloading?: boolean;
     isAgentRunning?: boolean;
+    runningWorkflowId?: string | null;
     agentError?: string | null;
     onDismissAgentError?: () => void;
 }
@@ -114,6 +115,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
     onGenerateAbstract,
     isDownloading,
     isAgentRunning,
+    runningWorkflowId,
     agentError,
     onDismissAgentError
 }) => {
@@ -246,6 +248,12 @@ ${paper.abstract || paper.summary || 'No abstract available'}
         return !!(paper[fieldMap[activeTab]] || (activeTab === 'abstract' && paper.summary));
     }, [paper, activeTab]);
 
+    const TAB_WORKFLOW_MAP: Record<string, string> = {
+        'abstract': 'summarise_paper',
+        'lit review': 'literature_review',
+        'method': 'get_methodology',
+        'findings': 'get_findings'
+    };
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-dark-card border-l border-gray-200 dark:border-gray-800 shadow-xl z-30 animate-slide-in-right font-quicksand">
@@ -385,9 +393,13 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                     <div className="grid grid-cols-2 gap-3 py-4 ">
                         <button
                             onClick={() => handleActionWithPrecheck(onGenerateLiteratureReview)}
-                            className="flex items-center justify-center px-3 py-4 bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-[12px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all rounded-xl"
+                            disabled={!!runningWorkflowId}
+                            className={`flex items-center justify-center px-3 py-4 bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-[12px] font-black uppercase tracking-widest text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all rounded-xl ${runningWorkflowId === 'literature_review' ? 'opacity-90' : ''}`}
                         >
-                            <span className="text-center">GENERATE LITERATURE REVIEW</span>
+                            <div className="flex items-center gap-2">
+                                {runningWorkflowId === 'literature_review' && <Loader2 size={16} className="animate-spin text-scholar-600 dark:text-scholar-400" />}
+                                <span className="text-center">{runningWorkflowId === 'literature_review' ? 'Generating Review...' : 'GENERATE LITERATURE REVIEW'}</span>
+                            </div>
                         </button>
                         <button
                             onClick={() => onView(paper)}
@@ -401,18 +413,24 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                     <div className="space-y-4 border-t pt-4 border-gray-400 dark:border-gray-500">
                         <div className="flex items-center justify-between gap-x-6 gap-y-2">
                             <div className="flex flex-wrap gap-x-6 gap-y-2">
-                                {['abstract', 'lit review', 'method', 'findings'].map((tab) => (
-                                    <button
-                                        key={tab}
-                                        onClick={() => setActiveTab(tab)}
-                                        className={`uppercase tracking-[0.2em] font-black transition-all ${activeTab === tab
-                                            ? 'text-md font-black uppercase tracking-[0.25em] text-gray-600 dark:text-gray-300 underline underline-offset-4'
-                                            : 'text-[10px] text-gray-500 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-600'
-                                            }`}
-                                    >
-                                        {tab}
-                                    </button>
-                                ))}
+                                {['abstract', 'lit review', 'method', 'findings'].map((tab) => {
+                                    const isThisTabRunning = runningWorkflowId === TAB_WORKFLOW_MAP[tab];
+                                    return (
+                                        <button
+                                            key={tab}
+                                            onClick={() => setActiveTab(tab)}
+                                            className={`uppercase tracking-[0.2em] font-black transition-all ${activeTab === tab
+                                                ? 'text-md font-black uppercase tracking-[0.25em] text-gray-600 dark:text-gray-300 underline underline-offset-4'
+                                                : 'text-[10px] text-gray-500 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-600'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-1.5">
+                                                {tab}
+                                                {isThisTabRunning && <Loader2 size={10} className="animate-spin text-scholar-600 dark:text-scholar-400" />}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
                             </div>
 
                             {/* Content Controls: Copy & Regenerate */}
@@ -425,7 +443,6 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                                         title="Copy content to clipboard"
                                     >
                                         {copiedContent ? <Check size={20} className="text-scholar-600 dark:text-scholar-400" /> : <Copy size={20} />}
-
                                     </button>
 
                                     <button
@@ -441,7 +458,7 @@ ${paper.abstract || paper.summary || 'No abstract available'}
 
                         <div className="min-h-[200px]">
                             <div className="animate-fade-in">
-                                {isAgentRunning ? (
+                                {isAgentRunning && runningWorkflowId === TAB_WORKFLOW_MAP[activeTab] ? (
                                     <div className="flex flex-col items-center justify-center min-h-[200px] py-8 text-center  rounded-2xl">
                                         <Loader2 size={24} className="animate-spin text-scholar-600 dark:text-scholar-400 mb-3" />
                                         <p className="text-[16px] font-black uppercase tracking-[0.2em] text-scholar-600 dark:text-scholar-400">Researching Document...</p>
@@ -476,16 +493,17 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                                                 )}
                                                 <div className="flex items-center justify-center flex-1">
                                                     <button
-                                                    onClick={() => {
-                                                        if (activeTab === 'abstract') handleActionWithPrecheck(onGenerateAbstract);
-                                                        else if (activeTab === 'lit review') handleActionWithPrecheck(onGenerateLiteratureReview);
-                                                        else if (activeTab === 'method') handleActionWithPrecheck(onGenerateMethodology);
-                                                        else if (activeTab === 'findings') handleActionWithPrecheck(onGenerateFindings);
-                                                    }}
-                                                    className="inline-flex items-center gap-2.5 px-6 py-5 bg-scholar-50/50 dark:bg-scholar-900/20 text-scholar-600 dark:text-scholar-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl border border-scholar-300 dark:border-scholar-800/50 hover:bg-scholar-50 dark:hover:bg-scholar-900/40 transition-all group"
-                                                >
-                                                    <Sparkles size={14} className="group-hover:animate-pulse" />
-                                                                    {activeTab === 'abstract' ? 'GENERATE ABSTRACT' :
+                                                        onClick={() => {
+                                                            if (activeTab === 'abstract') handleActionWithPrecheck(onGenerateAbstract);
+                                                            else if (activeTab === 'lit review') handleActionWithPrecheck(onGenerateLiteratureReview);
+                                                            else if (activeTab === 'method') handleActionWithPrecheck(onGenerateMethodology);
+                                                            else if (activeTab === 'findings') handleActionWithPrecheck(onGenerateFindings);
+                                                        }}
+                                                        disabled={!!runningWorkflowId}
+                                                        className="inline-flex items-center gap-2.5 px-6 py-5 bg-scholar-50/50 dark:bg-scholar-900/20 text-scholar-600 dark:text-scholar-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl border border-scholar-300 dark:border-scholar-800/50 hover:bg-scholar-50 dark:hover:bg-scholar-900/40 transition-all group disabled:opacity-50"
+                                                    >
+                                                        <Sparkles size={14} className="group-hover:animate-pulse" />
+                                                        {activeTab === 'abstract' ? 'GENERATE ABSTRACT' :
                                                             activeTab === 'lit review' ? 'GENERATE LITERATURE REVIEW' :
                                                                 activeTab === 'method' ? 'GENERATE METHODOLOGY' :
                                                                     activeTab === 'findings' ? 'GENERATE FINDINGS/RESULTS' :

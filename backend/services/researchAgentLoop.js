@@ -366,6 +366,7 @@ async function runAgentTask(task, workspace, workflowId) {
         logger.warn(`[ResearchAgent] ⚠️ Consecutive errors: ${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}`);
         if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
           logger.error(`[ResearchAgent] 🛑 Aborting: both AI providers failed ${consecutiveErrors} times in a row`);
+          logger.warn(`[ResearchAgent] → Sending to frontend: { success: false } (AI provider failure)`);
           return { success: false, iterations: iteration, memoryUsed: sessionMemory, history: executionLog };
         }
         recentObservations.unshift('ERROR: AI provider unavailable on this iteration. Retrying...');
@@ -437,19 +438,26 @@ async function runAgentTask(task, workspace, workflowId) {
 
       // SAFEGUARD 1: Immediately return if task_complete
       if (act.action === 'task_complete') {
-        let finalResponse = act.params?.response || 'Task completed.';
+        // Defensive extraction: handles empty string (falsy) and LLM placing response at root level
+        let finalResponse =
+          (typeof act.params?.response === 'string' && act.params.response.trim())
+          || (typeof act.response === 'string' && act.response.trim())
+          || null;
 
         // CATCH-ALL: Ensure finalResponse is a string to prevent React rendering crashes
-        if (typeof finalResponse === 'object' && finalResponse !== null) {
+        if (!finalResponse && typeof act.params?.response === 'object' && act.params.response !== null) {
           logger.warn(`[ResearchAgent] ⚠️  Agent returned an object for task_complete. Converting to string.`);
-          // Convert to a pretty-printed string or markdown-like list
-          finalResponse = Object.entries(finalResponse)
+          finalResponse = Object.entries(act.params.response)
             .map(([key, value]) => `### ${key}\n${String(value)}`)
             .join('\n\n');
         }
 
+        // Final safety net
+        if (!finalResponse) finalResponse = 'Task completed.';
+
         logger.info(`[ResearchAgent] ✅ Task complete after ${iteration} iteration(s)`);
         logger.info(`[ResearchAgent] Memory entries used: ${sessionMemory.length}`);
+        logger.info(`[ResearchAgent] → Sending to frontend: "${String(finalResponse).substring(0, 120).replace(/\n/g, ' ')}..."`);
 
         return {
           success: true,
