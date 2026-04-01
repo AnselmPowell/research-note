@@ -39,7 +39,7 @@ if (config.geminiApiKey) {
   logger.warn('[ResearchAgent] No GEMINI_API_KEY set — agent will not function');
 }
 
-const MAX_ITERATIONS = 20;
+const MAX_ITERATIONS = 40;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTEXT BUILDER

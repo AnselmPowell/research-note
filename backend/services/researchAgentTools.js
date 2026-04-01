@@ -182,7 +182,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
 
       const memId = generateId('Page', paper_index, page_number);
       const content = `[Page ${page_number}]:\n${paper.pages[pageIdx]}`;
-      
+
       sessionContextPool[memId] = {
         type: 'page',
         paper_index: paper_index,
@@ -234,14 +234,14 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
         const pageNum = startIdx + i + 1;
         const memId = generateId('Page', paper_index, pageNum);
         const textChunk = `[Page ${pageNum}]:\n${selectedPages[i]}`;
-        
+
         sessionContextPool[memId] = {
           type: 'page',
           paper_index: paper_index,
           page_number: pageNum,
           content: textChunk
         };
-        
+
         resultBlocks.push(`[MEMORY_ID: ${memId}]\n${textChunk}`);
       }
 
@@ -260,7 +260,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
         };
       }
       const paper = papers[paper_index];
-      
+
       // Support both singular/plural naming and database naming
       const authorsRaw = paper.author || paper.authors;
       const authorDisplay = Array.isArray(authorsRaw) ? authorsRaw.join(', ') : (authorsRaw || 'Unknown');
@@ -268,6 +268,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
 
       const metadataContent = [
         `Title: ${paper.title || 'Unknown'}`,
+        `Identifier (URI): ${paper.uri || 'Unknown'}`,
         `Author: ${authorDisplay}`,
         `Total Pages: ${pageCount}`,
         `Abstract: ${paper.abstract || 'Not extracted'}`,
@@ -432,7 +433,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
           memoryType: 'short_term'
         };
       }
-      
+
       const pagesToAnalyze = paper.pages.slice(0, 50);
       const textToAnalyze = pagesToAnalyze.map((text, i) => `--- PAGE ${i + 1} ---\n${text}`).join('\n\n');
 
@@ -464,7 +465,7 @@ ${textToAnalyze}`;
 
     case 'list_workspace': {
       const paperSummaries = papers.length > 0
-        ? papers.map((p, i) => `  [${i}] "${p.title}" by ${p.author || 'Unknown'} (${p.totalPages} pages)`).join('\n')
+        ? papers.map((p, i) => `  [${i}] "${p.title}" by ${p.author || 'Unknown'} (${p.totalPages} pages) — ID: ${p.uri || 'unknown'}`).join('\n')
         : '  No papers loaded.';
 
       const noteSummaries = notes.length > 0
@@ -497,14 +498,18 @@ ${textToAnalyze}`;
         };
       }
 
+      // Resolve the actual workspace index so notes group correctly in Layer 3
+      const realPaperIndex = papers.findIndex(p => p.uri === paper_uri);
+      const targetIndex = realPaperIndex !== -1 ? realPaperIndex : 99;
+
       const results = [];
       paperNotes.forEach((n, i) => {
-        const memId = generateId('Note', 99, i); // Use 99 for student notes for now
+        const memId = generateId('Note', targetIndex, i);
         const text = `Quote: "${n.quote}" (Pg ${n.pageNumber})`;
-        
+
         sessionContextPool[memId] = {
           type: 'note',
-          paper_index: 99, 
+          paper_index: targetIndex,
           page_number: n.pageNumber,
           content: text
         };
@@ -542,10 +547,10 @@ ${textToAnalyze}`;
         return { observation: `ERROR: No valid or existing IDs found. Provided: ${memory_ids.join(', ')}`, memoryType: 'short_term' };
       }
 
-      let obs = savedEntries.length > 0 
-        ? `SUCCESS: Saved ${savedEntries.length} new items to long-term memory. ` 
+      let obs = savedEntries.length > 0
+        ? `SUCCESS: Saved ${savedEntries.length} new items to long-term memory. `
         : `No new items to save. `;
-      
+
       if (alreadySaved.length > 0) obs += `\nNote: The following IDs were ALREADY in memory: ${alreadySaved.join(', ')}`;
       if (notFound.length > 0) obs += `\nWarning: IDs not found: ${notFound.join(', ')}`;
 

@@ -22,16 +22,19 @@ try {
 
 router.post('/run-task', async (req, res, next) => {
   const { task, papers, notes, workflowId } = req.body.data || req.body;
-  
-  // Use a unique key based on task and first paper URI to prevent "cloned" runs
-  const primaryPaperUri = papers?.[0]?.uri || 'unknown';
-  const taskKey = `${primaryPaperUri}-${workflowId || 'general'}`;
-  
+
+  // Build a unique task key from ALL paper URIs (sorted) + workflowId.
+  // Sorting ensures [A,B] and [B,A] produce the same key.
+  // Including workflowId means the same papers can run different workflows concurrently
+  // (e.g. lit_review and get_findings at the same time without blocking each other).
+  const paperUris = (Array.isArray(papers) ? papers : []).map(p => p.uri || '').sort().join(',');
+  const taskKey = `${paperUris}::${workflowId || 'general'}`;
+
   if (activeTasks.has(taskKey)) {
-    console.log(`[ResearchAgent] ⚠️  BLOCKED: Task already in progress for this paper: ${taskKey}`);
-    return res.status(202).json({ 
-      success: true, 
-      message: 'Workflow already in progress. Please wait for the current task to finish.' 
+    console.log(`[ResearchAgent] ⚠️  BLOCKED: Identical task already in progress: ${taskKey}`);
+    return res.status(202).json({
+      success: true,
+      message: 'Workflow already in progress. Please wait for the current task to finish.'
     });
   }
 
@@ -85,9 +88,7 @@ router.post('/run-task', async (req, res, next) => {
     next(err);
   } finally {
     // Always unlock once the agent loop finishes or errors out
-    const primaryPaperUri = papers?.[0]?.uri || 'unknown';
-    const taskKey = `${primaryPaperUri}-${workflowId || 'general'}`;
-    activeTasks.delete(taskKey); 
+    activeTasks.delete(taskKey);
   }
 });
 
