@@ -240,6 +240,47 @@ function extractDecision(responseText) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Fallback LLM call using GPT-4o-mini via the OpenAI API.
+ * Mirrors the callOpenAI pattern from geminiService.js.
+ * Called when Gemini fails on a given iteration.
+ *
+ * @param {string} contextText - The full context string built by buildContext()
+ * @returns {Promise<string>} - The raw JSON text from the model
+ */
+async function callOpenAIAgent(contextText) {
+  if (!config.openaiApiKey) {
+    throw new Error('OpenAI API key not configured — cannot use fallback');
+  }
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${config.openaiApiKey}`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a research agent. You MUST respond with ONLY valid JSON. No prose, no markdown, no explanation.'
+        },
+        { role: 'user', content: contextText }
+      ],
+      response_format: { type: 'json_object' }
+    })
+  });
+
+  if (!response.ok) {
+    const errBody = await response.text();
+    throw new Error(`OpenAI Error ${response.status}: ${errBody}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0]?.message?.content || '';
+}
+
+/**
  * Main Research Agent Loop — orchestrates the ReAct cycle.
  *
  * @param {string}           task       - The student's request
@@ -248,8 +289,11 @@ function extractDecision(responseText) {
  * @returns {Promise<AgentResult>}
  */
 async function runAgentTask(task, workspace, workflowId) {
+  if (!genAI && !config.openaiApiKey) {
+    throw new Error('No AI provider available — check GEMINI_API_KEY or OPENAI_API_KEY');
+  }
   if (!genAI) {
-    throw new Error('Gemini AI not initialized — check GEMINI_API_KEY');
+    logger.warn('[ResearchAgent] Gemini not available — will use GPT-4o-mini fallback only');
   }
 
   // Resolve workflowId to the instruction text (null = free-form task)
@@ -263,9 +307,13 @@ async function runAgentTask(task, workspace, workflowId) {
   // Session state — fresh for each task
   const executionLog = [];       // Compact summaries of all past actions
   const sessionMemory = [];      // Long-term: agent-curated key findings via save_to_memory
-  const sessionContextPool = {}; // NEW: High-capacity temporary storage for raw tool outputs (mapped to IDs)
+  const sessionContextPool = {}; // High-capacity temporary storage for raw tool outputs (mapped to IDs)
   let recentObservations = [];   // Short-term: up to last 3 tool outputs
   let iteration = 0;
+
+  // Consecutive error tracking — abort early if agent is stuck in a loop
+  let consecutiveErrors = 0;
+  const MAX_CONSECUTIVE_ERRORS = 4;
 
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.5-flash',
@@ -283,37 +331,55 @@ async function runAgentTask(task, workspace, workflowId) {
     iteration++;
     logger.info(`[ResearchAgent] === Iteration ${iteration}/${MAX_ITERATIONS} ===`);
 
-    // ── STEP A: Build fresh context and call Gemini ──────────────────────
+    // ── STEP A: Build context — Tier 1: Gemini, Tier 2: GPT-4o-mini ──────
+    // Context is built ONCE before both providers to avoid duplicate work.
     let responseText;
-    try {
-      const context = buildContext(
-        task,
-        workspace,
-        executionLog,
-        sessionMemory,
-        recentObservations, // FIXED: Pass the full array as expected by buildContext
-        workflow
-      );
+    const context = buildContext(
+      task,
+      workspace,
+      executionLog,
+      sessionMemory,
+      recentObservations,
+      workflow
+    );
 
+    try {
+      // TIER 1: Gemini
+      if (!genAI) throw new Error('Gemini not initialised — skipping to fallback');
       const result = await model.generateContent({
         contents: [{ role: 'user', parts: [{ text: context }] }]
       });
-
       responseText = result.response.text();
+      logger.info(`[ResearchAgent] ✅ Tier 1 (Gemini) on iteration ${iteration}`);
 
-      // Log truncated response so we can see what the model is doing
-      const preview = responseText.length > 200
-        ? responseText.substring(0, 200) + '...'
-        : responseText;
-      logger.info(`[ResearchAgent] Raw Response (truncated): ${preview.replace(/\n/g, ' ')}`);
-      logger.info(`[ResearchAgent] Total length: ${responseText.length} chars`);
+    } catch (geminiError) {
+      logger.warn(`[ResearchAgent] ⚠️ Tier 1 (Gemini) failed on iteration ${iteration}: ${geminiError.message}. Trying Tier 2...`);
 
-    } catch (apiError) {
-      logger.error(`[ResearchAgent] ❌ Error in iteration ${iteration}:`, apiError);
-      recentObservations.unshift(`ERROR: Tool output/API failed: ${apiError.message || 'Unknown error'}`);
-      if (recentObservations.length > 10) recentObservations.pop();
-      continue;
+      // TIER 2: GPT-4o-mini fallback
+      try {
+        responseText = await callOpenAIAgent(context);
+        logger.info(`[ResearchAgent] ✅ Tier 2 (GPT-4o-mini) on iteration ${iteration}`);
+
+      } catch (openaiError) {
+        logger.error(`[ResearchAgent] ❌ Tier 2 (GPT-4o-mini) also failed on iteration ${iteration}: ${openaiError.message}`);
+        consecutiveErrors++;
+        logger.warn(`[ResearchAgent] ⚠️ Consecutive errors: ${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}`);
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          logger.error(`[ResearchAgent] 🛑 Aborting: both AI providers failed ${consecutiveErrors} times in a row`);
+          return { success: false, iterations: iteration, memoryUsed: sessionMemory, history: executionLog };
+        }
+        recentObservations.unshift('ERROR: AI provider unavailable on this iteration. Retrying...');
+        if (recentObservations.length > 3) recentObservations.pop();
+        continue;
+      }
     }
+
+    // Log truncated response so we can see what the model is doing
+    const preview = responseText.length > 200
+      ? responseText.substring(0, 200) + '...'
+      : responseText;
+    logger.info(`[ResearchAgent] Raw Response (truncated): ${preview.replace(/\n/g, ' ')}`);
+    logger.info(`[ResearchAgent] Total length: ${responseText.length} chars`);
 
     // ── STEP B: Parse the JSON response ─────────────────────────────────
     const { decision, error: parseError } = extractDecision(responseText);
@@ -322,6 +388,12 @@ async function runAgentTask(task, workspace, workflowId) {
       logger.warn(`[ResearchAgent] JSON parse failed on iteration ${iteration}: ${parseError}`);
       recentObservations.unshift('ERROR: Your response was not valid JSON. You MUST respond with ONLY the JSON format — no other text, no markdown.');
       if (recentObservations.length > 3) recentObservations.pop();
+      consecutiveErrors++;
+      logger.warn(`[ResearchAgent] ⚠️ Consecutive errors: ${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}`);
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        logger.error(`[ResearchAgent] 🛑 Aborting: stuck in JSON parse error loop after ${consecutiveErrors} attempts`);
+        return { success: false, iterations: iteration, memoryUsed: sessionMemory, history: executionLog };
+      }
       continue;
     }
 
@@ -458,6 +530,19 @@ async function runAgentTask(task, workspace, workflowId) {
           recentObservations.pop(); // Keep only the 3 most recent
         }
 
+        // Track consecutive errors based on tool observations
+        if (observation.startsWith('ERROR:')) {
+          consecutiveErrors++;
+          logger.warn(`[ResearchAgent] ⚠️ Consecutive errors: ${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS} — ${observation.substring(0, 80)}`);
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            logger.error(`[ResearchAgent] 🛑 Aborting: agent stuck in tool error loop after ${consecutiveErrors} consecutive failures`);
+            return { success: false, iterations: iteration, memoryUsed: sessionMemory, history: executionLog };
+          }
+        } else {
+          // Successful tool result — reset the counter
+          consecutiveErrors = 0;
+        }
+
         logger.info(`[ResearchAgent] Tool: ${act.tool}`);
         logger.info(`[ResearchAgent] Result: ${resultSummary.substring(0, 100)}`);
 
@@ -472,16 +557,13 @@ async function runAgentTask(task, workspace, workflowId) {
 
   // ── MAX ITERATIONS EXCEEDED ───────────────────────────────────────────────
   logger.warn(`[ResearchAgent] ⚠️  Max iterations (${MAX_ITERATIONS}) reached without task_complete`);
-
-  // Return any partial findings from session memory
-  const partialFindings = sessionMemory.length > 0
-    ? '\n\nPartial findings gathered during research:\n' +
-    sessionMemory.map(m => `- [${m.type.toUpperCase()}]: ${m.content.substring(0, 100)}...`).join('\n')
-    : '';
+  if (sessionMemory.length > 0) {
+    const partialSummary = sessionMemory.map(m => `- [${m.type?.toUpperCase()}]: ${(m.content || '').substring(0, 100)}...`).join('\n');
+    logger.info(`[ResearchAgent] Partial findings (internal only):\n${partialSummary}`);
+  }
 
   return {
     success: false,
-    response: `The research agent was unable to complete the task within ${MAX_ITERATIONS} steps.${partialFindings}\n\nPlease try a more specific request.`,
     iterations: MAX_ITERATIONS,
     memoryUsed: sessionMemory,
     history: executionLog

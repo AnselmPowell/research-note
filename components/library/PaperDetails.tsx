@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Edit2, FileText, File, BookText, Loader2, X, Sparkles, Check, Copy, RotateCcw } from 'lucide-react';
+import { Edit2, FileText, File, BookText, Loader2, X, Sparkles, Check, Copy, RotateCcw, AlertCircle } from 'lucide-react';
 import { fetchPdfBuffer, extractPdfData } from '../../services/pdfService';
 import { useDatabase } from '../../database/DatabaseContext';
 
@@ -99,6 +99,8 @@ interface PaperDetailsProps {
     onGenerateAbstract: (paper: any) => void;
     isDownloading?: boolean;
     isAgentRunning?: boolean;
+    agentError?: string | null;
+    onDismissAgentError?: () => void;
 }
 
 export const PaperDetails: React.FC<PaperDetailsProps> = ({
@@ -111,7 +113,9 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
     onGenerateHarvardReference,
     onGenerateAbstract,
     isDownloading,
-    isAgentRunning
+    isAgentRunning,
+    agentError,
+    onDismissAgentError
 }) => {
     const [isExtracting, setIsExtracting] = useState(false);
     const [activeTab, setActiveTab] = useState('abstract');
@@ -460,8 +464,18 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                                         }
 
                                         return (
-                                            <div className="flex flex-col items-center justify-center min-h-[200px] border-gray-100 dark:border-gray-800 rounded-2xl py-8 px-4 text-center">
-                                                <button
+                                            <div className="flex flex-col gap-3 min-h-[200px] border-gray-100 dark:border-gray-800 rounded-2xl py-8 px-4">
+                                                {agentError && (
+                                                    <div className="flex items-center gap-2 px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl text-sm text-red-600 dark:text-red-400">
+                                                        <AlertCircle size={15} className="shrink-0" />
+                                                        <span className="text-[11px] font-semibold flex-1">{agentError}</span>
+                                                        <button onClick={onDismissAgentError} className="ml-auto p-0.5 hover:text-red-700 dark:hover:text-red-300 transition-colors">
+                                                            <X size={13} />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                <div className="flex items-center justify-center flex-1">
+                                                    <button
                                                     onClick={() => {
                                                         if (activeTab === 'abstract') handleActionWithPrecheck(onGenerateAbstract);
                                                         else if (activeTab === 'lit review') handleActionWithPrecheck(onGenerateLiteratureReview);
@@ -471,12 +485,13 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                                                     className="inline-flex items-center gap-2.5 px-6 py-5 bg-scholar-50/50 dark:bg-scholar-900/20 text-scholar-600 dark:text-scholar-400 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl border border-scholar-300 dark:border-scholar-800/50 hover:bg-scholar-50 dark:hover:bg-scholar-900/40 transition-all group"
                                                 >
                                                     <Sparkles size={14} className="group-hover:animate-pulse" />
-                                                    {activeTab === 'abstract' ? 'GENERATE ABSTRACT' :
-                                                        activeTab === 'lit review' ? 'GENERATE LITERATURE REVIEW' :
-                                                            activeTab === 'method' ? 'GENERATE METHODOLOGY' :
-                                                                activeTab === 'findings' ? 'GENERATE FINDINGS/RESULTS' :
-                                                                    `GENERATE ${activeTab.toUpperCase()}`}
-                                                </button>
+                                                                    {activeTab === 'abstract' ? 'GENERATE ABSTRACT' :
+                                                            activeTab === 'lit review' ? 'GENERATE LITERATURE REVIEW' :
+                                                                activeTab === 'method' ? 'GENERATE METHODOLOGY' :
+                                                                    activeTab === 'findings' ? 'GENERATE FINDINGS/RESULTS' :
+                                                                        `GENERATE ${activeTab.toUpperCase()}`}
+                                                    </button>
+                                                </div>
                                             </div>
                                         );
                                     })()
