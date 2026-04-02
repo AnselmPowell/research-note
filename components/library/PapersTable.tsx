@@ -255,6 +255,15 @@ export const PapersTable: React.FC<PapersTableProps> = ({
     );
 };
 
+const getSourceString = (uri: string) => {
+    if (!uri) return 'Unknown Source';
+    try {
+        return new URL(uri).hostname;
+    } catch (e) {
+        return uri.startsWith('local://') ? 'Local File' : 'Unknown Source';
+    }
+};
+
 const ExpandedRowContent = ({ 
     paper, 
     notesCount, 
@@ -315,7 +324,7 @@ const ExpandedRowContent = ({
                         <div>
                             <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Details</h4>
                             <p className="text-xs text-gray-500">
-                                Source: {new URL(paper.uri).hostname}
+                                Source: {getSourceString(paper.uri)}
                                 {paper.published ? ` • Published: ${new Date(paper.published).toLocaleDateString()}` : ''}
                             </p>
                         </div>

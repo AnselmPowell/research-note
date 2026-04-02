@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Edit2, FileText, File, BookText, Loader2, X, Sparkles, Check, Copy, RotateCcw, AlertCircle } from 'lucide-react';
 import { fetchPdfBuffer, extractPdfData } from '../../services/pdfService';
 import { useDatabase } from '../../database/DatabaseContext';
+import { useLibrary } from '../../contexts/LibraryContext';
 
 /**
  * Lightweight markdown-style formatter for Agent responses
@@ -124,7 +125,8 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
     const [copiedContent, setCopiedContent] = useState(false);
     const [copiedMeta, setCopiedMeta] = useState(false);
     const { savePaper } = useDatabase();
-    
+    const { loadedPdfs } = useLibrary();
+
     const detailsRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -185,11 +187,23 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
         // If content is missing, we MUST extract it first
         if (!paper.pages || paper.pages.length === 0) {
             console.log('[PaperDetails] Missing page data, triggering automatic extraction before agent run...');
-            const result = await handleGetMetadata();
-            if (result) {
-                activePaper = result;
+            
+            // QUICK CHECK: IF it's a local file we already have in memory, grab its pages DIRECTLY
+            const memoryPdf = loadedPdfs.find((lp: any) => lp.uri === paper.uri);
+            if (memoryPdf && memoryPdf.pages) {
+                activePaper = { ...paper, pages: memoryPdf.pages };
+            }
+            // OTHERWISE, try fetching it if it's a standard web URL
+            else if (!paper.uri.startsWith('local://')) {
+                const result = await handleGetMetadata();
+                if (result) {
+                    activePaper = result;
+                } else {
+                    console.error('[PaperDetails] Extraction failed, cannot proceed with agent workflow');
+                    return;
+                }
             } else {
-                console.error('[PaperDetails] Extraction failed, cannot proceed with agent workflow');
+                console.error("[PaperDetails] Local file no longer in memory and cannot be re-fetched.");
                 return;
             }
         }
@@ -293,7 +307,7 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                         }`}
                     title="Copy all metadata"
                 >
-                    {copiedMeta ? <Check size={28} className="text-scholar-600 dark:text-scholar-400" /> : <Copy size={28} />}
+                    {copiedMeta ? <Check size={24} className="text-scholar-600 dark:text-scholar-400" /> : <Copy size={24} />}
                     <span>{copiedMeta ? 'Copied' : 'Copy'}</span>
                 </button>
             </div>
