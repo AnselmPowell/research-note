@@ -1,12 +1,14 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { PanelLeft, Columns, PanelRight, Sun, Moon, Menu, FolderOpen, BookOpenText, FileText, Check } from 'lucide-react';
+import { Sun, Moon, Menu, Check, PanelLeft, BookOpenText, FolderOpen } from 'lucide-react';
+import { TbWorldSearch } from "react-icons/tb";
+import { PanelLeftIcon, PanelMiddleIcon, PanelRightIcon } from '../icons/CustomPanelIcons';
 import { useUI, ColumnKey } from '../../contexts/UIContext';
 import { useResearch } from '../../contexts/ResearchContext';
 
 const Tooltip = ({ text, icon: Icon }: { text: string, icon: any }) => (
   <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none flex items-center gap-1.5 z-50 shadow-xl">
-    <Icon size={12} className="text-scholar-200" />
+    {/* <Icon size={12} className="text-scholar-200" /> */}
     {text}
     {/* Little arrow */}
     <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
@@ -33,7 +35,7 @@ const DesktopButton = ({ col, icon: Icon, label, tooltipIcon, isActive, onToggle
         : 'text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
         }`}
     >
-      <Icon size={isHeaderVisible ? 28 : 24} />
+      <Icon size={isHeaderVisible ? 30 + (label === "Research" ? 3 : 0) : 26} />
       <Tooltip text={label} icon={tooltipIcon} />
     </button>
   );
@@ -83,8 +85,8 @@ export const LayoutControls: React.FC<LayoutControlsProps> = ({ inSidebar = fals
       {/* Desktop View: Row of buttons */}
       <div className="hidden md:flex items-center gap-2">
         <DesktopButton col="left" icon={FolderOpen} label="Sources" tooltipIcon={FolderOpen} isActive={columnVisibility.left} onToggle={handleToggle} />
-        <DesktopButton col="middle" icon={BookOpenText} label="Research" tooltipIcon={BookOpenText} isActive={columnVisibility.middle} onToggle={handleToggle} />
-        <DesktopButton col="right" icon={FileText} label="Paper View" tooltipIcon={FileText} isActive={columnVisibility.right} onToggle={handleToggle} />
+        <DesktopButton col="middle" icon={TbWorldSearch} label="Research" tooltipIcon={TbWorldSearch} isActive={columnVisibility.middle} onToggle={handleToggle} />
+        <DesktopButton col="right" icon={BookOpenText} label="Paper" tooltipIcon={BookOpenText} isActive={columnVisibility.right} onToggle={handleToggle} />
       </div>
 
       {/* Mobile View: Burger Menu */}
@@ -103,21 +105,21 @@ export const LayoutControls: React.FC<LayoutControlsProps> = ({ inSidebar = fals
 
         {isMobileMenuOpen && (
           <div className={`absolute ${inSidebar ? 'left-0' : 'right-0'} top-full mt-2 w-52 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 overflow-hidden animate-fade-in ${inSidebar ? 'origin-top-left' : 'origin-top-right'} ring-1 ring-black/5`}>
-        
+
             <button onClick={() => handleToggle('left')} className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <FolderOpen size={18} className={columnVisibility.left ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+              <PanelLeftIcon size={18} className={columnVisibility.left ? "opacity-100" : "opacity-40 grayscale"} />
               <span className={`text-sm ${columnVisibility.left ? "font-semibold text-scholar-600 dark:text-scholar-400" : "text-gray-600 dark:text-white"}`}>Sources</span>
               {columnVisibility.left && <Check size={16} className="ml-auto text-scholar-600 dark:text-scholar-400" />}
             </button>
 
             <button onClick={() => handleToggle('middle')} className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <BookOpenText size={18} className={columnVisibility.middle ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+              <PanelMiddleIcon size={18} className={columnVisibility.middle ? "opacity-100" : "opacity-40 grayscale"} />
               <span className={`text-sm ${columnVisibility.middle ? "font-semibold text-scholar-600 dark:text-scholar-400" : "text-gray-600 dark:text-white"}`}>Deep Research</span>
               {columnVisibility.middle && <Check size={16} className="ml-auto text-scholar-600 dark:text-scholar-400" />}
             </button>
 
             <button onClick={() => handleToggle('right')} className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <FileText size={18} className={columnVisibility.right ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
+              <PanelRightIcon size={18} className={columnVisibility.right ? "opacity-100" : "opacity-40 grayscale"} />
               <span className={`text-sm ${columnVisibility.right ? "font-semibold text-scholar-600 dark:text-scholar-400" : "text-gray-600 dark:text-white"}`}>Paper View</span>
               {columnVisibility.right && <Check size={16} className="ml-auto text-scholar-600 dark:text-scholar-400" />}
             </button>
