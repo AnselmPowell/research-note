@@ -312,9 +312,9 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Layout Controls - Always visible, positioned at top-right */}
-      {isHeaderVisible === false && (
-        <div className="absolute top-3 right-3 z-[100] flex items-center">
+      {/* Layout Controls - Visible only when header is hidden and sidebar is closed */}
+      {isHeaderVisible === false && !isLibraryOpen && (
+        <div className="absolute top-2 right-3 z-[100] flex items-center">
           <LayoutControls />
         </div>
       )}

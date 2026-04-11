@@ -632,7 +632,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
         togglePdfContext(paperUri, paper.title);
       }
     }
-  
+
   }, [uiSelectedPaperUris, paperByUri, isPdfInContext, togglePdfContext, loadPdfFromUrl]);
 
   const handleNoteSelect = useCallback((id: number) => {
@@ -670,52 +670,49 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
   }), [savedPapers, savedNotes]);
 
   const View_FilterOptions = useMemo(() => {
-  if (activeTab === 'notes' || activeTab === 'papers') {
-    return (
-      <div className="flex items-center gap-2">
-        <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
-          <button
-            onClick={() => setViewMode('table')}
-            className={`p-2 rounded-lg transition-all ${
-              viewMode === 'table'
-                ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400'
-                : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'
-            }`}
-            title="Table View"
-          >
-            <TableIcon size={18} />
-          </button>
+    if (activeTab === 'notes' || activeTab === 'papers') {
+      return (
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`p-2 rounded-lg transition-all ${viewMode === 'table'
+                  ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400'
+                  : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'
+                }`}
+              title="Table View"
+            >
+              <TableIcon size={18} />
+            </button>
+
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded-lg transition-all ${viewMode === 'list'
+                  ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400'
+                  : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'
+                }`}
+              title="List View"
+            >
+              <LayoutList size={18} />
+            </button>
+          </div>
 
           <button
-            onClick={() => setViewMode('list')}
-            className={`p-2 rounded-lg transition-all ${
-              viewMode === 'list'
-                ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400'
-                : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'
-            }`}
-            title="List View"
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition-all ${showFilters
+                ? 'bg-scholar-50 dark:bg-scholar-900/30 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400'
+                : 'bg-white/60 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400'
+              }`}
           >
-            <LayoutList size={18} />
+            <Filter size={18} className="flex-shrink-0" />
+            <span className="tab-label">Filters</span>
           </button>
         </div>
+      );
+    }
 
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition-all ${
-            showFilters
-              ? 'bg-scholar-50 dark:bg-scholar-900/30 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400'
-              : 'bg-white/60 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400'
-          }`}
-        >
-          <Filter size={18} className="flex-shrink-0" />
-          <span className="tab-label">Filters</span>
-        </button>
-      </div>
-    );
-  }
-
-  return null;
-}, [activeTab, viewMode, showFilters]);
+    return null;
+  }, [activeTab, viewMode, showFilters]);
 
 
 
@@ -796,7 +793,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                 </button>
               </div>
 
-        
+
             </div>
 
             {/* ACTION BAR ROW - ONLY WHEN ITEMS SELECTED */}
@@ -905,21 +902,21 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                 {/* Add Paper Actions */}
                 {activeTab === 'papers' && (
                   <>
-                  <p className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest opacity-60">
+                    <p className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest opacity-60">
                       Total {filteredPapers.length} papers
-                  </p> 
-                  <div className="flex items-center justify-between mb-4 mt-2 ">
-                    <button
-                      onClick={() => setIsAddPaperModalOpen(true)}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-scholar-600 hover:bg-scholar-800 text-white rounded-2xl shadow-lg shadow-scholar-600/20 transition-all hover:scale-[1.02] active:scale-95 group"
-                    >
-                      <Plus size={18} />
-                      <span className="text-sm font-black uppercase tracking-widest leading-none">Add Paper</span>
-                    </button>
+                    </p>
+                    <div className="flex items-center justify-between mb-4 mt-2 ">
+                      <button
+                        onClick={() => setIsAddPaperModalOpen(true)}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-scholar-600 hover:bg-scholar-800 text-white rounded-2xl shadow-lg shadow-scholar-600/20 transition-all hover:scale-[1.02] active:scale-95 group"
+                      >
+                        <Plus size={18} />
+                        <span className="text-sm font-black uppercase tracking-widest leading-none">Add Paper</span>
+                      </button>
 
-                     {/* RIGHT: VIEW TOGGLES AND FILTERS */}
-                    {View_FilterOptions}
-                  </div>
+                      {/* RIGHT: VIEW TOGGLES AND FILTERS */}
+                      {View_FilterOptions}
+                    </div>
                   </>
                 )}
 
@@ -1022,7 +1019,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                 {activeTab === 'notes' ? (
                   <>
                     <p className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest opacity-60">
-                        Total {filteredNotes.length} insights
+                      Total {filteredNotes.length} Notes
                     </p>
                     {/* CREATE NOTE BUTTON - MOVED DOWN */}
                     <div className="flex items-center justify-between mb-4 mt-2">
@@ -1034,8 +1031,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
                         <span className="text-sm font-black uppercase tracking-widest leading-none">Create Note</span>
                       </button>
 
-                        {/* RIGHT: VIEW TOGGLES AND FILTERS */}
-                        {View_FilterOptions }
+                      {/* RIGHT: VIEW TOGGLES AND FILTERS */}
+                      {View_FilterOptions}
                     </div>
                     {viewMode === 'table' ? (
                       <NotesTable

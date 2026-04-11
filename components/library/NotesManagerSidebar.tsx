@@ -15,13 +15,14 @@ import {
   LogOut,
   Settings,
   Sun,
-  Moon
+  Moon,
+  FolderOpen,
+  LibrarySquare
 } from 'lucide-react';
 import { useDatabase } from '../../database/DatabaseContext';
 import { useUI, LibraryView } from '../../contexts/UIContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { dataMigrationService } from '../../utils/dataMigrationService';
-import { NotesManager } from './NotesManager';
 import { LayoutControls } from '../layout/LayoutControls';
 
 // --- SUBCOMPONENTS ---
@@ -258,17 +259,42 @@ export const SidebarNav: React.FC<{
       </div>
 
       <div className="flex-1 -mt-4 overflow-y-auto custom-scrollbar px-0.5 md:px-1">
-        <div className="mb-1">
-          <NavItem label="All Notes" count={savedNotes.length} isActive={columnVisibility.library && libraryActiveView === 'all'} onClick={() => handleSelect('all')} />
-          <NavItem label="Papers" count={savedPapers.length} isActive={columnVisibility.library && libraryActiveView === 'papers'} onClick={() => handleSelect('papers')} />
-          <NavItem label="Research Findings" count={0} showCount={false} isActive={columnVisibility.library && libraryActiveView === 'research'} onClick={() => handleSelect('research')} />
+        {!columnVisibility.library ? (
+          /* Simplified Library View - Styled like Dashboard Mode */
+          <div className="mt-4 px-3 md:px-4">
+            <button
+              onClick={() => {
+                if (!libraryActiveView) setLibraryActiveView('all');
+                openColumn('library');
+              }}
+              className="w-full flex items-center justify-between p-4  hover:border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors hover:shadow-sm"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8  dark:text-white text-gray-900 flex items-center justify-center">
+                  <LibraryBig size={24} />
+                </div>
+                <div className="text-left">
+                  <div className="font-bold text-sm">Library</div>
+                  <div className="text-[10px] opacity-70 ">Manage your research</div>
+                </div>
+              </div>
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        ) : (
+          /* Full Note Manager Navigation */
+          <div className="mb-1">
+            <NavItem label="All Notes" count={savedNotes.length} isActive={columnVisibility.library && libraryActiveView === 'all'} onClick={() => handleSelect('all')} />
+            <NavItem label="Papers" count={savedPapers.length} isActive={columnVisibility.library && libraryActiveView === 'papers'} onClick={() => handleSelect('papers')} />
+            <NavItem label="Research Findings" count={0} showCount={false} isActive={columnVisibility.library && libraryActiveView === 'research'} onClick={() => handleSelect('research')} />
 
-          <div className="h-px bg-gray-100 dark:bg-gray-800 mx-6 my-2 opacity-50"></div>
+            <div className="h-px bg-gray-100 dark:bg-gray-800 mx-6 my-2 opacity-50"></div>
 
-          <NavItem icon={Clock} label="Recently Added" count={savedNotes.filter(n => (new Date().getTime() - new Date(n.created_at || 0).getTime()) < 86400000).length} isActive={columnVisibility.library && libraryActiveView === 'recent'} onClick={() => handleSelect('recent')} iconColor="text-gray-600" />
-          <NavItem icon={Flag} label="Flagged" count={savedNotes.filter(n => n.is_flagged).length} isActive={columnVisibility.library && libraryActiveView === 'flagged'} onClick={() => handleSelect('flagged')} iconColor="text-red-700" />
-          <NavItem icon={Star} label="Favorites" count={savedNotes.filter(n => n.is_starred).length} isActive={columnVisibility.library && libraryActiveView === 'starred'} onClick={() => handleSelect('starred')} iconColor="text-orange-500" />
-        </div>
+            <NavItem icon={Clock} label="Recently Added" count={savedNotes.filter(n => (new Date().getTime() - new Date(n.created_at || 0).getTime()) < 86400000).length} isActive={columnVisibility.library && libraryActiveView === 'recent'} onClick={() => handleSelect('recent')} iconColor="text-gray-600" />
+            <NavItem icon={Flag} label="Flagged" count={savedNotes.filter(n => n.is_flagged).length} isActive={columnVisibility.library && libraryActiveView === 'flagged'} onClick={() => handleSelect('flagged')} iconColor="text-red-700" />
+            <NavItem icon={Star} label="Favorites" count={savedNotes.filter(n => n.is_starred).length} isActive={columnVisibility.library && libraryActiveView === 'starred'} onClick={() => handleSelect('starred')} iconColor="text-orange-500" />
+          </div>
+        )}
 
         <div className="mt-4 px-3 md:px-4">
           <button
