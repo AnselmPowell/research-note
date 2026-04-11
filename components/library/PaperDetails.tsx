@@ -28,7 +28,7 @@ export const AgentResponseFormatter: React.FC<{ content: string }> = ({ content 
     };
 
     return (
-        <div className="space-y-1.5 py-2 animate-fade-in font-quicksand">
+        <div className="space-y-1.5 py-4 animate-fade-in font-quicksand">
             {content.split('\n').map((line, idx) => {
                 const trimmedLine = line.trim();
 
@@ -187,7 +187,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
         // If content is missing, we MUST extract it first
         if (!paper.pages || paper.pages.length === 0) {
             console.log('[PaperDetails] Missing page data, triggering automatic extraction before agent run...');
-            
+
             // QUICK CHECK: IF it's a local file we already have in memory, grab its pages DIRECTLY
             const memoryPdf = loadedPdfs.find((lp: any) => lp.uri === paper.uri);
             if (memoryPdf && memoryPdf.pages) {

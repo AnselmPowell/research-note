@@ -13,7 +13,8 @@ import {
     FileText,
     StickyNote,
     Sparkles,
-    PlusCircle
+    PlusCircle,
+    RotateCcw
 } from 'lucide-react';
 import { DeepResearchResult, DeepResearchNote } from '../../types';
 import { useState } from 'react';
@@ -224,10 +225,10 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                                 {isExpanded && (
                                     <tr className="bg-gray-50/50 dark:bg-gray-800/20 animate-slide-down">
                                         <td colSpan={6} className="p-0">
-                                            <ExpandedRowContent 
-                                                paper={paper} 
-                                                notesCount={notesCount} 
-                                                onRunAgentWorkflow={onRunAgentWorkflow} 
+                                            <ExpandedRowContent
+                                                paper={paper}
+                                                notesCount={notesCount}
+                                                onRunAgentWorkflow={onRunAgentWorkflow}
                                                 agentRunningTasks={agentRunningTasks}
                                                 onExtractMetadata={onExtractMetadata}
                                                 extractingUris={extractingUris}
@@ -264,10 +265,10 @@ const getSourceString = (uri: string) => {
     }
 };
 
-const ExpandedRowContent = ({ 
-    paper, 
-    notesCount, 
-    onRunAgentWorkflow, 
+const ExpandedRowContent = ({
+    paper,
+    notesCount,
+    onRunAgentWorkflow,
     agentRunningTasks,
     onTitleClick
 }: any) => {
@@ -287,19 +288,19 @@ const ExpandedRowContent = ({
             {/* Tab Navigation Menu */}
             <div className="flex border-b border-gray-100 dark:border-gray-800 mb-4 items-center">
                 <div className="flex space-x-6 items-center">
-                    <button 
-                      onClick={() => setActiveTab('abstract')}
-                      className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'abstract' ? 'border-b-2 border-scholar-600 text-scholar-600' : 'text-gray-400 hover:text-gray-600'}`}>
-                      Abstract
+                    <button
+                        onClick={() => setActiveTab('abstract')}
+                        className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'abstract' ? 'border-b-2 border-scholar-600 text-scholar-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                        Abstract
                     </button>
-                    <button 
-                      onClick={() => setActiveTab('findings')}
-                      className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'findings' ? 'border-b-2 border-scholar-600 text-scholar-600' : 'text-gray-400 hover:text-gray-600'}`}>
-                      Key Findings
+                    <button
+                        onClick={() => setActiveTab('findings')}
+                        className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'findings' ? 'border-b-2 border-scholar-600 text-scholar-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                        Key Findings
                     </button>
-                    
+
                     {/* The Plus Button to open PaperDetails */}
-                    <button 
+                    <button
                         onClick={() => onTitleClick(paper)}
                         className="p-1 mb-2 text-gray-400 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors ml-4"
                         title="Open Paper Details">
@@ -310,10 +311,22 @@ const ExpandedRowContent = ({
 
             {/* TAB PANELS */}
             {activeTab === 'abstract' && (
-                <div className="animate-fade-in">
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-serif pb-4">
-                        {paper.abstract || "No abstract available for this document."}
-                    </p>
+                <div className="animate-fade-in relative">
+
+                    <div className="absolute top-0 right-0">
+                        <button
+                            onClick={() => onRunAgentWorkflow(paper, 'summarise_paper')}
+                            disabled={!!agentRunningTasks[paper.uri]}
+                            className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all"
+                            title="Regenerate Abstract"
+                        >
+                            <RotateCcw size={18} className={agentRunningTasks[paper.uri] === 'summarise_paper' ? "animate-spin text-scholar-500" : ""} />
+                        </button>
+                    </div>
+
+                    <div className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-serif pr-10">
+                        <AgentResponseFormatter content={paper.abstract || "No abstract available for this document."} />
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-gray-100 dark:border-gray-800">
                         <div>
                             <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Full Authors</h4>
@@ -334,14 +347,24 @@ const ExpandedRowContent = ({
 
             {/* Unified Findings Panel */}
             {activeTab === 'findings' && (
-                <div className="animate-fade-in flex flex-col items-center">
+                <div className="animate-fade-in flex flex-col items-center relative">
                     {paper.findings ? (
-                        <div className="text-sm max-w-4xl w-full py-2">
+                        <div className="text-sm max-w-4xl w-full py-2 pr-10">
+                            <div className="absolute top-0 right-0">
+                                <button
+                                    onClick={() => onRunAgentWorkflow(paper, 'get_findings')}
+                                    disabled={!!agentRunningTasks[paper.uri]}
+                                    className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all"
+                                    title="Regenerate Key Findings"
+                                >
+                                    <RotateCcw size={18} className={agentRunningTasks[paper.uri] === 'get_findings' ? "animate-spin text-scholar-500" : ""} />
+                                </button>
+                            </div>
                             <AgentResponseFormatter content={paper.findings} />
                         </div>
                     ) : (
                         <div className="flex justify-center w-full my-10">
-                            <button 
+                            <button
                                 onClick={() => onRunAgentWorkflow(paper, 'get_findings')}
                                 disabled={agentRunningTasks[paper.uri] === 'get_findings'}
                                 className="px-10 py-3 bg-scholar-600 text-white rounded-lg hover:bg-scholar-700 transition-all font-bold text-sm shadow-sm flex items-center gap-2">
