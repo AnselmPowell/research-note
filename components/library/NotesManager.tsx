@@ -177,7 +177,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
         'get_methodology': `Extract and analyze the methodology used in this paper: "${paper.title}"`,
         'get_findings': `Identify the core questions the paper asks, summarize the key findings/results, and highlight any gaps in the research: "${paper.title}"`,
         'format_reference': `Format a professional Harvard reference for the paper: "${paper.title}".`,
-        'summarise_paper': `Provide a clear, academic summary/abstract of this paper: "${paper.title}"`
+        'summarise_paper': `Provide a clear, academic summary/abstract of this paper: "${paper.title}"`,
+        'paper_breakdown': `Create a complete, plain-language student breakdown of this paper: "${paper.title}"`
       };
 
       const taskPrompt = taskDescriptions[workflowId] || `Perform ${workflowId} analysis for the paper: "${paper.title}"`;
@@ -207,7 +208,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
           'literature_review': 'literature_review',
           'get_methodology': 'methodology',
           'get_findings': 'findings',
-          'format_reference': 'harvardReference'
+          'format_reference': 'harvardReference',
+          'paper_breakdown': 'paper_breakdown'
         };
 
         const targetField = fieldMap[workflowId];
@@ -1253,6 +1255,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
             onGenerateFindings={(p) => handleRunAgentWorkflow(p, 'get_findings')}
             onGenerateHarvardReference={(p) => handleRunAgentWorkflow(p, 'format_reference')}
             onGenerateAbstract={(p) => handleRunAgentWorkflow(p, 'summarise_paper')}
+            onGenerateBreakdown={(p) => handleRunAgentWorkflow(p, 'paper_breakdown')}
             isDownloading={downloadingUris.has(liveSelectedPaper.uri)}
             isAgentRunning={!!agentRunningTasks[liveSelectedPaper.uri]}
             runningWorkflowId={agentRunningTasks[liveSelectedPaper.uri]}

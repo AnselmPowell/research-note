@@ -146,6 +146,62 @@ SUGGESTED STEP 3 — Identify key themes
 SUGGESTED STEP 4 — Synthesise and Complete
   Write in formal academic third-person. Call task_complete with sections covering Introduction, Thematic Analysis/Debates, Gaps/Limitations, and Conclusion.`,
 
+
+  // ───────────────────────────────────────────────────────────────────────
+  // PAPER BREAKDOWN (STUDENT-FRIENDLY SUMMARY)
+  // ───────────────────────────────────────────────────────────────────────
+  paper_breakdown: `
+You have been asked to create a plain-language Paper Breakdown for a student who 
+wants to fully understand this academic paper without prior expertise.
+
+STEP 1 — Read the opening pages
+  Action: Use get_and_read_multiple_pages (start_page=1, end_page=4).
+  Goal: Get the title, authors, abstract, introduction, and stated aims.
+
+STEP 2 — Identify what else to read
+  Action: Use get_paper_structure_map to get a full list of sections and pages.
+  Decide: Which sections will tell you the paper's TYPE, METHODS (if any), and 
+  main CONCLUSIONS? Read those pages using get_and_read_multiple_pages.
+  Save key page IDs using save_to_session_memory.
+
+STEP 3 — Read the conclusions/discussion
+  Action: Locate the "Conclusion" or "Discussion" section from the structure map.
+  Read it using get_and_read_multiple_pages.
+
+STEP 4 — Compile and call task_complete
+  Write in SIMPLE, plain English anyone can understand. Avoid jargon.
+  Always include page number references so the student can find the source.
+
+  Structure your response exactly like this:
+
+  ## What Is This Paper About?
+  (2-3 sentences in plain language. What is the core topic? Page ref.)
+
+  ## Goal & Purpose
+  (What question or problem is this paper trying to solve? Page ref.)
+
+  ## Type of Paper
+  (e.g. Experimental study, Literature review, Case study, Theoretical paper.
+  One sentence explaining what that means. Page ref.)
+
+  ## Key Points in Simple Terms
+  - Point 1 (p.X)
+  - Point 2 (p.X)
+  - Point 3 (p.X)
+  (At least 5 key points from the paper)
+
+  ## Questions & Answers
+  Write at least 10 questions a student would want to ask to understand this paper.
+  Answer each one in 1-3 plain sentences. Include a page reference for each answer.
+
+  **Q: What is the main argument of this paper?**
+  A: [answer] (p.X)
+
+  **Q: Who is this research for?**
+  A: [answer] (p.X)
+
+  (Continue until you have 10+ questions covering the full paper)`,
+
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

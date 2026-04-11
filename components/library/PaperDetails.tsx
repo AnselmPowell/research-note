@@ -98,6 +98,7 @@ interface PaperDetailsProps {
     onGenerateFindings: (paper: any) => void;
     onGenerateHarvardReference: (paper: any) => void;
     onGenerateAbstract: (paper: any) => void;
+    onGenerateBreakdown: (paper: any) => void;
     isDownloading?: boolean;
     isAgentRunning?: boolean;
     runningWorkflowId?: string | null;
@@ -114,6 +115,7 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
     onGenerateFindings,
     onGenerateHarvardReference,
     onGenerateAbstract,
+    onGenerateBreakdown,
     isDownloading,
     isAgentRunning,
     runningWorkflowId,
@@ -262,6 +264,7 @@ ${paper.abstract || paper.summary || 'No abstract available'}
 
     const handleRegenerateContent = () => {
         if (activeTab === 'abstract') handleActionWithPrecheck(onGenerateAbstract);
+        else if (activeTab === 'breakdown') handleActionWithPrecheck(onGenerateBreakdown);
         else if (activeTab === 'lit review') handleActionWithPrecheck(onGenerateLiteratureReview);
         else if (activeTab === 'method') handleActionWithPrecheck(onGenerateMethodology);
         else if (activeTab === 'findings') handleActionWithPrecheck(onGenerateFindings);
@@ -270,6 +273,7 @@ ${paper.abstract || paper.summary || 'No abstract available'}
     const hasAnyContent = useMemo(() => {
         const fieldMap: Record<string, string> = {
             'abstract': 'abstract',
+            'breakdown': 'paper_breakdown',
             'lit review': 'literature_review',
             'method': 'methodology',
             'findings': 'findings'
@@ -279,6 +283,7 @@ ${paper.abstract || paper.summary || 'No abstract available'}
 
     const TAB_WORKFLOW_MAP: Record<string, string> = {
         'abstract': 'summarise_paper',
+        'breakdown': 'paper_breakdown',
         'lit review': 'literature_review',
         'method': 'get_methodology',
         'findings': 'get_findings'
@@ -442,7 +447,7 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                     <div className="space-y-4 border-t pt-4 border-gray-400 dark:border-gray-500">
                         <div className="flex items-center justify-between gap-x-6 gap-y-2">
                             <div className="flex flex-wrap gap-x-6 gap-y-2">
-                                {['abstract', 'lit review', 'method', 'findings'].map((tab) => {
+                                {['abstract', 'breakdown', 'lit review', 'method', 'findings'].map((tab) => {
                                     const isThisTabRunning = runningWorkflowId === TAB_WORKFLOW_MAP[tab];
                                     return (
                                         <button
@@ -497,6 +502,7 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                                     (() => {
                                         const fieldMap: Record<string, string> = {
                                             'abstract': 'abstract',
+                                            'breakdown': 'paper_breakdown',
                                             'lit review': 'literature_review',
                                             'method': 'methodology',
                                             'findings': 'findings'
@@ -524,6 +530,7 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                                                     <button
                                                         onClick={() => {
                                                             if (activeTab === 'abstract') handleActionWithPrecheck(onGenerateAbstract);
+                                                            else if (activeTab === 'breakdown') handleActionWithPrecheck(onGenerateBreakdown);
                                                             else if (activeTab === 'lit review') handleActionWithPrecheck(onGenerateLiteratureReview);
                                                             else if (activeTab === 'method') handleActionWithPrecheck(onGenerateMethodology);
                                                             else if (activeTab === 'findings') handleActionWithPrecheck(onGenerateFindings);
@@ -533,10 +540,11 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                                                     >
                                                         <Sparkles size={14} className="group-hover:animate-pulse" />
                                                         {activeTab === 'abstract' ? 'GENERATE ABSTRACT' :
-                                                            activeTab === 'lit review' ? 'GENERATE LITERATURE REVIEW' :
-                                                                activeTab === 'method' ? 'GENERATE METHODOLOGY' :
-                                                                    activeTab === 'findings' ? 'GENERATE FINDINGS/RESULTS' :
-                                                                        `GENERATE ${activeTab.toUpperCase()}`}
+                                                            activeTab === 'breakdown' ? 'GENERATE PAPER BREAKDOWN' :
+                                                                activeTab === 'lit review' ? 'GENERATE LITERATURE REVIEW' :
+                                                                    activeTab === 'method' ? 'GENERATE METHODOLOGY' :
+                                                                        activeTab === 'findings' ? 'GENERATE FINDINGS/RESULTS' :
+                                                                            `GENERATE ${activeTab.toUpperCase()}`}
                                                     </button>
                                                 </div>
                                             </div>

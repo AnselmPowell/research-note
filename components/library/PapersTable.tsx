@@ -272,7 +272,7 @@ const ExpandedRowContent = ({
     agentRunningTasks,
     onTitleClick
 }: any) => {
-    const [activeTab, setActiveTab] = useState<'abstract' | 'findings'>('abstract');
+    const [activeTab, setActiveTab] = useState<'abstract' | 'breakdown' | 'findings'>('abstract');
 
     return (
         <div className="px-4 py-4 sm:px-14 pb-6 space-y-4">
@@ -292,6 +292,11 @@ const ExpandedRowContent = ({
                         onClick={() => setActiveTab('abstract')}
                         className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'abstract' ? 'border-b-2 border-scholar-600 text-scholar-600' : 'text-gray-400 hover:text-gray-600'}`}>
                         Abstract
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('breakdown')}
+                        className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'breakdown' ? 'border-b-2 border-scholar-600 text-scholar-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                        Paper Breakdown
                     </button>
                     <button
                         onClick={() => setActiveTab('findings')}
@@ -342,6 +347,40 @@ const ExpandedRowContent = ({
                             </p>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Paper Breakdown Panel */}
+            {activeTab === 'breakdown' && (
+                <div className="animate-fade-in flex flex-col items-center relative">
+                    {paper.paper_breakdown ? (
+                        <div className="text-sm max-w-4xl w-full py-2 pr-10">
+                            <div className="absolute top-0 right-0">
+                                <button
+                                    onClick={() => onRunAgentWorkflow(paper, 'paper_breakdown')}
+                                    disabled={!!agentRunningTasks[paper.uri]}
+                                    className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all"
+                                    title="Regenerate Paper Breakdown"
+                                >
+                                    <RotateCcw size={18} className={agentRunningTasks[paper.uri] === 'paper_breakdown' ? "animate-spin text-scholar-500" : ""} />
+                                </button>
+                            </div>
+                            <AgentResponseFormatter content={paper.paper_breakdown} />
+                        </div>
+                    ) : (
+                        <div className="flex justify-center w-full my-10">
+                            <button
+                                onClick={() => onRunAgentWorkflow(paper, 'paper_breakdown')}
+                                disabled={agentRunningTasks[paper.uri] === 'paper_breakdown'}
+                                className="px-10 py-3 bg-scholar-600 text-white rounded-lg hover:bg-scholar-700 transition-all font-bold text-sm shadow-sm flex items-center gap-2">
+                                {agentRunningTasks[paper.uri] === 'paper_breakdown' ? (
+                                    <><Loader2 size={16} className="animate-spin" /> Generating Breakdown...</>
+                                ) : (
+                                    'Generate Paper Breakdown'
+                                )}
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 
