@@ -791,23 +791,24 @@ export const SourcePapersList: React.FC = () => {
         <div className="flex flex-col relative">
             {/* Header with Title and Add Button */}
             <div className="flex items-center justify-between mb-2 px-1">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                    Sources
-                </p>
+                {uploadMode !== 'url' && (
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        Sources
+                    </p>)}
                 {uploadMode === 'url' ? (
-                    <div className="flex-1 ml-3 flex items-center gap-1 z-50">
+                    <div className="flex-1 flex items-center gap-1 z-50 mb-2 ml-2">
                         <input
                             type="text" value={urlInput} onChange={(e) => setUrlInput(e.target.value)}
                             onKeyPress={(e) => e.key === 'Enter' && handleUrlUpload()}
                             placeholder="Enter PDF URL..."
-                            className="flex-1 px-2 py-1 text-[10px] border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                            className="flex-1 px-2 py-1.5 text-[10px] border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                             autoFocus
                         />
-                        <button onClick={handleUrlUpload} disabled={!urlInput.trim() || isLoading} className="px-1.5 py-1 bg-scholar-600 text-white rounded text-[10px] font-medium hover:bg-scholar-700">
+                        <button onClick={handleUrlUpload} disabled={!urlInput.trim() || isLoading} className="px-1.5 py-1.5 bg-scholar-600 text-white rounded text-[10px] font-medium hover:bg-scholar-700">
                             {isLoading ? <Loader2 size={10} className="animate-spin" /> : 'Add'}
                         </button>
                         <button onClick={() => { setUploadMode('search'); setUrlInput(''); setUploadError(null); }} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
-                            <X size={12} className="text-gray-500" />
+                            <X size={14} className="text-gray-500" />
                         </button>
                     </div>
                 ) : (

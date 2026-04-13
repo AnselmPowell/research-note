@@ -259,7 +259,7 @@ export const SidebarNav: React.FC<{
 
       </div>
 
-      <div className="flex-1 -mt-8 overflow-y-auto custom-scrollbar px-0.5 md:px-1">
+      <div className="flex-1 -mt-5 overflow-y-auto custom-scrollbar px-0.5 md:px-1">
         {!columnVisibility.library ? (
           /* Simplified Library View - Styled like Dashboard Mode */
           <>
