@@ -453,7 +453,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
       // TIER 1: Gemini (only if available)
       if (genAI) {
         try {
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
           const result = await model.generateContent(prompt);
           return buildStructureResult(result.response.text());
         } catch (geminiErr) {

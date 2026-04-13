@@ -327,7 +327,7 @@ async function runAgentTask(task, workspace, workflowId) {
   let geminiFailed = false;
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.5-flash-lite',
     generationConfig: {
       temperature: 0.2  // Low temperature = more reliable structured JSON output
     }

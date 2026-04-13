@@ -20,7 +20,7 @@ async function uploadFile(file, uniqueId) {
   if (!genAI) {
     throw new Error('Gemini AI not initialized');
   }
-  
+
   // Check if file is already cached - return ONLY the URI
   if (uploadedFiles.has(uniqueId)) {
     const cachedFile = uploadedFiles.get(uniqueId);
@@ -36,7 +36,7 @@ async function uploadFile(file, uniqueId) {
       mimeType: file.mimetype,
       originalName: file.originalname
     });
-    
+
     logger.info(`[Agent] File uploaded and cached: ${uniqueId}`);
     return fileUri;
   } catch (error) {
@@ -53,17 +53,17 @@ async function sendMessage(message, fileUris, contextNotes = [], documentMetadat
     console.log('[sendMessage] DEBUG: fileUris.length:', fileUris ? fileUris.length : 0);
     console.log('[sendMessage] DEBUG: documentMetadata:', documentMetadata);
     console.log('[sendMessage] DEBUG: contextNotes.length:', contextNotes.length);
-    
+
     const systemInstruction = buildSystemInstruction(documentMetadata, contextNotes);
     console.log('[sendMessage] DEBUG: systemInstruction length:', systemInstruction.length);
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash', 
+      model: 'gemini-2.5-flash-lite',
       systemInstruction
     });
 
 
-    
+
 
     const parts = [];
 
@@ -73,19 +73,19 @@ async function sendMessage(message, fileUris, contextNotes = [], documentMetadat
       console.log(`[sendMessage] DEBUG: Processing ${fileUris.length} file URIs`);
       for (const uri of fileUris) {
         console.log(`[sendMessage] DEBUG: Processing URI: ${uri}`);
-        
+
         // Extract uniqueId from file:// URI
         const uniqueId = uri.replace('file://', '');
         console.log(`[sendMessage] DEBUG: Extracted uniqueId: ${uniqueId}`);
-        
+
         // Get file data from our cache
         const fileData = uploadedFiles.get(uniqueId);
         console.log(`[sendMessage] DEBUG: File in cache? ${!!fileData}`);
-        
+
         if (fileData) {
           const base64Data = fileData.file.buffer.toString('base64');
           console.log(`[sendMessage] DEBUG: Converted to base64, length: ${base64Data.length}`);
-          
+
           parts.push({
             inlineData: {
               mimeType: fileData.mimeType || 'application/pdf',

@@ -16,7 +16,7 @@ function loadEnvFile() {
   try {
     const envPath = join(__dirname, '..', '.env.local');
     const envContent = readFileSync(envPath, 'utf8');
-    
+
     const envVars = {};
     envContent.split('\n').forEach(line => {
       line = line.trim();
@@ -27,7 +27,7 @@ function loadEnvFile() {
         }
       }
     });
-    
+
     return envVars;
   } catch (error) {
     console.log('❌ Could not read .env.local file');
@@ -38,14 +38,14 @@ function loadEnvFile() {
 
 function checkConfiguration() {
   console.log('🔍 Research Note - Configuration Verification\n');
-  
+
   const envVars = loadEnvFile();
   if (!envVars) {
     process.exit(1);
   }
-  
+
   let hasErrors = false;
-  
+
   // Check Core AI Configuration
   if (envVars.GEMINI_API_KEY && envVars.GEMINI_API_KEY !== 'PLACEHOLDER_API_KEY') {
     console.log('✅ Gemini AI API Key: Configured');
@@ -54,30 +54,30 @@ function checkConfiguration() {
     console.log('   Get your API key from: https://aistudio.google.com/apikey');
     hasErrors = true;
   }
-  
+
   // Check Google Search Configuration
   if (envVars.GOOGLE_SEARCH_KEY && envVars.GOOGLE_SEARCH_CX) {
     console.log('✅ Google Search API: Configured');
   } else {
     console.log('⚠️  Google Search API: Missing - Web search feature will be disabled');
   }
-  
+
   // Check OpenAI Configuration
   if (envVars.OPENAI_API_KEY) {
     console.log('✅ OpenAI Fallback: Configured');
   } else {
     console.log('⚠️  OpenAI Fallback: Missing - No fallback when Gemini is unavailable');
   }
-  
+
   // Check Database Configuration
   if (envVars.DATABASE_URL) {
     console.log('✅ Database: Configured');
   } else {
     console.log('⚠️  Database: Missing - Using fallback connection string');
   }
-  
+
   console.log(`\n🎯 Environment: ${envVars.NODE_ENV || 'development'}`);
-  
+
   if (hasErrors) {
     console.log('\n❌ Configuration check failed! Please fix the errors above before running the application.');
     console.log('\n💡 To fix: Update your .env.local file with valid API keys');
@@ -96,8 +96,8 @@ function checkConfiguration() {
 async function testGeminiConnection(apiKey) {
   try {
     console.log('🧪 Testing Gemini AI connection...');
-    
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -110,7 +110,7 @@ async function testGeminiConnection(apiKey) {
         }]
       })
     });
-    
+
     if (response.ok) {
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Connected successfully';
@@ -152,20 +152,20 @@ function validateDatabaseUrl(url) {
 // Main execution
 async function main() {
   checkConfiguration();
-  
+
   // If we get here, configuration is valid
   const envVars = loadEnvFile();
-  
+
   // Additional tests if environment variables look good
   if (envVars && envVars.GEMINI_API_KEY && envVars.GEMINI_API_KEY !== 'PLACEHOLDER_API_KEY') {
     console.log('\n🔬 Running additional validation tests...\n');
-    
+
     await testGeminiConnection(envVars.GEMINI_API_KEY);
-    
+
     if (envVars.DATABASE_URL) {
       validateDatabaseUrl(envVars.DATABASE_URL);
     }
-    
+
     console.log('\n✅ All tests completed! Your Research Note application is ready to run.\n');
   }
 }

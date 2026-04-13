@@ -16,7 +16,7 @@
    - Fixed the auto-save mechanism: Any tool (e.g., `get_paper_structure`) can now automatically inject findings into the long-term Session Memory.
 3. **Advanced Navigation Tools**:
    - `search_multiple_keyword`: Scans for an array of terms in one go to save iterations.
-   - `get_paper_structure`: A dedicated sub-agent tool (`gemini-2.5-flash`) that maps the logical structure of 50 pages and auto-saves a Table of Contents with page numbers.
+   - `get_paper_structure`: A dedicated sub-agent tool (`gemini-2.5-flash-lite`) that maps the logical structure of 50 pages and auto-saves a Table of Contents with page numbers.
 4. **Resiliency**: Increased `MAX_ITERATIONS` to 15 and implemented a graceful failure state that returns partial findings gathered so far instead of a blank error.
 
 **Result:**
