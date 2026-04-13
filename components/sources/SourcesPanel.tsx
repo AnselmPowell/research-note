@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useDatabase } from '../../database/DatabaseContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useResearch } from '../../contexts/ResearchContext';
@@ -624,15 +625,63 @@ type DeleteModalState = {
 
 export function useSourcePapers() {
     const { savedPapers, deletePaper } = useDatabase();
-    const { setActivePdf, loadPdfFromUrl, isPdfInContext, togglePdfContext, loadedPdfs, downloadingUris, removePdf } = useLibrary();
+    const { setActivePdf, loadPdfFromUrl, isPdfInContext, togglePdfContext, loadedPdfs, downloadingUris, removePdf, addLocalPdf, addRemotePdf } = useLibrary();
     const { isPaperSelectedByUri, addToSelectionByUri, removeFromSelectionByUri, selectedArxivIds, arxivCandidates, filteredCandidates } = useResearch();
     const { setColumnVisibility } = useUI();
+
+    const [uploadMode, setUploadMode] = useState<'search' | 'url' | 'menu'>('search');
+    const [urlInput, setUrlInput] = useState('');
+    const [showUploadMenu, setShowUploadMenu] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+    const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; currentFileName: string } | null>(null);
 
     const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
         isOpen: false,
         isBulk: false,
         isProcessing: false
     });
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []) as File[];
+        if (files.length === 0) return;
+        const pdfFiles = files.filter(file => file.type === 'application/pdf');
+        if (pdfFiles.length === 0) { e.target.value = ''; return; }
+        if (pdfFiles.length > 8) { setUploadError('Max 8 files allowed'); e.target.value = ''; return; }
+
+        setIsLoading(true); setUploadError(null);
+        try {
+            for (let i = 0; i < pdfFiles.length; i++) {
+                setUploadProgress({ current: i + 1, total: pdfFiles.length, currentFileName: pdfFiles[i].name });
+                const result = await addLocalPdf(pdfFiles[i]);
+                if (result.success && result.pdf) addToSelectionByUri(result.pdf.uri);
+            }
+            setUploadMode('search'); setShowUploadMenu(false); setUploadProgress(null);
+        } catch (error) {
+            setUploadError(`Failed to upload ${uploadProgress?.currentFileName || 'file'}`);
+            setUploadProgress(null);
+        } finally {
+            setIsLoading(false); e.target.value = '';
+        }
+    };
+
+    const handleUrlUpload = async () => {
+        if (!urlInput.trim()) return;
+        setIsLoading(true); setUploadError(null);
+        try {
+            const result = await addRemotePdf(urlInput.trim());
+            if (result.success && result.pdf) {
+                addToSelectionByUri(result.pdf.uri);
+                setUrlInput(''); setUploadMode('search'); setShowUploadMenu(false);
+            } else if (result.error) {
+                setUploadError(`${result.error.reason}: ${result.error.actionableMsg}`);
+            }
+        } catch (error) {
+            setUploadError('Failed to load PDF from URL');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const handleOpenPaper = useCallback((uri: string, title: string) => {
         const loadPromise = loadPdfFromUrl(uri, title);
@@ -712,6 +761,14 @@ export function useSourcePapers() {
         handleToggleSelect,
         handleRemovePaper,
         handleConfirmDelete,
+        uploadMode, setUploadMode,
+        urlInput, setUrlInput,
+        showUploadMenu, setShowUploadMenu,
+        isLoading, setIsLoading,
+        uploadError, setUploadError,
+        uploadProgress,
+        handleFileUpload,
+        handleUrlUpload
     };
 }
 
@@ -723,108 +780,153 @@ export function useSourcePapers() {
 
 export const SourcePapersList: React.FC = () => {
     const {
-        savedPapers,
-        downloadingUris,
-        isPdfInContext,
-        isPaperSelectedByUri,
-        selectedArxivIds,
-        arxivCandidates,
-        filteredCandidates,
-        deleteModal,
-        setDeleteModal,
-        handleOpenPaper,
-        handleToggleSelect,
-        handleRemovePaper,
-        handleConfirmDelete,
+        savedPapers, downloadingUris, isPdfInContext, isPaperSelectedByUri,
+        selectedArxivIds, arxivCandidates, filteredCandidates,
+        deleteModal, setDeleteModal, handleOpenPaper, handleToggleSelect, handleRemovePaper, handleConfirmDelete,
+        uploadMode, setUploadMode, urlInput, setUrlInput, showUploadMenu, setShowUploadMenu,
+        isLoading, uploadError, setUploadError, uploadProgress, handleFileUpload, handleUrlUpload
     } = useSourcePapers();
 
-    if (savedPapers.length === 0) {
-        return (
-            <div className="text-center py-6 opacity-40">
-                <FileText size={32} className="mx-auto mb-2 text-gray-300 dark:text-gray-600" />
-                <p className="text-xs text-gray-500 dark:text-gray-400">No sources yet</p>
-            </div>
-        );
-    }
-
     return (
-        <div className="mt-4 px-3 md:px-4">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">
-                Sources
-            </p>
-            <div className="space-y-2">
-                {savedPapers.map(paper => {
-                    const isInContext = isPdfInContext(paper.uri);
-                    const normalizedTitle = (paper.title || '').toLowerCase().trim();
-                    const isArxivSelected = Array.from(selectedArxivIds).some(id => {
-                        const ap = [...arxivCandidates, ...filteredCandidates].find(p => p.id === id);
-                        return ap?.title.toLowerCase().trim() === normalizedTitle;
-                    });
-                    const isGloballySelected = isPaperSelectedByUri(paper.uri);
-                    const isSelected = isGloballySelected || isInContext || isArxivSelected;
-                    const isDownloading = downloadingUris.has(paper.uri);
+        <div className="flex flex-col relative">
+            {/* Header with Title and Add Button */}
+            <div className="flex items-center justify-between mb-2 px-1">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    Sources
+                </p>
+                {uploadMode === 'url' ? (
+                    <div className="flex-1 ml-3 flex items-center gap-1 z-50">
+                        <input
+                            type="text" value={urlInput} onChange={(e) => setUrlInput(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && handleUrlUpload()}
+                            placeholder="Enter PDF URL..."
+                            className="flex-1 px-2 py-1 text-[10px] border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                            autoFocus
+                        />
+                        <button onClick={handleUrlUpload} disabled={!urlInput.trim() || isLoading} className="px-1.5 py-1 bg-scholar-600 text-white rounded text-[10px] font-medium hover:bg-scholar-700">
+                            {isLoading ? <Loader2 size={10} className="animate-spin" /> : 'Add'}
+                        </button>
+                        <button onClick={() => { setUploadMode('search'); setUrlInput(''); setUploadError(null); }} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+                            <X size={12} className="text-gray-500" />
+                        </button>
+                    </div>
+                ) : (
+                    <div className="relative">
+                        <button onClick={() => setShowUploadMenu(!showUploadMenu)} className="p-1.5 bg-scholar-600 hover:bg-scholar-700 text-white rounded transition-colors">
+                            <Plus size={14} strokeWidth={2.5} />
+                        </button>
+                        {showUploadMenu && (
+                            <>
+                                <div className="fixed inset-0 z-[60]" onClick={() => setShowUploadMenu(false)} />
+                                <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-[70] animate-fade-in">
+                                    <label className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors">
+                                        <Upload size={14} className="text-gray-600 dark:text-gray-400" />
+                                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Upload from computer</span>
+                                        <input type="file" accept="application/pdf" multiple onChange={handleFileUpload} className="hidden" />
+                                    </label>
+                                    <button onClick={() => { setUploadMode('url'); setShowUploadMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                        <Link size={14} className="text-gray-600 dark:text-gray-400" />
+                                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Enter URL</span>
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+            </div>
 
-                    return (
-                        <div
-                            key={paper.uri}
-                            title={paper.title}
-                            className={`p-2.5 bg-cream dark:bg-dark-card rounded-lg border transition-all duration-200 group cursor-pointer hover:z-[9999] hover:relative hover:shadow-xl hover:scale-[1.02] ${isSelected
+            {/* Error Message */}
+            {uploadError && (
+                <div className="mb-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-2 py-1.5 rounded text-[10px]">
+                    <div className="flex items-start gap-1.5">
+                        <AlertCircle size={10} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                        <span>{uploadError}</span>
+                    </div>
+                </div>
+            )}
+
+            {/* List or Empty State */}
+            {savedPapers.length === 0 ? (
+                <div className="text-center py-6 opacity-40">
+                    <FileText size={24} className="mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+                    <p className="text-xs text-gray-500 dark:text-gray-400">No sources yet</p>
+                    <p className="text-[10px] mt-1 text-gray-400">Click <Plus size={10} className="inline" /> to add</p>
+                </div>
+            ) : (
+                <div className="space-y-2">
+                    {savedPapers.map(paper => {
+                        const isInContext = isPdfInContext(paper.uri);
+                        const normalizedTitle = (paper.title || '').toLowerCase().trim();
+                        const isArxivSelected = Array.from(selectedArxivIds).some(id => {
+                            const ap = [...arxivCandidates, ...filteredCandidates].find(p => p.id === id);
+                            return ap?.title.toLowerCase().trim() === normalizedTitle;
+                        });
+                        const isGloballySelected = isPaperSelectedByUri(paper.uri);
+                        const isSelected = isGloballySelected || isInContext || isArxivSelected;
+                        const isDownloading = downloadingUris.has(paper.uri);
+
+                        return (
+                            <div
+                                key={paper.uri}
+                                title={paper.title}
+                                className={`p-2.5 bg-cream dark:bg-dark-card rounded-lg border transition-all duration-200 group cursor-pointer hover:z-[9999] hover:relative hover:shadow-xl hover:scale-[1.02] ${isSelected
                                     ? 'border-scholar-500 ring-1 ring-scholar-500 shadow-sm'
                                     : isInContext
                                         ? 'border-scholar-300 dark:border-scholar-700'
                                         : 'border-gray-200 dark:border-gray-700 hover:border-scholar-300 dark:hover:border-scholar-700'
-                                }`}
-                            onClick={() => handleOpenPaper(paper.uri, paper.title)}
-                        >
-                            <div className="flex items-start gap-2">
-                                <div className="items-center gap-1">
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleToggleSelect(paper.uri, paper.title); }}
-                                        disabled={isDownloading}
-                                        className={`mt-0.5 flex-shrink-0 transition-colors ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-300 dark:text-gray-600 hover:text-gray-400'
-                                            }`}
-                                    >
-                                        {isDownloading ? (
-                                            <Loader2 size={16} className="animate-spin text-scholar-600" />
-                                        ) : (
-                                            isSelected ? <CheckSquare size={16} /> : <Square size={16} />
+                                    }`}
+                                onClick={() => handleOpenPaper(paper.uri, paper.title)}
+                            >
+                                <div className="flex items-start gap-2">
+                                    <div className="items-center gap-1">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleToggleSelect(paper.uri, paper.title); }}
+                                            disabled={isDownloading}
+                                            className={`mt-0.5 flex-shrink-0 transition-colors ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-300 dark:text-gray-600 hover:text-gray-400'
+                                                }`}
+                                        >
+                                            {isDownloading ? (
+                                                <Loader2 size={16} className="animate-spin text-scholar-600" />
+                                            ) : (
+                                                isSelected ? <CheckSquare size={16} /> : <Square size={16} />
+                                            )}
+                                        </button>
+                                        {isInContext && (
+                                            <Brain size={18} className="text-scholar-600 dark:text-scholar-400 flex-shrink-0" title="Added to AI context" />
                                         )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="text-xs font-medium text-gray-900 dark:text-white line-clamp-2 leading-tight mb-1">
+                                            {paper.title}
+                                        </h3>
+                                        {paper.authors && paper.authors.length > 0 && (
+                                            <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                                                {paper.authors.slice(0, 2).join(', ')}
+                                                {paper.authors.length > 2 && ' et al.'}
+                                            </p>
+                                        )}
+                                        {paper.num_pages && (
+                                            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                                                {paper.num_pages} pages
+                                            </p>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleRemovePaper(paper.uri, paper.title); }}
+                                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-all flex-shrink-0 text-gray-400 hover:text-red-500"
+                                        title="Remove from sources"
+                                    >
+                                        <X size={14} />
                                     </button>
-                                    {isInContext && (
-                                        <Brain size={18} className="text-scholar-600 dark:text-scholar-400 flex-shrink-0" title="Added to AI context" />
-                                    )}
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="text-xs font-medium text-gray-900 dark:text-white line-clamp-2 leading-tight mb-1">
-                                        {paper.title}
-                                    </h3>
-                                    {paper.authors && paper.authors.length > 0 && (
-                                        <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
-                                            {paper.authors.slice(0, 2).join(', ')}
-                                            {paper.authors.length > 2 && ' et al.'}
-                                        </p>
-                                    )}
-                                    {paper.num_pages && (
-                                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
-                                            {paper.num_pages} pages
-                                        </p>
-                                    )}
-                                </div>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); handleRemovePaper(paper.uri, paper.title); }}
-                                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-all flex-shrink-0 text-gray-400 hover:text-red-500"
-                                    title="Remove from sources"
-                                >
-                                    <X size={14} />
-                                </button>
                             </div>
-                        </div>
-                    );
-                })}
-            </div>
+                        );
+                    })}
+                </div>
+            )}
 
             {/* Delete Confirmation Modal */}
-            {deleteModal.isOpen && (
+            {deleteModal.isOpen && typeof document !== 'undefined' && createPortal(
                 <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-transparent" onClick={() => !deleteModal.isProcessing && setDeleteModal(prev => ({ ...prev, isOpen: false }))} />
                     <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-xl shadow-2xl ring-1 ring-gray-900/5 dark:ring-white/10 p-6 animate-in fade-in zoom-in-95 duration-200">
@@ -852,7 +954,8 @@ export const SourcePapersList: React.FC = () => {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

@@ -259,7 +259,7 @@ export const SidebarNav: React.FC<{
 
       </div>
 
-      <div className="flex-1 -mt-4 overflow-y-auto custom-scrollbar px-0.5 md:px-1">
+      <div className="flex-1 -mt-8 overflow-y-auto custom-scrollbar px-0.5 md:px-1">
         {!columnVisibility.library ? (
           /* Simplified Library View - Styled like Dashboard Mode */
           <>
@@ -305,9 +305,9 @@ export const SidebarNav: React.FC<{
 
             {/* Sources list — only visible when Sources Panel (left column) is closed */}
             {!columnVisibility.left && (
-
-              <SourcePapersList />
-
+              <div className="mt-4 px-3 md:px-4">
+                <SourcePapersList />
+              </div>
             )}
           </>
         ) : (
