@@ -117,7 +117,7 @@ async function enhanceMetadata(firstFourPagesText, currentMetadata) {
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
     const result = await withTimeout(
       model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -187,7 +187,7 @@ Return JSON array of strings.`;
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
     const result = await withTimeout(
       model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -499,7 +499,7 @@ User query:
     if (!genAI) throw new Error('Gemini not initialized');
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash-lite',
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0.1
@@ -1337,7 +1337,7 @@ Most importantly, must extract the EXACT text from the paper dont shorten or par
       if (!genAI) throw new Error('Gemini not available');
 
       const model = genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.5-flash-lite',
         generationConfig: {
           responseMimeType: 'application/json'
         }
@@ -1549,7 +1549,7 @@ INSTRUCTIONS:
     if (!genAI) throw new Error('Gemini not initialized');
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash-lite',
       tools: [{ googleSearch: {} }]
     });
 

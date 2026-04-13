@@ -24,6 +24,7 @@ import { useUI, LibraryView } from '../../contexts/UIContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { dataMigrationService } from '../../utils/dataMigrationService';
 import { LayoutControls } from '../layout/LayoutControls';
+import { SourcePapersList } from '../sources/SourcesPanel';
 
 // --- SUBCOMPONENTS ---
 
@@ -261,26 +262,54 @@ export const SidebarNav: React.FC<{
       <div className="flex-1 -mt-4 overflow-y-auto custom-scrollbar px-0.5 md:px-1">
         {!columnVisibility.library ? (
           /* Simplified Library View - Styled like Dashboard Mode */
-          <div className="mt-4 px-3 md:px-4">
-            <button
-              onClick={() => {
-                if (!libraryActiveView) setLibraryActiveView('all');
-                openColumn('library');
-              }}
-              className="w-full flex items-center justify-between p-4  hover:border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors hover:shadow-sm"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8  dark:text-white text-gray-900 flex items-center justify-center">
-                  <LibraryBig size={24} />
+          <>
+            <div className="mt-4 px-3 md:px-4">
+              <button
+                onClick={() => {
+                  if (!libraryActiveView) setLibraryActiveView('all');
+                  openColumn('library');
+                }}
+                className="w-full flex items-center justify-between p-4  hover:border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors hover:shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8  dark:text-white text-gray-900 flex items-center justify-center">
+                    <LibraryBig size={24} />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-bold text-sm">Library</div>
+                    <div className="text-[10px] opacity-70 ">Manage your research</div>
+                  </div>
                 </div>
-                <div className="text-left">
-                  <div className="font-bold text-sm">Library</div>
-                  <div className="text-[10px] opacity-70 ">Manage your research</div>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+
+            {/* Dashboard Mode button */}
+            <div className="mt-2 px-3 md:px-4">
+              <button
+                onClick={() => { openColumn('library'); setHeaderVisible(false); if (onClose) onClose(); }}
+                className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 flex items-center justify-center">
+                    <LayoutList size={18} />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-bold text-sm">Dashboard Mode</div>
+                    <div className="text-[10px] opacity-70">Focus on Knowledge Base</div>
+                  </div>
                 </div>
-              </div>
-              <ChevronRight size={16} />
-            </button>
-          </div>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+
+            {/* Sources list — only visible when Sources Panel (left column) is closed */}
+            {!columnVisibility.left && (
+
+              <SourcePapersList />
+
+            )}
+          </>
         ) : (
           /* Full Note Manager Navigation */
           <div className="mb-1">
@@ -296,23 +325,6 @@ export const SidebarNav: React.FC<{
           </div>
         )}
 
-        <div className="mt-4 px-3 md:px-4">
-          <button
-            onClick={() => { openColumn('library'); setHeaderVisible(false); if (onClose) onClose(); }}
-            className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 flex items-center justify-center">
-                <LayoutList size={18} />
-              </div>
-              <div className="text-left">
-                <div className="font-bold text-sm">Dashboard Mode</div>
-                <div className="text-[10px] opacity-70">Focus on Knowledge Base</div>
-              </div>
-            </div>
-            <ChevronRight size={16} />
-          </button>
-        </div>
       </div>
 
       {/* Profile section at bottom - outside scrollable area */}
@@ -405,7 +417,7 @@ export const NotesManagerSidebar: React.FC<{
       {/* 3. Sidebar Drawer - gliding animation */}
       <div
         ref={sidebarRef}
-        className={`fixed left-0 top-0 bottom-0 w-85 sm:w-85 z-[70] bg-white dark:bg-dark-card border-r-2 border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl transition-transform ${TRANSITION_DURATION} ${TRANSITION_EASING} font-sans overflow-hidden transform ${isLibraryOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed left-0 top-0 bottom-0 w-[300px] max-w-[300px] z-[70] bg-white dark:bg-dark-card border-r-2 border-gray-200 dark:border-gray-800 flex flex-col shadow-2xl transition-transform ${TRANSITION_DURATION} ${TRANSITION_EASING} font-sans overflow-hidden transform ${isLibraryOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
       >
         <SidebarNav onClose={() => setLibraryOpen(false)} onShowAuthModal={onShowAuthModal} resetCallbacks={resetCallbacks} />

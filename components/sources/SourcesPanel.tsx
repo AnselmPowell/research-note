@@ -566,7 +566,7 @@ export const SourcesPanel: React.FC = () => {
                 )}
             </div>
 
-            {/* Delete Confirmation Modal */}
+            {/* Delete Confirmation Modal - shared JSX, also used by SourcePapersList */}
             {deleteModal.isOpen && (
                 <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-transparent" onClick={() => !deleteModal.isProcessing && setDeleteModal(prev => ({ ...prev, isOpen: false }))} />
@@ -583,6 +583,257 @@ export const SourcesPanel: React.FC = () => {
                             </p>
                         </div>
 
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                onClick={() => setDeleteModal(prev => ({ ...prev, isOpen: false }))}
+                                disabled={deleteModal.isProcessing}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleConfirmDelete}
+                                disabled={deleteModal.isProcessing}
+                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {deleteModal.isProcessing ? <Loader2 size={16} className="animate-spin" /> : null}
+                                Remove
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHARED HOOK — useSourcePapers
+// Encapsulates all papers list state & handlers so they can be shared between
+// the full SourcesPanel and the sidebar SourcePapersList without duplicating logic.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type DeleteModalState = {
+    isOpen: boolean;
+    isBulk: boolean;
+    uri?: string;
+    title?: string;
+    count?: number;
+    isProcessing: boolean;
+};
+
+export function useSourcePapers() {
+    const { savedPapers, deletePaper } = useDatabase();
+    const { setActivePdf, loadPdfFromUrl, isPdfInContext, togglePdfContext, loadedPdfs, downloadingUris, removePdf } = useLibrary();
+    const { isPaperSelectedByUri, addToSelectionByUri, removeFromSelectionByUri, selectedArxivIds, arxivCandidates, filteredCandidates } = useResearch();
+    const { setColumnVisibility } = useUI();
+
+    const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
+        isOpen: false,
+        isBulk: false,
+        isProcessing: false
+    });
+
+    const handleOpenPaper = useCallback((uri: string, title: string) => {
+        const loadPromise = loadPdfFromUrl(uri, title);
+        setColumnVisibility(prev => ({ ...prev, left: true, right: true }));
+        setActivePdf(uri);
+        loadPromise.then(result => {
+            if (!result.success && result.error) {
+                setActivePdf(null);
+            }
+        });
+    }, [loadPdfFromUrl, setActivePdf, setColumnVisibility]);
+
+    const handleRemovePaper = useCallback((uri: string, title: string) => {
+        setDeleteModal({ isOpen: true, isBulk: false, uri, title, isProcessing: false });
+    }, []);
+
+    const handleConfirmDelete = useCallback(async () => {
+        setDeleteModal(prev => ({ ...prev, isProcessing: true }));
+        try {
+            if (deleteModal.uri) {
+                await deletePaper(deleteModal.uri);
+                const isLoaded = loadedPdfs.some(p => p.uri === deleteModal.uri);
+                if (isLoaded) removePdf(deleteModal.uri);
+            }
+        } catch (error) {
+            console.error('[SourcePapersList] Delete failed:', error);
+        } finally {
+            setDeleteModal({ isOpen: false, isBulk: false, isProcessing: false });
+        }
+    }, [deleteModal, deletePaper, loadedPdfs, removePdf]);
+
+    const handleToggleSelect = useCallback(async (uri: string, title: string) => {
+        const isCurrentlySelected = isPaperSelectedByUri(uri);
+
+        if (isCurrentlySelected) {
+            removeFromSelectionByUri(uri);
+            if (isPdfInContext(uri)) togglePdfContext(uri, title);
+        } else {
+            // Cross-context deduplication — matches SourcesPanel logic exactly
+            const normalizedTitle = title.toLowerCase().trim();
+            const genericTitles = ['untitled document', 'document', 'pdf document', 'untitled', 'unknown'];
+
+            if (normalizedTitle && !genericTitles.includes(normalizedTitle)) {
+                const isDuplicateInArxivContext = Array.from(selectedArxivIds).some(id => {
+                    const ap = [...arxivCandidates, ...filteredCandidates].find(p => p.id === id);
+                    return ap?.title && ap.title.toLowerCase().trim() === normalizedTitle;
+                });
+                if (isDuplicateInArxivContext) {
+                    console.warn(`[SourcePapersList] Selection blocked: "${title}" is already active via ArXiv context.`);
+                    return;
+                }
+            }
+
+            addToSelectionByUri(uri);
+            if (!isPdfInContext(uri)) togglePdfContext(uri, title);
+
+            const resultPromise = loadPdfFromUrl(uri, title);
+            resultPromise.then(result => {
+                if (result && !result.success) {
+                    removeFromSelectionByUri(uri);
+                }
+            });
+        }
+    }, [isPaperSelectedByUri, addToSelectionByUri, removeFromSelectionByUri, isPdfInContext, togglePdfContext, loadPdfFromUrl, selectedArxivIds, arxivCandidates, filteredCandidates]);
+
+    return {
+        savedPapers,
+        downloadingUris,
+        isPdfInContext,
+        isPaperSelectedByUri,
+        selectedArxivIds,
+        arxivCandidates,
+        filteredCandidates,
+        deleteModal,
+        setDeleteModal,
+        handleOpenPaper,
+        handleToggleSelect,
+        handleRemovePaper,
+        handleConfirmDelete,
+    };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORTED COMPONENT — SourcePapersList
+// Renders the same paper card list as SourcesPanel, for use in the sidebar
+// simplified view when the SourcesPanel (left column) is not open.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const SourcePapersList: React.FC = () => {
+    const {
+        savedPapers,
+        downloadingUris,
+        isPdfInContext,
+        isPaperSelectedByUri,
+        selectedArxivIds,
+        arxivCandidates,
+        filteredCandidates,
+        deleteModal,
+        setDeleteModal,
+        handleOpenPaper,
+        handleToggleSelect,
+        handleRemovePaper,
+        handleConfirmDelete,
+    } = useSourcePapers();
+
+    if (savedPapers.length === 0) {
+        return (
+            <div className="text-center py-6 opacity-40">
+                <FileText size={32} className="mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+                <p className="text-xs text-gray-500 dark:text-gray-400">No sources yet</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="mt-4 px-3 md:px-4">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">
+                Sources
+            </p>
+            <div className="space-y-2">
+                {savedPapers.map(paper => {
+                    const isInContext = isPdfInContext(paper.uri);
+                    const normalizedTitle = (paper.title || '').toLowerCase().trim();
+                    const isArxivSelected = Array.from(selectedArxivIds).some(id => {
+                        const ap = [...arxivCandidates, ...filteredCandidates].find(p => p.id === id);
+                        return ap?.title.toLowerCase().trim() === normalizedTitle;
+                    });
+                    const isGloballySelected = isPaperSelectedByUri(paper.uri);
+                    const isSelected = isGloballySelected || isInContext || isArxivSelected;
+                    const isDownloading = downloadingUris.has(paper.uri);
+
+                    return (
+                        <div
+                            key={paper.uri}
+                            title={paper.title}
+                            className={`p-2.5 bg-cream dark:bg-dark-card rounded-lg border transition-all duration-200 group cursor-pointer hover:z-[9999] hover:relative hover:shadow-xl hover:scale-[1.02] ${isSelected
+                                    ? 'border-scholar-500 ring-1 ring-scholar-500 shadow-sm'
+                                    : isInContext
+                                        ? 'border-scholar-300 dark:border-scholar-700'
+                                        : 'border-gray-200 dark:border-gray-700 hover:border-scholar-300 dark:hover:border-scholar-700'
+                                }`}
+                            onClick={() => handleOpenPaper(paper.uri, paper.title)}
+                        >
+                            <div className="flex items-start gap-2">
+                                <div className="items-center gap-1">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleToggleSelect(paper.uri, paper.title); }}
+                                        disabled={isDownloading}
+                                        className={`mt-0.5 flex-shrink-0 transition-colors ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-300 dark:text-gray-600 hover:text-gray-400'
+                                            }`}
+                                    >
+                                        {isDownloading ? (
+                                            <Loader2 size={16} className="animate-spin text-scholar-600" />
+                                        ) : (
+                                            isSelected ? <CheckSquare size={16} /> : <Square size={16} />
+                                        )}
+                                    </button>
+                                    {isInContext && (
+                                        <Brain size={18} className="text-scholar-600 dark:text-scholar-400 flex-shrink-0" title="Added to AI context" />
+                                    )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-xs font-medium text-gray-900 dark:text-white line-clamp-2 leading-tight mb-1">
+                                        {paper.title}
+                                    </h3>
+                                    {paper.authors && paper.authors.length > 0 && (
+                                        <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                                            {paper.authors.slice(0, 2).join(', ')}
+                                            {paper.authors.length > 2 && ' et al.'}
+                                        </p>
+                                    )}
+                                    {paper.num_pages && (
+                                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+                                            {paper.num_pages} pages
+                                        </p>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleRemovePaper(paper.uri, paper.title); }}
+                                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-all flex-shrink-0 text-gray-400 hover:text-red-500"
+                                    title="Remove from sources"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Delete Confirmation Modal */}
+            {deleteModal.isOpen && (
+                <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-transparent" onClick={() => !deleteModal.isProcessing && setDeleteModal(prev => ({ ...prev, isOpen: false }))} />
+                    <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-xl shadow-2xl ring-1 ring-gray-900/5 dark:ring-white/10 p-6 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="text-center mb-6">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Remove Source?</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                                You're about to remove "{deleteModal.title}". This action cannot be undone.
+                            </p>
+                        </div>
                         <div className="grid grid-cols-2 gap-3">
                             <button
                                 onClick={() => setDeleteModal(prev => ({ ...prev, isOpen: false }))}
