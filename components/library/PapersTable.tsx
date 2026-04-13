@@ -325,7 +325,7 @@ const ExpandedRowContent = ({
                             className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all"
                             title="Regenerate Abstract"
                         >
-                            <RotateCcw size={18} className={agentRunningTasks[paper.uri] === 'summarise_paper' ? "animate-spin text-scholar-500" : ""} />
+                            <RotateCcw size={20} className={agentRunningTasks[paper.uri] === 'summarise_paper' ? "animate-spin text-scholar-500 [animation-direction:reverse]" : ""} />
                         </button>
                     </div>
 
@@ -362,7 +362,7 @@ const ExpandedRowContent = ({
                                     className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all"
                                     title="Regenerate Paper Breakdown"
                                 >
-                                    <RotateCcw size={18} className={agentRunningTasks[paper.uri] === 'paper_breakdown' ? "animate-spin text-scholar-500" : ""} />
+                                    <RotateCcw size={20} className={agentRunningTasks[paper.uri] === 'paper_breakdown' ? "animate-spin text-scholar-500 [animation-direction:reverse]" : ""} />
                                 </button>
                             </div>
                             <AgentResponseFormatter content={paper.paper_breakdown} />
@@ -396,7 +396,7 @@ const ExpandedRowContent = ({
                                     className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all"
                                     title="Regenerate Key Findings"
                                 >
-                                    <RotateCcw size={18} className={agentRunningTasks[paper.uri] === 'get_findings' ? "animate-spin text-scholar-500" : ""} />
+                                    <RotateCcw size={20} className={agentRunningTasks[paper.uri] === 'get_findings' ? "animate-spin text-scholar-500 [animation-direction:reverse]" : ""} />
                                 </button>
                             </div>
                             <AgentResponseFormatter content={paper.findings} />

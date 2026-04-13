@@ -41,6 +41,10 @@ if (config.geminiApiKey) {
 
 const MAX_ITERATIONS = 40;
 
+// Scaleable set of all known tool names - derived from TOOL_SCHEMA so it never goes stale
+// when new tools are added to researchAgentTools.js
+const KNOWN_TOOLS = new Set(TOOL_SCHEMA.map(t => t.name));
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTEXT BUILDER
 // Rebuilds the full context from scratch every iteration.
@@ -174,6 +178,11 @@ Return an object with an "actions" array:
     }
   ]
 }
+
+CRITICAL PARAM RULES:
+- For save_to_session_memory, params key MUST be lowercase: { "memory_ids": ["Page_P0_Pg1", "Page_P0_Pg2"] }
+- The IDs come from [MEMORY_ID: X] tags in tool output. Copy them exactly as written.
+- For get_and_read_multiple_pages: { "paper_index": 0, "start_page": 1, "end_page": 4 }
 
 For completing the task, the action is "task_complete". The "response" param must be a LONG-FORM STRING (not an object) containing your complete academic findings. You can use markdown for formatting.`;
 
@@ -314,6 +323,8 @@ async function runAgentTask(task, workspace, workflowId) {
   // Consecutive error tracking — abort early if agent is stuck in a loop
   let consecutiveErrors = 0;
   const MAX_CONSECUTIVE_ERRORS = 4;
+  // Once Gemini fails, we skip it permanently for the rest of this task session
+  let geminiFailed = false;
 
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.5-flash',
@@ -344,8 +355,8 @@ async function runAgentTask(task, workspace, workflowId) {
     );
 
     try {
-      // TIER 1: Gemini
-      if (!genAI) throw new Error('Gemini not initialised — skipping to fallback');
+      // TIER 1: Gemini — skip entirely if it already failed earlier this session
+      if (!genAI || geminiFailed) throw new Error('Gemini not available — skipping to fallback');
       const result = await model.generateContent({
         contents: [{ role: 'user', parts: [{ text: context }] }]
       });
@@ -353,7 +364,13 @@ async function runAgentTask(task, workspace, workflowId) {
       logger.info(`[ResearchAgent] ✅ Tier 1 (Gemini) on iteration ${iteration}`);
 
     } catch (geminiError) {
-      logger.warn(`[ResearchAgent] ⚠️ Tier 1 (Gemini) failed on iteration ${iteration}: ${geminiError.message}. Trying Tier 2...`);
+      // Mark Gemini as failed for ALL remaining iterations in this session
+      if (!geminiFailed) {
+        geminiFailed = true;
+        logger.warn(`[ResearchAgent] ⚠️ Gemini failed on iteration ${iteration}: ${geminiError.message}. Switching permanently to GPT-4o-mini for this session.`);
+      } else {
+        logger.info(`[ResearchAgent] ℹ️ Tier 1 (Gemini) skipped (already marked failed) — using GPT-4o-mini directly.`);
+      }
 
       // TIER 2: GPT-4o-mini fallback
       try {
@@ -387,7 +404,7 @@ async function runAgentTask(task, workspace, workflowId) {
 
     if (parseError || !decision) {
       logger.warn(`[ResearchAgent] JSON parse failed on iteration ${iteration}: ${parseError}`);
-      recentObservations.unshift('ERROR: Your response was not valid JSON. You MUST respond with ONLY the JSON format — no other text, no markdown.');
+      recentObservations.unshift('ERROR: Your response was not valid JSON. You MUST respond with ONLY the JSON object — no markdown, no explanation. Example: { "actions": [{ "thinking": "...", "action": "tool_call", "tool": "get_and_read_multiple_pages", "params": { "paper_index": 0, "start_page": 1, "end_page": 4 } }] }');
       if (recentObservations.length > 3) recentObservations.pop();
       consecutiveErrors++;
       logger.warn(`[ResearchAgent] ⚠️ Consecutive errors: ${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}`);
@@ -416,12 +433,25 @@ async function runAgentTask(task, workspace, workflowId) {
     for (let i = 0; i < actionsToRun.length; i++) {
       let act = actionsToRun[i];
 
-      // NORMALIZATION: If the agent mistakenly calls 'task_complete' as a 'tool_call', 
+      // NORMALIZATION: If the agent mistakenly calls 'task_complete' as a 'tool_call',
       // convert it to the primary 'task_complete' action type.
       if (act.action === 'tool_call' && act.tool === 'task_complete') {
         logger.info(`[ResearchAgent] 🔄 Normalizing 'tool_call: task_complete' to primary 'task_complete' action.`);
         act = {
           action: 'task_complete',
+          params: act.params,
+          thinking: act.thinking
+        };
+      }
+
+      // NORMALIZATION: GPT-4o-mini sometimes uses a known tool name directly as the
+      // action value instead of wrapping it in { action: 'tool_call', tool: name }.
+      // This derives the valid set from TOOL_SCHEMA so it is always up to date.
+      if (act.action !== 'tool_call' && act.action !== 'task_complete' && KNOWN_TOOLS.has(act.action)) {
+        logger.info(`[ResearchAgent] 🔄 Normalizing direct tool action '${act.action}' to tool_call format.`);
+        act = {
+          action: 'tool_call',
+          tool: act.action,
           params: act.params,
           thinking: act.thinking
         };
@@ -480,7 +510,8 @@ async function runAgentTask(task, workspace, workflowId) {
       if (act.action === 'tool_call' && act.tool) {
         // Pass sessionContextPool to allow tools to "register" content IDs
         // AND pass sessionMemory for deduplication checks
-        const toolResult = await executeTool(act.tool, act.params || {}, workspace, genAI, sessionContextPool, sessionMemory);
+        // Pass null for genAI if Gemini has failed — prevents tools from attempting Gemini calls
+        const toolResult = await executeTool(act.tool, act.params || {}, workspace, geminiFailed ? null : genAI, sessionContextPool, sessionMemory);
 
         // Guard against malformed tool result
         const observation = (toolResult && typeof toolResult.observation === 'string')

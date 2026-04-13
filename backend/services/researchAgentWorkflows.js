@@ -184,10 +184,11 @@ STEP 4 — Compile and call task_complete
   (e.g. Experimental study, Literature review, Case study, Theoretical paper.
   One sentence explaining what that means. Page ref.)
 
-  ## Key Points in Simple Terms
+  ## Key Points 
   - Point 1 (p.X)
   - Point 2 (p.X)
   - Point 3 (p.X)
+  (All must be written in simple language and Simple Terms)
   (At least 5 key points from the paper)
 
   ## Questions & Answers

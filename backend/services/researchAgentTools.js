@@ -1,10 +1,13 @@
 // backend/services/researchAgentTools.js
 //
 // Tool Schema + Executor for the Research Agent.
-// Tools operate purely on workspace data passed in — no DB calls, no file I/O.
+// Tools operate purely on workspace data passed in - no DB calls, no file I/O.
 // Each tool returns { observation, memoryType } where:
 //   memoryType: 'short_term' = only in next iteration, then dropped
 //   memoryType: 'long_term'  = agent explicitly saves to sessionMemory via save_to_memory
+
+const { initializeEnvironment } = require('../config/env');
+const config = initializeEnvironment();
 
 const TOOL_SCHEMA = [
   {
@@ -206,7 +209,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
       }
       if (typeof start_page !== 'number' || typeof end_page !== 'number' || isNaN(start_page) || isNaN(end_page)) {
         return {
-          observation: 'ERROR: "start_page" and "end_page" are required and must be numbers.',
+          observation: 'ERROR: "start_page" and "end_page" are required as numbers. Correct format: { "paper_index": 0, "start_page": 1, "end_page": 4 }',
           memoryType: 'short_term'
         };
       }
@@ -297,7 +300,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
       }
       if (!keyword || !keyword.trim()) {
         return {
-          observation: 'ERROR: Keyword cannot be empty.',
+          observation: 'ERROR: "keyword" cannot be empty. Correct format: { "paper_index": 0, "keyword": "methodology" }',
           memoryType: 'short_term'
         };
       }
@@ -348,7 +351,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
       }
       if (!Array.isArray(keywords) || keywords.length === 0) {
         return {
-          observation: 'ERROR: "keywords" must be a non-empty array of strings.',
+          observation: 'ERROR: "keywords" must be a non-empty array of strings. Correct format: { "paper_index": 0, "keywords": ["methodology", "results"] }',
           memoryType: 'short_term'
         };
       }
@@ -422,9 +425,6 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
           memoryType: 'short_term'
         };
       }
-      if (!genAI) {
-        return { observation: `ERROR: AI service not available.`, memoryType: 'short_term' };
-      }
 
       const paper = papers[paper_index];
       if (!paper.pages || !Array.isArray(paper.pages)) {
@@ -437,28 +437,59 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
       const pagesToAnalyze = paper.pages.slice(0, 50);
       const textToAnalyze = pagesToAnalyze.map((text, i) => `--- PAGE ${i + 1} ---\n${text}`).join('\n\n');
 
-      const prompt = `Analyze the following academic text (up to 50 pages) and construct a simple Table of Contents mapping logical sections to page numbers. Respond ONLY with a bulleted list.
+      const prompt = `Analyze the following academic text (up to 50 pages) and construct a simple Table of Contents mapping logical sections to page numbers. Respond ONLY with a bulleted list.\n\nTEXT:\n${textToAnalyze}`;
 
-TEXT:
-${textToAnalyze}`;
+      const buildStructureResult = (structure) => ({
+        observation: `GENERATED STRUCTURE MAP:\n${structure}\n(This has been AUTO-SAVED to your long-term memory).`,
+        memoryType: 'long_term',
+        memoryEntry: {
+          id: `Struct_P${paper_index}`,
+          type: 'structure',
+          paper_index: paper_index,
+          content: `Document Structure:\n${structure}`
+        }
+      });
 
+      // TIER 1: Gemini (only if available)
+      if (genAI) {
+        try {
+          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+          const result = await model.generateContent(prompt);
+          return buildStructureResult(result.response.text());
+        } catch (geminiErr) {
+          // Gemini failed — fall through to OpenAI below
+          console.warn('[get_paper_structure_map] Gemini failed, trying OpenAI fallback:', geminiErr.message);
+        }
+      }
+
+      // TIER 2: OpenAI fallback (used when Gemini is unavailable or failed)
+      if (!config.openaiApiKey) {
+        return { observation: `ERROR: AI service not available — no fallback configured.`, memoryType: 'short_term' };
+      }
       try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        const result = await model.generateContent(prompt);
-        const structure = result.response.text();
-
-        return {
-          observation: `GENERATED STRUCTURE MAP:\n${structure}\n(This has been AUTO-SAVED to your long-term memory).`,
-          memoryType: 'long_term',
-          memoryEntry: {
-            id: `Struct_P${paper_index}`, // Explicit deterministic ID
-            type: 'structure',
-            paper_index: paper_index,
-            content: `Document Structure:\n${structure}`
-          }
-        };
-      } catch (err) {
-        return { observation: `ERROR: ${err.message}`, memoryType: 'short_term' };
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.openaiApiKey}`
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: 'You are a research assistant. Respond ONLY with a bulleted list of sections and page numbers. No prose.' },
+              { role: 'user', content: prompt }
+            ]
+          })
+        });
+        if (!response.ok) {
+          const errBody = await response.text();
+          return { observation: `ERROR: OpenAI fallback failed (${response.status}): ${errBody}`, memoryType: 'short_term' };
+        }
+        const data = await response.json();
+        const structure = data.choices[0]?.message?.content || '';
+        return buildStructureResult(structure);
+      } catch (openaiErr) {
+        return { observation: `ERROR: ${openaiErr.message}`, memoryType: 'short_term' };
       }
     }
 
@@ -524,9 +555,13 @@ ${textToAnalyze}`;
     }
 
     case 'save_to_session_memory': {
-      const { memory_ids } = params;
+      // Accept all casing variants GPT-4o-mini may emit: memory_ids, MEMORY_IDs, memory_id
+      const memory_ids = params.memory_ids || params.MEMORY_IDs || params.memory_id;
       if (!Array.isArray(memory_ids) || memory_ids.length === 0) {
-        return { observation: 'ERROR: provide an array of memory_ids.', memoryType: 'short_term' };
+        return {
+          observation: 'ERROR: "memory_ids" must be a non-empty array of MEMORY_ID strings. Correct format: { "memory_ids": ["Page_P0_Pg1", "Page_P0_Pg2"] }. The IDs are shown in [MEMORY_ID: X] tags in tool output.',
+          memoryType: 'short_term'
+        };
       }
 
       const savedEntries = [];
