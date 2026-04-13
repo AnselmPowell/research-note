@@ -80,6 +80,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
     // Local state for editing content
     const [editContent, setEditContent] = useState('');
     const [actionMenuOpen, setActionMenuOpen] = useState<number | null>(null);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState<number | null>(null);
 
     // Update edit content when editingId changes
     React.useEffect(() => {
@@ -95,10 +96,13 @@ export const NotesTable: React.FC<NotesTableProps> = ({
             if (actionMenuOpen !== null && !(event.target as Element).closest('.action-menu-trigger')) {
                 setActionMenuOpen(null);
             }
+            if (mobileMenuOpen !== null && !(event.target as Element).closest('.mobile-menu-trigger')) {
+                setMobileMenuOpen(null);
+            }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [actionMenuOpen]);
+    }, [actionMenuOpen, mobileMenuOpen]);
 
     const handleSave = async (id: number) => {
         if (editContent.trim()) {
@@ -145,7 +149,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                             <span className="sr-only">Select</span>
                         </th>
                         <th
-                            className="py-3 px-4 cursor-pointer hover:text-scholar-600 transition-colors group select-none w-1/2"
+                            className="py-3 px-4 cursor-pointer hover:text-scholar-600 transition-colors group select-none min-w-[220px]"
                             onClick={() => onSort('content')}
                         >
                             <div className="flex items-center">
@@ -205,7 +209,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                             {editingId === note.id ? (
                                                 <div className="space-y-2">
                                                     <textarea
-                                                        className="w-full p-3 bg-scholar-50 dark:bg-gray-900 border border-scholar-200 dark:border-gray-700 rounded-lg outline-none text-sm font-sans italic text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-scholar-500/20 transition-all resize-y"
+                                                        className="w-full p-3 bg-scholar-50 dark:bg-gray-900 border border-scholar-200 dark:border-gray-700 rounded-lg outline-none text-base md:text-sm font-sans italic text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-scholar-500/20 transition-all resize-y"
                                                         value={editContent}
                                                         onChange={(e) => setEditContent(e.target.value)}
                                                         rows={3}
@@ -229,14 +233,13 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                 </div>
                                             ) : (
                                                 <>
-                                                    <p className="text-sm text-gray-800 dark:text-gray-200 line-clamp-2 font-medium">
+                                                    <p className="text-sm text-gray-800 dark:text-gray-200 font-medium whitespace-pre-wrap break-words leading-relaxed max-w-[90vw] sm:max-w-none">
                                                         "{note.content}"
                                                     </p>
                                                     {/* Mobile-only metadata */}
-                                                    <div className="md:hidden flex items-center gap-2 text-xs text-gray-500 mt-1">
-                                                        <span className="truncate max-w-[150px] font-bold text-scholar-600">{paperTitle}</span>
-                                                        <span>•</span>
-                                                        <span>p.{note.page_number}</span>
+                                                    <div className="md:hidden flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-gray-500 mt-3 border-t border-gray-100 dark:border-gray-800/50 pt-2">
+                                                        <span className="font-bold text-scholar-600 break-words leading-tight">{paperTitle}</span>
+                                                        <span className="bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded text-[10px] font-bold">p.{note.page_number}</span>
                                                     </div>
                                                 </>
                                             )}
@@ -303,61 +306,85 @@ export const NotesTable: React.FC<NotesTableProps> = ({
 
                                     <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex items-center justify-end gap-1 relative">
-                                            <button
-                                                onClick={() => onViewPdf(note)}
-                                                className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all"
-                                                title="View in PDF"
-                                            >
-                                                <TextSearch size={17} />
-                                            </button>
-                                            <button
-                                                onClick={() => onEdit(note.id!)}
-                                                className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all"
-                                                title="Edit Note"
-                                            >
-                                                <Edit3 size={16} />
-                                            </button>
-
-                                            <div className="relative">
+                                            {/* Desktop Actions */}
+                                            <div className="hidden sm:flex items-center justify-end gap-1 relative">
                                                 <button
-                                                    onClick={(e) => { e.stopPropagation(); setActionMenuOpen(actionMenuOpen === note.id ? null : note.id!); }}
-                                                    className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all action-menu-trigger"
-                                                    title="Copy options"
+                                                    onClick={() => onViewPdf(note)}
+                                                    className="p-2 sm:p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all"
+                                                    title="View in PDF"
                                                 >
-                                                    <Copy size={16} />
+                                                    <TextSearch size={18} className="sm:w-[17px] sm:h-[17px]" />
+                                                </button>
+                                                <button
+                                                    onClick={() => onEdit(note.id!)}
+                                                    className="p-2 sm:p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all"
+                                                    title="Edit Note"
+                                                >
+                                                    <Edit3 size={18} className="sm:w-[16px] sm:h-[16px]" />
                                                 </button>
 
-                                                {actionMenuOpen === note.id && (
-                                                    <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-[997] animate-fade-in  overflow-visible">
-                                                        <button
-                                                            onClick={(e) => handleCopy(e, note, false)}
-                                                            className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
-                                                        >
-                                                            <FileText size={14} /> Copy Text
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => handleCopy(e, note, true)}
-                                                            className="w-full text-left px-4 py-2 text-xs font-bold text-scholar-600 dark:text-scholar-400 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 flex items-center gap-2"
-                                                        >
-                                                            <FileJson size={14} /> Copy Full
-                                                        </button>
+                                                <div className="relative">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setActionMenuOpen(actionMenuOpen === note.id ? null : note.id!); setMobileMenuOpen(null); }}
+                                                        className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all action-menu-trigger"
+                                                        title="Copy options"
+                                                    >
+                                                        <Copy size={16} />
+                                                    </button>
+
+                                                    {actionMenuOpen === note.id && (
+                                                        <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-[997] animate-fade-in  overflow-visible">
+                                                            <button
+                                                                onClick={(e) => handleCopy(e, note, false)}
+                                                                className="w-full text-left px-4 py-3 sm:py-2 text-sm sm:text-xs font-bold text-gray-600 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                                                            >
+                                                                <FileText size={16} className="sm:w-[14px] sm:h-[14px]" /> Copy Text
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => handleCopy(e, note, true)}
+                                                                className="w-full text-left px-4 py-3 sm:py-2 text-sm sm:text-xs font-bold text-scholar-600 dark:text-scholar-400 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 flex items-center gap-2"
+                                                            >
+                                                                <FileJson size={16} className="sm:w-[14px] sm:h-[14px]" /> Copy Full
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <button
+                                                    onClick={() => onDelete(note.id!)}
+                                                    className="p-2 sm:p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 size={18} className="sm:w-[16px] sm:h-[16px]" />
+                                                </button>
+                                                <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
+                                            </div>
+
+                                            {/* Mobile Actions Dropdown */}
+                                            <div className="sm:hidden relative">
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); setMobileMenuOpen(mobileMenuOpen === note.id ? null : note.id!); setActionMenuOpen(null); }}
+                                                    className="p-2 text-gray-400 hover:text-gray-600 mobile-menu-trigger bg-gray-50 dark:bg-gray-800 rounded-lg"
+                                                >
+                                                    <MoreHorizontal size={18} />
+                                                </button>
+                                                {mobileMenuOpen === note.id && (
+                                                    <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-[997] animate-fade-in overflow-visible">
+                                                        <button onClick={(e) => { e.stopPropagation(); onViewPdf(note); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-200 flex items-center gap-2"> <TextSearch size={16} /> View PDF </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); onEdit(note.id!); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-200 flex items-center gap-2"> <Edit3 size={16} /> Edit </button>
+                                                        <button onClick={(e) => { handleCopy(e, note, false); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-200 flex items-center gap-2"> <FileText size={16} /> Copy Text </button>
+                                                        <button onClick={(e) => { handleCopy(e, note, true); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-scholar-600 dark:text-scholar-400 flex items-center gap-2"> <FileJson size={16} /> Copy Full </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); onDelete(note.id!); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"> <Trash2 size={16} /> Delete </button>
                                                     </div>
                                                 )}
                                             </div>
 
                                             <button
-                                                onClick={() => onDelete(note.id!)}
-                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
-                                                title="Delete"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                            <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
-                                            <button
                                                 onClick={() => onExpand(note.id!)}
-                                                className={`p-1 text-gray-400 hover:text-gray-600 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                                                className={`p-2 sm:p-1 text-gray-400 hover:text-gray-600 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                                                title="Expand"
                                             >
-                                                <ChevronDown size={16} />
+                                                <ChevronDown size={18} className="sm:w-[16px] sm:h-[16px]" />
                                             </button>
                                         </div>
                                     </td>

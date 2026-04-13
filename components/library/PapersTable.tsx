@@ -14,7 +14,8 @@ import {
     StickyNote,
     Sparkles,
     PlusCircle,
-    RotateCcw
+    RotateCcw,
+    MoreHorizontal
 } from 'lucide-react';
 import { DeepResearchResult, DeepResearchNote } from '../../types';
 import { useState } from 'react';
@@ -60,6 +61,17 @@ export const PapersTable: React.FC<PapersTableProps> = ({
     onExtractMetadata,
     extractingUris
 }) => {
+    const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
+
+    React.useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (actionMenuOpen !== null && !(event.target as Element).closest('.action-menu-trigger')) {
+                setActionMenuOpen(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [actionMenuOpen]);
 
     const SortIcon = ({ column }: { column: string }) => {
         if (sortColumn !== column) return <ArrowUpDown size={12} className="opacity-20 ml-1" />;
@@ -147,18 +159,17 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                                     </td>
 
                                     <td className="py-5 px-4">
-                                        <div className="flex flex-col gap-1">
+                                        <div className="flex flex-col gap-2">
                                             <span
                                                 onClick={(e) => { e.stopPropagation(); onTitleClick(paper); }}
-                                                className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug hover:text-scholar-600 transition-colors cursor-pointer"
+                                                className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug hover:text-scholar-600 transition-colors cursor-pointer break-words"
                                             >
                                                 {paper.title}
                                             </span>
                                             {/* Mobile-only metadata */}
-                                            <div className="md:hidden flex items-center gap-2 text-xs text-gray-500">
-                                                <span>{year}</span>
-                                                <span>•</span>
-                                                <span className="truncate max-w-[150px]">{authors}</span>
+                                            <div className="md:hidden flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
+                                                <span className="bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded text-[10px] font-bold">{year}</span>
+                                                <span className="line-clamp-2 break-words leading-tight">{authors}</span>
                                             </div>
                                         </div>
                                     </td>
@@ -188,34 +199,58 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                                     </td>
 
                                     <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                                        <div className="flex items-center justify-end gap-1">
-                                            <button
-                                                onClick={() => onTitleClick(paper)}
-                                                className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all"
-                                                title="View Paper Details"
-                                            >
-                                                <FileText size={16} />
-                                            </button>
-                                            <button
-                                                onClick={() => onView(paper)}
-                                                className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all"
-                                                title="View PDF"
-                                            >
-                                                {isDownloading(paper.uri) ? <Loader2 size={16} className="animate-spin" /> : <BookText size={16} />}
-                                            </button>
-                                            <button
-                                                onClick={() => onDelete(paper)}
-                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
-                                                title="Delete"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                            <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
+                                        <div className="flex items-center justify-end gap-1 relative">
+                                            {/* Desktop Actions */}
+                                            <div className="hidden sm:flex items-center justify-end gap-1 sm:gap-2">
+                                                <button
+                                                    onClick={() => onTitleClick(paper)}
+                                                    className="p-2 sm:p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all"
+                                                    title="View Paper Details"
+                                                >
+                                                    <FileText size={18} className="sm:w-[16px] sm:h-[16px]" />
+                                                </button>
+                                                <button
+                                                    onClick={() => onView(paper)}
+                                                    className="p-2 sm:p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all"
+                                                    title="View PDF"
+                                                >
+                                                    {isDownloading(paper.uri) ? <Loader2 size={18} className="animate-spin sm:w-[16px] sm:h-[16px]" /> : <BookText size={18} className="sm:w-[16px] sm:h-[16px]" />}
+                                                </button>
+                                                <button
+                                                    onClick={() => onDelete(paper)}
+                                                    className="p-2 sm:p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 size={18} className="sm:w-[16px] sm:h-[16px]" />
+                                                </button>
+                                                <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
+                                            </div>
+
+                                            {/* Mobile Actions Dropdown */}
+                                            <div className="sm:hidden relative">
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); setActionMenuOpen(actionMenuOpen === paper.uri ? null : paper.uri); }}
+                                                    className="p-2 text-gray-400 hover:text-gray-600 action-menu-trigger bg-gray-50 dark:bg-gray-800 rounded-lg"
+                                                >
+                                                    <MoreHorizontal size={18} />
+                                                </button>
+                                                {actionMenuOpen === paper.uri && (
+                                                    <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-[997] animate-fade-in overflow-visible">
+                                                        <button onClick={(e) => { e.stopPropagation(); onTitleClick(paper); setActionMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-200 flex items-center gap-2"> <FileText size={16} /> Details </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); onView(paper); setActionMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-200 flex items-center gap-2"> 
+                                                            {isDownloading(paper.uri) ? <Loader2 size={16} className="animate-spin" /> : <BookText size={16} />} View PDF
+                                                        </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); onDelete(paper); setActionMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"> <Trash2 size={16} /> Delete </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
                                             <button
                                                 onClick={() => onExpand(paper.uri)}
-                                                className={`p-1 text-gray-400 hover:text-gray-600 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                                                className={`p-2 sm:p-1 text-gray-400 hover:text-gray-600 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                                                title="Expand"
                                             >
-                                                <ChevronDown size={16} />
+                                                <ChevronDown size={18} className="sm:w-[16px] sm:h-[16px]" />
                                             </button>
                                         </div>
                                     </td>
