@@ -674,8 +674,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
   const View_FilterOptions = useMemo(() => {
     if (activeTab === 'notes' || activeTab === 'papers') {
       return (
-        <div className="flex items-center gap-1 sm:gap-2">
-          <div className="flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-1 sm:mr-2">
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:flex bg-white/40 dark:bg-gray-800/40 p-1 rounded-xl border border-gray-100 dark:border-gray-800 view-toggle-container mr-2">
             <button
               onClick={() => setViewMode('table')}
               className={`p-2 rounded-lg transition-all ${viewMode === 'table'
@@ -724,6 +724,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
         <style>{`
         @container (max-width: 450px) {
           .tab-label { display: none; }
+          .view-toggle-container { display: none !important; }
           .filters-grid { grid-template-columns: 1fr !important; }
           .pagination-controls { flex-direction: column; gap: 1rem; }
           .notes-grid { grid-template-columns: 1fr !important; }

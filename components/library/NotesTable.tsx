@@ -57,6 +57,13 @@ const formatFullNote = (note: DeepResearchNote, paper: DeepResearchResult | unde
   `.trim();
 };
 
+const truncateToWords = (text: string, wordLimit: number) => {
+    if (!text) return '';
+    const words = text.trim().split(/\s+/);
+    if (words.length <= wordLimit) return text;
+    return words.slice(0, wordLimit).join(' ') + '...';
+};
+
 export const NotesTable: React.FC<NotesTableProps> = ({
     notes,
     papers,
@@ -93,10 +100,10 @@ export const NotesTable: React.FC<NotesTableProps> = ({
     // Close menu when clicking outside
     React.useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (actionMenuOpen !== null && !(event.target as Element).closest('.action-menu-trigger')) {
+            if (actionMenuOpen !== null && !(event.target as Element).closest('.action-menu-container')) {
                 setActionMenuOpen(null);
             }
-            if (mobileMenuOpen !== null && !(event.target as Element).closest('.mobile-menu-trigger')) {
+            if (mobileMenuOpen !== null && !(event.target as Element).closest('.mobile-menu-container')) {
                 setMobileMenuOpen(null);
             }
         };
@@ -121,7 +128,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
 
     const SortIcon = ({ column }: { column: string }) => {
         if (sortColumn !== column) return <ArrowUpDown size={12} className="opacity-20 ml-1" />;
-        return <ArrowUpDown size={12} className={`ml-1 ${sortDirection === 'asc' ? 'rotate-180' : ''} text-scholar-600`} />;
+        return <ArrowUpDown size={12} className={`ml-1 ${sortDirection === 'asc' ? 'rotate-180' : ''} text-scholar-600 dark:text-scholar-400`} />;
     };
 
     // Tooltip component for instant hover display
@@ -149,7 +156,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                             <span className="sr-only">Select</span>
                         </th>
                         <th
-                            className="py-3 px-4 cursor-pointer hover:text-scholar-600 transition-colors group select-none min-w-[220px]"
+                            className="py-3 px-4 cursor-pointer hover:text-scholar-600 hover:dark:text-scholar-400 transition-colors group select-none lg:w-[60%] min-w-[220px]"
                             onClick={() => onSort('content')}
                         >
                             <div className="flex items-center">
@@ -157,28 +164,18 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                 <SortIcon column="content" />
                             </div>
                         </th>
-                        <th className="hidden lg:table-cell py-3 px-4 w-32 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider">Author</th>
-                        <th className="hidden lg:table-cell py-3 px-4 w-20 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider">Year</th>
                         <th
-                            className="hidden md:table-cell py-3 px-4 w-1/6 cursor-pointer hover:text-scholar-600 transition-colors group select-none"
+                            className="hidden md:table-cell py-3 px-4 w-1/5 cursor-pointer hover:text-scholar-600 hover:dark:text-scholar-400 transition-colors group select-none"
                             onClick={() => onSort('paper')}
                         >
-                            <div className="flex items-center">
+                            <div className="flex items-center ">
                                 Source
                                 <SortIcon column="paper" />
                             </div>
                         </th>
-                        <th
-                            className="hidden lg:table-cell py-3 px-4 w-20 cursor-pointer hover:text-scholar-600 transition-colors group select-none"
-                            onClick={() => onSort('page')}
-                        >
-                            <div className="flex items-center">
-                                Page
-                                <SortIcon column="page" />
-                            </div>
-                        </th>
+                        <th className="hidden lg:table-cell py-3 px-4 w-48 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider">Reference</th>
                         <th className="hidden sm:table-cell py-3 px-4 w-24 text-center">Tags</th>
-                        <th className="hidden xl:table-cell py-3 px-4 w-48 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider">Query</th>
+                        <th className="hidden xl:table-cell py-3 px-4 w-40 text-left font-semibold text-gray-500 text-xs uppercase tracking-wider">Query</th>
                         <th className="py-3 px-4 w-24 text-right">Actions</th>
                     </tr>
                 </thead>
@@ -198,7 +195,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                     <td className="py-5 pl-4 vertical-top" onClick={(e) => e.stopPropagation()}>
                                         <button
                                             onClick={() => onSelect(note.id!)}
-                                            className={`p-1 rounded-md transition-colors ${isSelected ? 'text-scholar-600 bg-scholar-50 dark:bg-scholar-900/20' : 'text-gray-300 hover:text-gray-500'}`}
+                                            className={`p-1 rounded-md transition-colors ${isSelected ? 'text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/20' : 'text-gray-300 hover:text-gray-500'}`}
                                         >
                                             {isSelected ? <Check size={18} /> : <Square size={18} />}
                                         </button>
@@ -233,12 +230,12 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                 </div>
                                             ) : (
                                                 <>
-                                                    <p className="text-sm text-gray-800 dark:text-gray-200 font-medium whitespace-pre-wrap break-words leading-relaxed max-w-[90vw] sm:max-w-none">
-                                                        "{note.content}"
+                                                    <p className="text-[15px] md:text-base text-gray-800 dark:text-gray-200 font-medium whitespace-pre-wrap break-words leading-[1.7] max-w-[90vw] sm:max-w-none pt-1">
+                                                        "{truncateToWords(note.content, 30)}"
                                                     </p>
                                                     {/* Mobile-only metadata */}
                                                     <div className="md:hidden flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs text-gray-500 mt-3 border-t border-gray-100 dark:border-gray-800/50 pt-2">
-                                                        <span className="font-bold text-scholar-600 break-words leading-tight">{paperTitle}</span>
+                                                        <span className="font-bold text-scholar-600 dark:text-scholar-400 break-words leading-tight">{paperTitle}</span>
                                                         <span className="bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded text-[10px] font-bold">p.{note.page_number}</span>
                                                     </div>
                                                 </>
@@ -246,26 +243,10 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                         </div>
                                     </td>
 
-                                    <td className="hidden lg:table-cell py-5 px-4 vertical-top">
-                                        <Tooltip text={Array.isArray(paper?.authors) ? paper?.authors.join(', ') : paper?.authors || ''}>
-                                            <span className="text-xs text-gray-600 dark:text-gray-400 font-medium line-clamp-1 cursor-help">
-                                                {Array.isArray(paper?.authors) ? (paper?.authors[0] + (paper!.authors.length > 1 ? ' et al.' : '')) : (paper?.authors || 'Unknown')}
-                                            </span>
-                                        </Tooltip>
-                                    </td>
-
-                                    <td className="hidden lg:table-cell py-5 px-4 vertical-top">
-                                        <span className="text-xs text-gray-500 font-mono">
-                                            {paper?.year ? paper.year :
-                                                (paper?.publishedDate ? new Date(paper.publishedDate).getFullYear() :
-                                                    (paper?.created_at ? new Date(paper.created_at).getFullYear() : '—'))}
-                                        </span>
-                                    </td>
-
                                     <td className="hidden md:table-cell py-5 px-4 vertical-top">
                                         <Tooltip text={paperTitle}>
                                             <span
-                                                className="text-xs font-bold text-scholar-600 hover:underline cursor-pointer truncate block max-w-[200px]"
+                                                className="text-[13px] font-bold text-scholar-600 dark:text-scholar-400 hover:underline cursor-pointer line-clamp-2 block"
                                                 onClick={(e) => { e.stopPropagation(); onViewPdf(note); }}
                                             >
                                                 {paperTitle}
@@ -273,10 +254,18 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                         </Tooltip>
                                     </td>
 
-                                    <td className="hidden lg:table-cell py-3 px-4">
-                                        <span className="text-xs text-gray-500 font-mono">
-                                            p.{note.page_number}
-                                        </span>
+                                    <td className="hidden lg:table-cell py-5 px-4 vertical-top">
+                                        <div className="flex flex-col gap-0.5">
+                                            <Tooltip text={Array.isArray(paper?.authors) ? paper?.authors.join(', ') : paper?.authors || ''}>
+                                                <span className="text-xs text-gray-600 dark:text-gray-400 font-bold line-clamp-1 cursor-help">
+                                                    {Array.isArray(paper?.authors) ? (paper?.authors[0] + (paper!.authors.length > 1 ? ' et al.' : '')) : (paper?.authors || 'Unknown')}
+                                                </span>
+                                            </Tooltip>
+                                            <span className="text-xs text-gray-500 font-mono flex items-center gap-2 mt-1">
+                                                <span>{paper?.year ? paper.year : (paper?.publishedDate ? new Date(paper.publishedDate).getFullYear() : (paper?.created_at ? new Date(paper.created_at).getFullYear() : '—'))}</span>
+                                                <span className="bg-gray-100 dark:bg-gray-800 px-1.5 rounded font-bold">p.{note.page_number}</span>
+                                            </span>
+                                        </div>
                                     </td>
 
                                     <td className="hidden sm:table-cell py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
@@ -323,10 +312,10 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                     <Edit3 size={18} className="sm:w-[16px] sm:h-[16px]" />
                                                 </button>
 
-                                                <div className="relative">
+                                                <div className="relative action-menu-container">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setActionMenuOpen(actionMenuOpen === note.id ? null : note.id!); setMobileMenuOpen(null); }}
-                                                        className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all action-menu-trigger"
+                                                        className="p-1.5 text-gray-400 hover:text-scholar-600  hover:bg-scholar-50 dark:hover:bg-scholar-900/20 rounded-lg transition-all action-menu-trigger"
                                                         title="Copy options"
                                                     >
                                                         <Copy size={16} />
@@ -338,7 +327,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                                 onClick={(e) => handleCopy(e, note, false)}
                                                                 className="w-full text-left px-4 py-3 sm:py-2 text-sm sm:text-xs font-bold text-gray-600 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
                                                             >
-                                                                <FileText size={16} className="sm:w-[14px] sm:h-[14px]" /> Copy Text
+                                                                <FileText size={16} className="sm:w-[14px] sm:h-[14px]" /> Copy note
                                                             </button>
                                                             <button
                                                                 onClick={(e) => handleCopy(e, note, true)}
@@ -361,8 +350,8 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                             </div>
 
                                             {/* Mobile Actions Dropdown */}
-                                            <div className="sm:hidden relative">
-                                                <button 
+                                            <div className="sm:hidden relative mobile-menu-container">
+                                                <button
                                                     onClick={(e) => { e.stopPropagation(); setMobileMenuOpen(mobileMenuOpen === note.id ? null : note.id!); setActionMenuOpen(null); }}
                                                     className="p-2 text-gray-400 hover:text-gray-600 mobile-menu-trigger bg-gray-50 dark:bg-gray-800 rounded-lg"
                                                 >
@@ -370,11 +359,11 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                 </button>
                                                 {mobileMenuOpen === note.id && (
                                                     <div className="absolute right-0 top-full mt-1 w-44 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-[997] animate-fade-in overflow-visible">
-                                                        <button onClick={(e) => { e.stopPropagation(); onViewPdf(note); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-200 flex items-center gap-2"> <TextSearch size={16} /> View PDF </button>
-                                                        <button onClick={(e) => { e.stopPropagation(); onEdit(note.id!); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-200 flex items-center gap-2"> <Edit3 size={16} /> Edit </button>
-                                                        <button onClick={(e) => { handleCopy(e, note, false); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-200 flex items-center gap-2"> <FileText size={16} /> Copy Text </button>
-                                                        <button onClick={(e) => { handleCopy(e, note, true); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-scholar-600 dark:text-scholar-400 flex items-center gap-2"> <FileJson size={16} /> Copy Full </button>
-                                                        <button onClick={(e) => { e.stopPropagation(); onDelete(note.id!); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"> <Trash2 size={16} /> Delete </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); onViewPdf(note); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-200 flex items-center gap-2"> <TextSearch size={18} /> View PDF </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); onEdit(note.id!); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-200 flex items-center gap-2"> <Edit3 size={18} /> Edit </button>
+                                                        <button onClick={(e) => { handleCopy(e, note, false); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-200 flex items-center gap-2"> <FileText size={18} /> Copy note </button>
+                                                        <button onClick={(e) => { handleCopy(e, note, true); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-scholar-600 dark:text-scholar-400 flex items-center gap-2"> <FileJson size={18} /> Copy Full </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); onDelete(note.id!); setMobileMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"> <Trash2 size={18} /> Delete </button>
                                                     </div>
                                                 )}
                                             </div>
@@ -393,7 +382,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                 {/* Expanded Details Row */}
                                 {isExpanded && (
                                     <tr className="bg-gray-50/50 dark:bg-gray-800/20 animate-slide-down">
-                                        <td colSpan={9} className="p-0">
+                                        <td colSpan={7} className="p-0">
                                             <div className="px-4 py-4 sm:px-14 pb-6 space-y-4">
                                                 {/* Harvard Reference */}
                                                 {paper?.harvardReference && (
@@ -419,15 +408,15 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                 </div>
 
                                                 <div className="mb-4">
-                                                    <p className="text-base text-gray-800 dark:text-gray-200 leading-relaxed font-serif bg-white dark:bg-gray-900/50 p-4 rounded-lg border border-gray-100 dark:border-gray-800">
+                                                    <p className="text-base text-gray-800 dark:text-gray-200 leading-relaxed font-serif bg-white dark:bg-gray-900/50 p-8 rounded-lg border border-gray-100 dark:border-gray-800">
                                                         "{note.content}"
                                                     </p>
                                                 </div>
 
                                                 {note.justification && (
                                                     <div>
-                                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-scholar-600 mb-1">Justification/Context</h4>
-                                                        <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed bg-scholar-50/50 dark:bg-scholar-900/10 p-3 rounded-lg border border-scholar-50 dark:border-scholar-900">
+                                                        <h4 className="text-[10px] font-black uppercase tracking-widest text-scholar-600 dark:text-scholar-400 mb-1">Justification/Context</h4>
+                                                        <p className="text-xs text-gray-600 dark:text-gray-200 leading-relaxed bg-scholar-50/50 dark:bg-scholar-900/10 p-3 rounded-lg border border-scholar-50 dark:border-scholar-900">
                                                             {note.justification}
                                                         </p>
                                                     </div>
@@ -439,7 +428,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                         <div className="space-y-1">
                                                             {note.citations.map((cit, idx) => (
                                                                 <div key={idx} className="text-xs text-gray-600 bg-gray-50 dark:bg-gray-800/50 block p-2 rounded mb-1">
-                                                                    <span className="font-bold text-scholar-600 mr-2">{cit.inline}</span>
+                                                                    <span className="font-bold text-scholar-600 dark:text-scholar-400 mr-2">{cit.inline}</span>
                                                                     <span className="text-gray-500">{cit.full}</span>
                                                                 </div>
                                                             ))}
@@ -454,7 +443,7 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                         );
                     }) : (
                         <tr>
-                            <td colSpan={9} className="py-24 text-center">
+                            <td colSpan={7} className="py-24 text-center">
                                 <div className="flex flex-col items-center justify-center opacity-40">
                                     <MessageSquareQuote size={48} className="mb-4 text-gray-300 dark:text-gray-600" />
                                     <p className="text-gray-900 dark:text-white font-bold">No notes found</p>

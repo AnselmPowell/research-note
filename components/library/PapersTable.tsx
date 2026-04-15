@@ -75,7 +75,7 @@ export const PapersTable: React.FC<PapersTableProps> = ({
 
     const SortIcon = ({ column }: { column: string }) => {
         if (sortColumn !== column) return <ArrowUpDown size={12} className="opacity-20 ml-1" />;
-        return <ArrowUpDown size={12} className={`ml-1 ${sortDirection === 'asc' ? 'rotate-180' : ''} text-scholar-600`} />;
+        return <ArrowUpDown size={12} className={`ml-1 ${sortDirection === 'asc' ? 'rotate-180' : ''} text-scholar-600 dark:text-scholar-400`} />;
     };
 
     // Tooltip component for instant hover display
@@ -103,7 +103,7 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                             <span className="sr-only">Select</span>
                         </th>
                         <th
-                            className="py-3 px-4 cursor-pointer hover:text-scholar-600 transition-colors group select-none"
+                            className="py-3 px-4 cursor-pointer hover:text-scholar-600 hover:dark:text-scholar-400 transition-colors group select-none"
                             onClick={() => onSort('title')}
                         >
                             <div className="flex items-center">
@@ -112,7 +112,7 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                             </div>
                         </th>
                         <th
-                            className="hidden md:table-cell py-3 px-4 w-1/4 cursor-pointer hover:text-scholar-600 transition-colors group select-none"
+                            className="hidden md:table-cell py-3 px-4 w-1/4 cursor-pointer hover:text-scholar-600 hover:dark:text-scholar-400 transition-colors group select-none"
                             onClick={() => onSort('authors')}
                         >
                             <div className="flex items-center">
@@ -121,7 +121,7 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                             </div>
                         </th>
                         <th
-                            className="hidden lg:table-cell py-3 px-4 w-24 cursor-pointer hover:text-scholar-600 transition-colors group select-none"
+                            className="hidden lg:table-cell py-3 px-4 w-24 cursor-pointer hover:text-scholar-600 hover:dark:text-scholar-400 transition-colors group select-none"
                             onClick={() => onSort('year')}
                         >
                             <div className="flex items-center">
@@ -152,7 +152,7 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                                     <td className="py-5 pl-4 vertical-top" onClick={(e) => e.stopPropagation()}>
                                         <button
                                             onClick={() => onSelect(paper)}
-                                            className={`p-1 rounded-md transition-colors ${isSelected ? 'text-scholar-600 bg-scholar-50 dark:bg-scholar-900/20' : 'text-gray-300 hover:text-gray-500'}`}
+                                            className={`p-1 rounded-md transition-colors ${isSelected ? 'text-scholar-600  bg-scholar-50 dark:bg-scholar-900/20' : 'text-gray-300 hover:text-gray-500'}`}
                                         >
                                             {isSelected ? <Check size={18} /> : <Square size={18} />}
                                         </button>
@@ -162,7 +162,7 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                                         <div className="flex flex-col gap-2">
                                             <span
                                                 onClick={(e) => { e.stopPropagation(); onTitleClick(paper); }}
-                                                className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug hover:text-scholar-600 transition-colors cursor-pointer break-words"
+                                                className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-snug hover:text-scholar-600 hover:dark:text-scholar-400  transition-colors cursor-pointer break-words"
                                             >
                                                 {paper.title}
                                             </span>
@@ -228,7 +228,7 @@ export const PapersTable: React.FC<PapersTableProps> = ({
 
                                             {/* Mobile Actions Dropdown */}
                                             <div className="sm:hidden relative">
-                                                <button 
+                                                <button
                                                     onClick={(e) => { e.stopPropagation(); setActionMenuOpen(actionMenuOpen === paper.uri ? null : paper.uri); }}
                                                     className="p-2 text-gray-400 hover:text-gray-600 action-menu-trigger bg-gray-50 dark:bg-gray-800 rounded-lg"
                                                 >
@@ -237,7 +237,7 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                                                 {actionMenuOpen === paper.uri && (
                                                     <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-[997] animate-fade-in overflow-visible">
                                                         <button onClick={(e) => { e.stopPropagation(); onTitleClick(paper); setActionMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-200 flex items-center gap-2"> <FileText size={16} /> Details </button>
-                                                        <button onClick={(e) => { e.stopPropagation(); onView(paper); setActionMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-200 flex items-center gap-2"> 
+                                                        <button onClick={(e) => { e.stopPropagation(); onView(paper); setActionMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-gray-600 dark:text-gray-200 flex items-center gap-2">
                                                             {isDownloading(paper.uri) ? <Loader2 size={16} className="animate-spin" /> : <BookText size={16} />} View PDF
                                                         </button>
                                                         <button onClick={(e) => { e.stopPropagation(); onDelete(paper); setActionMenuOpen(null); }} className="w-full text-left px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"> <Trash2 size={16} /> Delete </button>
@@ -325,24 +325,24 @@ const ExpandedRowContent = ({
                 <div className="flex space-x-6 items-center">
                     <button
                         onClick={() => setActiveTab('abstract')}
-                        className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'abstract' ? 'border-b-2 border-scholar-600 text-scholar-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                        className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'abstract' ? 'border-b-2 border-scholar-600 text-scholar-600 dark:text-scholar-100' : 'text-gray-400 hover:text-gray-600'}`}>
                         Abstract
                     </button>
                     <button
                         onClick={() => setActiveTab('breakdown')}
-                        className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'breakdown' ? 'border-b-2 border-scholar-600 text-scholar-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                        className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'breakdown' ? 'border-b-2 border-scholar-600 text-scholar-600 dark:text-scholar-100' : 'text-gray-400 hover:text-gray-600'}`}>
                         Paper Breakdown
                     </button>
                     <button
                         onClick={() => setActiveTab('findings')}
-                        className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'findings' ? 'border-b-2 border-scholar-600 text-scholar-600' : 'text-gray-400 hover:text-gray-600'}`}>
+                        className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'findings' ? 'border-b-2 border-scholar-600 text-scholar-600 dark:text-scholar-100' : 'text-gray-400 hover:text-gray-600'}`}>
                         Key Findings
                     </button>
 
                     {/* The Plus Button to open PaperDetails */}
                     <button
                         onClick={() => onTitleClick(paper)}
-                        className="p-1 mb-2 text-gray-400 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors ml-4"
+                        className="p-1 mb-2 text-gray-400 dark:text-scholar-100 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors ml-4"
                         title="Open Paper Details">
                         <PlusCircle size={18} />
                     </button>
@@ -357,7 +357,7 @@ const ExpandedRowContent = ({
                         <button
                             onClick={() => onRunAgentWorkflow(paper, 'summarise_paper')}
                             disabled={!!agentRunningTasks[paper.uri]}
-                            className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all"
+                            className="p-1.5 text-gray-400 dark:text-scholar-100 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all"
                             title="Regenerate Abstract"
                         >
                             <RotateCcw size={20} className={agentRunningTasks[paper.uri] === 'summarise_paper' ? "animate-spin text-scholar-500 [animation-direction:reverse]" : ""} />
@@ -394,7 +394,7 @@ const ExpandedRowContent = ({
                                 <button
                                     onClick={() => onRunAgentWorkflow(paper, 'paper_breakdown')}
                                     disabled={!!agentRunningTasks[paper.uri]}
-                                    className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all"
+                                    className="p-1.5 text-gray-400 dark:text-scholar-100 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all"
                                     title="Regenerate Paper Breakdown"
                                 >
                                     <RotateCcw size={20} className={agentRunningTasks[paper.uri] === 'paper_breakdown' ? "animate-spin text-scholar-500 [animation-direction:reverse]" : ""} />
@@ -428,7 +428,7 @@ const ExpandedRowContent = ({
                                 <button
                                     onClick={() => onRunAgentWorkflow(paper, 'get_findings')}
                                     disabled={!!agentRunningTasks[paper.uri]}
-                                    className="p-1.5 text-gray-400 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all"
+                                    className="p-1.5 text-gray-400 dark:text-scholar-100 hover:text-scholar-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all"
                                     title="Regenerate Key Findings"
                                 >
                                     <RotateCcw size={20} className={agentRunningTasks[paper.uri] === 'get_findings' ? "animate-spin text-scholar-500 [animation-direction:reverse]" : ""} />
