@@ -325,15 +325,15 @@ export const NotesTable: React.FC<NotesTableProps> = ({
                                                         <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1 z-[997] animate-fade-in  overflow-visible">
                                                             <button
                                                                 onClick={(e) => handleCopy(e, note, false)}
-                                                                className="w-full text-left px-4 py-3 sm:py-2 text-sm sm:text-xs font-bold text-gray-600 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                                                                className="w-full text-left px-4 py-3 sm:py-2 text-sm sm:text-xs font-bold text-gray-600 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                                                             >
-                                                                <FileText size={16} className="sm:w-[14px] sm:h-[14px]" /> Copy note
+                                                                Copy note
                                                             </button>
                                                             <button
                                                                 onClick={(e) => handleCopy(e, note, true)}
-                                                                className="w-full text-left px-4 py-3 sm:py-2 text-sm sm:text-xs font-bold text-scholar-600 dark:text-scholar-400 hover:bg-scholar-50 dark:hover:bg-scholar-900/20 flex items-center gap-2"
+                                                                className="w-full text-left px-4 py-3 sm:py-2 text-sm sm:text-xs font-bold text-scholar-600 dark:text-scholar-400 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
                                                             >
-                                                                <FileJson size={16} className="sm:w-[14px] sm:h-[14px]" /> Copy Full
+                                                                Copy Full
                                                             </button>
                                                         </div>
                                                     )}

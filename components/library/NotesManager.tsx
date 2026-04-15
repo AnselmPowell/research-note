@@ -679,8 +679,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
             <button
               onClick={() => setViewMode('table')}
               className={`p-2 rounded-lg transition-all ${viewMode === 'table'
-                  ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400'
-                  : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'
+                ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400'
+                : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'
                 }`}
               title="Table View"
             >
@@ -690,8 +690,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
             <button
               onClick={() => setViewMode('list')}
               className={`p-2 rounded-lg transition-all ${viewMode === 'list'
-                  ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400'
-                  : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'
+                ? 'bg-white dark:bg-gray-700 shadow-sm text-scholar-600 dark:text-scholar-400'
+                : 'text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400'
                 }`}
               title="List View"
             >
@@ -702,8 +702,8 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl border transition-all ${showFilters
-                ? 'bg-scholar-50 dark:bg-scholar-900/30 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400'
-                : 'bg-white/60 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400'
+              ? 'bg-scholar-50 dark:bg-scholar-900/30 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400'
+              : 'bg-white/60 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-scholar-200 dark:hover:border-scholar-800 hover:text-scholar-600 dark:hover:text-scholar-400'
               }`}
           >
             <Filter size={18} className="flex-shrink-0" />
@@ -1634,11 +1634,11 @@ function NoteCard({
               </button>
               {showCopyMenu && (
                 <div className="absolute top-full right-0 mt-1 w-40 sm:w-48 bg-white dark:bg-gray-800 rounded-xl sm:rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 py-1 sm:py-1.5 z-50 text-gray-900 dark:text-white animate-fade-in origin-top-right">
-                  <button onClick={handleCopyRaw} className="w-full text-left px-3 sm:px-4 py-2 text-[9px] sm:text-xs font-bold uppercase tracking-widest hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-2 sm:gap-3 transition-colors">
-                    <FileText size={12} className="sm:w-[14px] sm:h-[14px] text-gray-400" /> Copy Text
+                  <button onClick={handleCopyRaw} className="w-full text-left px-3 sm:px-4 py-2 text-[9px] sm:text-xs font-bold uppercase tracking-widest hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 sm:gap-3 transition-colors">
+                    Copy Note
                   </button>
-                  <button onClick={handleCopyFull} className="w-full text-left px-3 sm:px-4 py-2 text-[9px] sm:text-xs font-bold uppercase tracking-widest hover:bg-scholar-50 dark:hover:bg-scholar-900/30 flex items-center gap-2 sm:gap-3 transition-colors">
-                    <FileJson size={12} className="sm:w-[14px] sm:h-[14px] text-scholar-600 dark:text-scholar-400" /> Citation
+                  <button onClick={handleCopyFull} className="w-full text-left px-3 sm:px-4 py-2 text-[9px] sm:text-xs font-bold uppercase tracking-widest hover:hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 sm:gap-3 transition-colors">
+                    Copy Full
                   </button>
                 </div>
               )}
