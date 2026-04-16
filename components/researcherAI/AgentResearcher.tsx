@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Sparkles, X, BookOpenText, Plus, Loader2, FileText, ArrowRight, AlertCircle, ChevronDown, Trash2, Square } from 'lucide-react';
+import { Sparkles, X, BookOpenText, Plus, Loader2, FileText, ArrowRight, AlertCircle, ChevronDown, Trash2, Square, Check } from 'lucide-react';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useResearch } from '../../contexts/ResearchContext';
 import { useUI } from '../../contexts/UIContext';
@@ -33,6 +33,9 @@ export const AgentResearcher: React.FC<AgentResearcherProps> = ({ activeTool, se
     const [isBarExpanded, setIsBarExpanded] = useState(false);
     const [deepQuestions, setDeepQuestions] = useState<string[]>([]);
     const [deepInput, setDeepInput] = useState('');
+
+    // Paper Selector Pop-up State
+    const [showPaperSelector, setShowPaperSelector] = useState(false);
 
     // Tag Management & Visibility State
     const [showAllDocs, setShowAllDocs] = useState(false);
@@ -416,6 +419,66 @@ export const AgentResearcher: React.FC<AgentResearcherProps> = ({ activeTool, se
                             ${isBarExpanded ? 'rounded-xl p-3' : 'rounded-2xl p-3 cursor-text hover:shadow-scholar-lg hover:border-scholar-200'}
                         `}
                         onClick={() => !isBarExpanded && setIsBarExpanded(true)}>
+
+                        {/* ✨ NEW POPUP INJECTED HERE inside barRef */}
+                        {showPaperSelector && isBarExpanded && (
+                            <>
+                                {/* Invisible Backdrop - Auto-saves on click-off */}
+                                <div 
+                                    className="fixed inset-0 z-40 cursor-default" 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowPaperSelector(false);
+                                    }}
+                                />
+                                <div onClick={(e) => e.stopPropagation()} className="absolute bottom-[110%] left-0 w-full bg-white dark:bg-dark-card border border-gray-200 dark:border-gray-700 shadow-2xl rounded-2xl p-4 animate-fade-in z-50 flex flex-col max-h-[60vh]">
+                                <div className="flex justify-between items-center mb-4 flex-shrink-0">
+                                    <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200">Select Papers for Research</h4>
+                                    <button onClick={(e) => { e.stopPropagation(); setShowPaperSelector(false); }} className="text-gray-400 hover:text-gray-600">
+                                        <X size={16} />
+                                    </button>
+                                </div>
+
+                                {savedPapers.length === 0 ? (
+                                    <p className="text-sm text-gray-500 py-4 text-center">Your library is empty. Please add papers first.</p>
+                                ) : (
+                                    <div className="overflow-y-auto space-y-2 mb-4 custom-scrollbar pr-2 flex-grow">
+                                        {savedPapers.map(paper => {
+                                            const uri = paper.pdfUri || paper.uri;
+                                            const isSelected = contextUris.has(uri);
+                                            return (
+                                                <div
+                                                    key={uri}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        togglePdfContext(uri, paper.title);
+                                                    }}
+                                                    className="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-gray-700 transition-colors"
+                                                >
+                                                    <div className="mt-0.5">
+                                                        {isSelected ? <Check size={18} className="text-scholar-600 dark:text-scholar-400 stroke-[3]" /> : <Square size={18} className="text-gray-400" />}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate pr-2">{paper.title}</p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                <div className="flex justify-end pt-2 border-t border-gray-100 dark:border-gray-800 flex-shrink-0">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setShowPaperSelector(false); }}
+                                        className="bg-scholar-600 text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-scholar-700 transition-colors"
+                                    >
+                                        Done
+                                    </button>
+                                </div>
+                            </div>
+                            </>
+                        )}
+
                         {isBarExpanded && (
                             <div className="mb-4 opacity-0 animate-fade-in space-y-3 delay-150 fill-mode-forwards" style={{ animationFillMode: 'forwards' }}>
                                 <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-700">
@@ -433,6 +496,13 @@ export const AgentResearcher: React.FC<AgentResearcherProps> = ({ activeTool, se
                                             <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1">
                                                 Active Documents ({contextItems.length})
                                             </label>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setShowPaperSelector(true); }}
+                                                className="text-[10px] font-semibold text-scholar-700 bg-scholar-100 hover:bg-scholar-200 dark:bg-scholar-900/30 dark:text-scholar-300 dark:hover:bg-scholar-900/50 px-1.5 py-0.5 rounded transition-colors flex items-center gap-1 border border-scholar-200 dark:border-scholar-800"
+                                                title="Select Papers"
+                                            >
+                                                <Plus size={10} /> Add Papers
+                                            </button>
                                             {hasContext && (
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); clearAllDocuments(); }}
@@ -533,10 +603,10 @@ export const AgentResearcher: React.FC<AgentResearcherProps> = ({ activeTool, se
                             {isBarExpanded ? (
                                 <div className="flex items-center gap-1">
                                     <button
-                                        onClick={addDeepQuestion}
-                                        disabled={!deepInput.trim() || isDeepResearchLoading}
-                                        className="p-1.5 text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
-                                        title="Add Question"
+                                        onClick={() => !deepInput.trim() ? setShowPaperSelector(true) : addDeepQuestion()}
+                                        disabled={isDeepResearchLoading}
+                                        className="p-1.5 text-gray-400 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 relative"
+                                        title={!deepInput.trim() ? "Select Papers to Research" : "Add Question"}
                                     >
                                         <Plus size={18} />
                                     </button>

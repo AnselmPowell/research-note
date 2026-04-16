@@ -32,6 +32,7 @@ import { PaperSearch } from '../research/PaperSearch';
 import { useDatabase } from '../../database/DatabaseContext';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
+import { useResearch } from '../../contexts/ResearchContext';
 import { PapersTable } from './PapersTable';
 import { NotesTable } from './NotesTable';
 import { CreateNoteModal } from './CreateNoteModal';
@@ -85,6 +86,7 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
   } = useLibrary();
 
   const { setColumnVisibility, handleScroll } = useUI();
+  const { setIsResearchFindingsTabActive } = useResearch();
 
   // --- STATE ---
   const [activeTab, setActiveTab] = useState<'notes' | 'papers' | 'research'>('notes');
@@ -99,6 +101,11 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
       setActiveTab('notes');
     }
   }, [activeView]);
+
+  // Sync tab state with context so the application knows when user is on findings tab
+  useEffect(() => {
+    setIsResearchFindingsTabActive(activeTab === 'research');
+  }, [activeTab, setIsResearchFindingsTabActive]);
 
   // FIXED: Sync UI selection with AgentResearcher context on mount and context changes
   // This ensures the checkbox state reflects the actual AgentResearcher context

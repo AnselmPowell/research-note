@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { ThreeColumnLayout } from './components/layout/ThreeColumnLayout';
 import { SearchBar } from './components/search/SearchBar';
 import { WebSearch } from './components/research/WebSearch';
@@ -112,10 +112,27 @@ const App: React.FC = () => {
     clearWebSearchResults,
     setPendingDeepResearchQuery,
     activeSearchMode,
-    isDeepSearchBarExpanded
+    isDeepSearchBarExpanded,
+    isResearchFindingsTabActive
   } = useResearch();
 
-  const { loadedPdfs, downloadingUris, loadPdfFromUrl, setActivePdf, isPdfInContext, togglePdfContext, failedUris, resetLibrary } = useLibrary();
+  // Trigger Deep Research agent when the specific tab is opened
+  useEffect(() => {
+    if (isResearchFindingsTabActive) {
+      setActiveTool('deep');
+    }
+  }, [isResearchFindingsTabActive]);
+
+  const { loadedPdfs, downloadingUris, loadPdfFromUrl, setActivePdf, isPdfInContext, togglePdfContext, failedUris, resetLibrary, contextUris } = useLibrary();
+
+  // Trigger Deep Research agent when the contextUris size changes
+  const prevContextUrisSize = useRef(contextUris?.size || 0);
+  useEffect(() => {
+    if (contextUris && contextUris.size > prevContextUrisSize.current) {
+      setActiveTool('deep');
+    }
+    prevContextUrisSize.current = contextUris?.size || 0;
+  }, [contextUris]);
 
   const [allWebNotesExpanded, setAllWebNotesExpanded] = useState(false);
 

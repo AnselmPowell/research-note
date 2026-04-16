@@ -622,7 +622,7 @@ export const PaperSearch: React.FC = () => {
     );
   }, []);
 
-  const { setActivePdf, loadPdfFromUrl } = useLibrary();
+  const { setActivePdf, loadPdfFromUrl, togglePdfContext } = useLibrary();
   const { openColumn, setColumnVisibility } = useUI();
 
   // ─── Local Sort State ─────────────────────────────────────────────────────────
@@ -940,8 +940,15 @@ export const PaperSearch: React.FC = () => {
     });
   }, [removePaperFromResults]);
 
-  // ✅ NEW: Toggle selection in local accumulation state (isolated to PaperResults tab)
+  // ✅ NEW: Toggle selection in local accumulation state AND global context
   const handleToggleAccumulatedSelection = useCallback((paperId: string) => {
+    // Add logic to globally toggle the PDF context so Agent Researcher sees it
+    const paper = accumulatedPapers.find(p => p.id === paperId);
+    if (paper) {
+      // Use PDF URI if available, otherwise just use the paper's ID
+      togglePdfContext(paper.pdfUri || paper.id, paper.title);
+    }
+
     setAccumulatedSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(paperId)) {
@@ -951,7 +958,7 @@ export const PaperSearch: React.FC = () => {
       }
       return next;
     });
-  }, []);
+  }, [accumulatedPapers, togglePdfContext]);
 
   const handleResetFilters = useCallback(() => {
     onSearchQueryChange('');
@@ -1362,10 +1369,14 @@ export const PaperSearch: React.FC = () => {
 
         {/* Empty state — idle */}
         {currentTabCandidates.length === 0 && researchPhase === 'idle' && (
-          <div className="py-24 flex flex-col items-center justify-center text-center opacity-40">
-            <BookOpenText size={64} className="mb-6 text-gray-300 dark:text-gray-600" />
-            <h3 className="text-xl font-bold text-gray-800 dark:text-white">No deep research results</h3>
-            <p className="text-xs max-w-xs leading-relaxed text-gray-500 dark:text-gray-400">Enter topics in the search bar to find academic papers.</p>
+          <div className="py-24 flex flex-col items-center justify-center text-center opacity-70 animate-fade-in">
+            <div className="w-20 h-20 mb-6 bg-scholar-50 dark:bg-scholar-900/20 rounded-full flex items-center justify-center">
+              <Sparkles size={32} className="text-scholar-600 dark:text-scholar-400" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">No Research Findings Yet</h3>
+            <p className="text-sm max-w-sm leading-relaxed text-gray-500 dark:text-gray-400">
+              Select papers from your library and use the Deep Search agent below to extract research notes from those papers.
+            </p>
           </div>
         )}
 

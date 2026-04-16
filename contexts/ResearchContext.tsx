@@ -86,12 +86,13 @@ interface ResearchContextType {
   // New: clear search results from localStorage
   clearWebSearchResults: () => void;
   clearDeepResearchResults: () => void;
-  pendingDeepResearchQuery: DeepResearchQuery | null;
-  setPendingDeepResearchQuery: (query: DeepResearchQuery | null) => void;
+  // New: track if deep research tab is active
+  isResearchFindingsTabActive: boolean;
+  setIsResearchFindingsTabActive: (active: boolean) => void;
   // New: track deep search bar expansion state for UI layout
   isDeepSearchBarExpanded: boolean;
   setIsDeepSearchBarExpanded: (expanded: boolean) => void;
-  // New: timing tracking for pipeline phases
+  // NEW: timing tracking for pipeline phases
   researchTimings: ResearchTimings | null;
   timeToFirstNotes: number | null;
   timeToFirstPaper: number | null;
@@ -296,6 +297,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [navigationHandled, setNavigationHandled] = useState(false);
   const [pendingDeepResearchQuery, setPendingDeepResearchQuery] = useState<DeepResearchQuery | null>(null);
   const [isDeepSearchBarExpanded, setIsDeepSearchBarExpanded] = useState(false);
+  const [isResearchFindingsTabActive, setIsResearchFindingsTabActive] = useState(false);
 
   // NEW: Accumulated results for "My Results" tab (persistent across searches)
   const [accumulatedPapers, setAccumulatedPapers] = useState<ArxivPaper[]>([]);
@@ -1588,6 +1590,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setPendingDeepResearchQuery,
     isDeepSearchBarExpanded,
     setIsDeepSearchBarExpanded,
+    isResearchFindingsTabActive,
+    setIsResearchFindingsTabActive,
     // NEW: Timing tracking
     researchTimings,
     timeToFirstNotes,
@@ -1618,7 +1622,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     performWebSearch, performDeepResearch, performHybridResearch, performHybridAnalysis, stopDeepResearch, resetSearch,
     analyzeLoadedPdfs, analyzeArxivPapers, resetAllResearchData, processedPdfs,
     showUploadedTab, shouldOpenPdfViewer, uploadedPaperStatuses, updateUploadedPaperStatus,
-    navigationHandled, pendingDeepResearchQuery, isDeepSearchBarExpanded,
+    navigationHandled, pendingDeepResearchQuery, isDeepSearchBarExpanded, isResearchFindingsTabActive,
     researchTimings, timeToFirstNotes, timeToFirstPaper, searchMetrics,
     accumulatedPapers, accumulatedNotes, paperResultsMetadata,
     addToPaperResults, clearPaperResults, removePaperFromResults, resetAccumulatedDataForMigration,
