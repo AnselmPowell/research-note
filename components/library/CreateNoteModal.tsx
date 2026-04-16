@@ -7,13 +7,17 @@ interface CreateNoteModalProps {
   onClose: () => void;
   savedPapers: ArxivPaper[];
   onSave: (note: DeepResearchNote, paperMetadata?: any) => Promise<void>;
+  initialContent?: string;
+  initialPaperUri?: string;
 }
 
 export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
   isOpen,
   onClose,
   savedPapers,
-  onSave
+  onSave,
+  initialContent = '',
+  initialPaperUri = ''
 }) => {
   const [content, setContent] = useState('');
   const [selectedPaperUri, setSelectedPaperUri] = useState('');
@@ -23,12 +27,12 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
   // Reset form when opening
   useEffect(() => {
     if (isOpen) {
-      setContent('');
-      setSelectedPaperUri('');
+      setContent(initialContent);
+      setSelectedPaperUri(initialPaperUri);
       setPageNumber(0);
       setIsSaving(false);
     }
-  }, [isOpen]);
+  }, [isOpen, initialContent, initialPaperUri]);
 
   if (!isOpen) return null;
 

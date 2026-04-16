@@ -99,6 +99,13 @@
   - Base64 encoding for API transmission
   - Complete debug tracing for troubleshooting
 
+### ✅ User Productivity (NEW - Apr 16, 2026)
+- **Global Highlight-to-Note**: Instantly turn any text in the app into a research note.
+- **Context-Aware Trigger**: Floating button automatically appears centered above selection on mouse release.
+- **Metadata Preservation**: Automatically captures paper URI and title via dataset attributes.
+- **Surgical Pre-filling**: `CreateNoteModal` pre-fills content and source without user input.
+- **Capture-Phase Logic**: Guaranteed interaction reliability by intercepting pointers before component propagation.
+
 ## Recent Critical Fixes
 
 ### ✅ SORT UI DECENTRALIZATION (Mar 17, 2026) - UI ENCAPSULATION

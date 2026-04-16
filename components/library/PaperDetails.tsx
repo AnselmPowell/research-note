@@ -490,7 +490,7 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                             )}
                         </div>
 
-                        <div className="min-h-[200px]">
+                        <div className="min-h-[200px]" data-paper-uri={paper.uri} data-paper-title={paper.title}>
                             <div className="animate-fade-in">
                                 {isAgentRunning && runningWorkflowId === TAB_WORKFLOW_MAP[activeTab] ? (
                                     <div className="flex flex-col items-center justify-center min-h-[200px] py-8 text-center  rounded-2xl">

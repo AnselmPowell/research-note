@@ -61,16 +61,16 @@ const waitForContainerMeasurement = async (
     for (let i = 0; i < maxRetries; i++) {
         const parentElement = canvas.parentElement?.parentElement?.parentElement;
         const width = parentElement?.clientWidth ?? 0;
-        
+
         // Container must be measured (width > 0) and reasonable size (> 300px)
         if (width > 300) {
             return width;
         }
-        
+
         // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, delayMs));
     }
-    
+
     // Fallback: use window width as last resort
     return Math.min(window.innerWidth - 40, 1200);
 };
@@ -633,7 +633,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
 
             const dpr = window.devicePixelRatio || 1;
             const pageViewport = page.getViewport({ scale: 1 });
-            
+
             // FIX 1: Wait for container to be measured before calculating scale
             // This prevents rendering at wrong scale on first page load
             let containerWidth: number;
@@ -644,7 +644,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
                 // On subsequent pages, container is already measured
                 containerWidth = Math.min(canvas.parentElement?.parentElement?.parentElement?.clientWidth || 1200, 1200);
             }
-            
+
             const baseScale = containerWidth / pageViewport.width;
             const finalScale = baseScale * zoomLevel;
 
@@ -657,7 +657,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
             canvas.height = scaledViewport.height;
             canvas.style.width = `${cssViewport.width}px`;
             canvas.style.height = `${cssViewport.height}px`;
-            
+
             // Pre-size text layer IMMEDIATELY (before canvas render starts)
             textLayer.style.width = `${cssViewport.width}px`;
             textLayer.style.height = `${cssViewport.height}px`;
@@ -797,7 +797,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
             <div
                 ref={scrollContainerRef}
                 onScroll={globalHandleScroll}
-                className="flex-grow w-full max-w-5xl p-0 sm:p-4 mb-16 flex justify-center overflow-auto custom-scrollbar"
+                className="flex-grow w-full max-w-5xl p-0 sm:p-4 mb-16 flex justify-center overflow-auto custom-scrollbar "
             >
                 <div className="flex-shrink-0">
                     <div className="relative shadow-lg rounded-md my-8">

@@ -11,6 +11,7 @@ import { AgentFAB } from './components/researcherAI/AgentFAB';
 import { LayoutControls } from './components/layout/LayoutControls';
 import { NotesManagerSidebar } from './components/library/NotesManagerSidebar';
 import { NotesManager } from './components/library/NotesManager';
+import { SelectionNotesTrigger } from './components/ui/SelectionNotesTrigger';
 
 import { ToastContainer } from './components/ui/Toast';
 
@@ -372,6 +373,9 @@ const App: React.FC = () => {
           rightContent={rightContent}
         />
       )}
+
+      {/* Global Highlight Trigger */}
+      <SelectionNotesTrigger />
 
       {/* Auth Modal for anonymous users to sign up */}
       <AuthModal

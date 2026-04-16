@@ -310,7 +310,7 @@ const ExpandedRowContent = ({
     const [activeTab, setActiveTab] = useState<'abstract' | 'breakdown' | 'findings'>('abstract');
 
     return (
-        <div className="px-4 py-4 sm:px-14 pb-6 space-y-4">
+        <div className="px-4 py-4 sm:px-14 pb-6 space-y-4" data-paper-uri={paper.uri} data-paper-title={paper.title}>
             {/* Mobile badges shown in expanded view */}
             <div className="sm:hidden flex items-center gap-2 mb-2">
                 {notesCount > 0 && (

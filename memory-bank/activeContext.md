@@ -1,4 +1,33 @@
-## Current Work Focus (March 23, 2026)
+## Current Work Focus (April 16, 2026)
+
+### COMPLETED: Global Highlight-to-Note Feature ✅
+
+**Session (Apr 16, 2026) - Global Context-Aware Note Creation**
+
+**Problem Solved:**
+- Users couldn't easily turn agent-generated insights (Abstracts, Findings, Breakdowns) into permanent notes.
+- Creating a note required manually copy-pasting text and switching between tabs/modals.
+
+**Solution: The "Selection Context" Pattern**
+1. **useTextSelection Hook**: A global hook using Capture Phase pointers to detect text selections upon mouse release without interfering with UI drags.
+2. **DOM-Context Discovery**: Uses `data-paper-uri` and `data-paper-title` attributes to automatically discover the source paper of any highlighted text.
+3. **SelectionNotesTrigger**: A floating glassmorphic "Create Note" button that inherits existing styling and pre-fills the creation modal.
+4. **Modal Pre-filling**: Updated `CreateNoteModal` to accept and prioritize pre-filled content and source papers.
+
+**Result:**
+- ✅ Users can highlight any agent output and turn it into a note with one click.
+- ✅ Feature is highly scalable (any component can be "note-enabled" by adding 2 HTML attributes).
+- ✅ Perfectly centered UI positioning using per-line rect calculations.
+
+**Files Created/Modified:**
+- `hooks/useTextSelection.ts` (NEW)
+- `components/ui/SelectionNotesTrigger.tsx` (NEW)
+- `components/library/CreateNoteModal.tsx`
+- `components/library/PapersTable.tsx`
+- `components/library/PaperDetails.tsx`
+- `App.tsx`
+
+---
 
 ### COMPLETED: Research Agent Harness & Tool Robustness ✅
 

@@ -129,6 +129,15 @@ Clear Results: "This will clear 45 extracted notes. Continue?"
 Sign Out: "Migrate anonymous data first?"
 ```
 
+### Highlight-to-Note (NEW)
+One-click note creation from any document or agent output.
+
+```
+User Action: Highlight text in expanded results or sidebar
+Feedback: Floating "Create Note" button appears centered above selection
+Result: Pre-filled CreateNoteModal opens with text and paper citation
+```
+
 ## Feature Priorities
 
 ### Core (MVP)
