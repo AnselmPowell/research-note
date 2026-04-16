@@ -312,17 +312,36 @@ export const SidebarNav: React.FC<{
           </>
         ) : (
           /* Full Note Manager Navigation */
-          <div className="mb-1">
-            <NavItem label="All Notes" count={savedNotes.length} isActive={columnVisibility.library && libraryActiveView === 'all'} onClick={() => handleSelect('all')} />
-            <NavItem label="Papers" count={savedPapers.length} isActive={columnVisibility.library && libraryActiveView === 'papers'} onClick={() => handleSelect('papers')} />
-            <NavItem label="Research Findings" count={0} showCount={false} isActive={columnVisibility.library && libraryActiveView === 'research'} onClick={() => handleSelect('research')} />
+          <>
+            <div className="mb-6 ">
+              <NavItem label="All Notes" count={savedNotes.length} isActive={columnVisibility.library && libraryActiveView === 'all'} onClick={() => handleSelect('all')} />
+              <NavItem label="Papers" count={savedPapers.length} isActive={columnVisibility.library && libraryActiveView === 'papers'} onClick={() => handleSelect('papers')} />
+              <NavItem label="Research Findings" count={0} showCount={false} isActive={columnVisibility.library && libraryActiveView === 'research'} onClick={() => handleSelect('research')} />
 
-            <div className="h-px bg-gray-100 dark:bg-gray-800 mx-6 my-2 opacity-50"></div>
+              <div className="h-px bg-gray-100 dark:bg-gray-800 mx-6 my-2 opacity-50"></div>
 
-            <NavItem icon={Clock} label="Recently Added" count={savedNotes.filter(n => (new Date().getTime() - new Date(n.created_at || 0).getTime()) < 86400000).length} isActive={columnVisibility.library && libraryActiveView === 'recent'} onClick={() => handleSelect('recent')} iconColor="text-gray-600" />
-            <NavItem icon={Flag} label="Flagged" count={savedNotes.filter(n => n.is_flagged).length} isActive={columnVisibility.library && libraryActiveView === 'flagged'} onClick={() => handleSelect('flagged')} iconColor="text-red-700" />
-            <NavItem icon={Star} label="Favorites" count={savedNotes.filter(n => n.is_starred).length} isActive={columnVisibility.library && libraryActiveView === 'starred'} onClick={() => handleSelect('starred')} iconColor="text-orange-500" />
-          </div>
+              <NavItem icon={Clock} label="Recently Added" count={savedNotes.filter(n => (new Date().getTime() - new Date(n.created_at || 0).getTime()) < 86400000).length} isActive={columnVisibility.library && libraryActiveView === 'recent'} onClick={() => handleSelect('recent')} iconColor="text-gray-600" />
+              <NavItem icon={Flag} label="Flagged" count={savedNotes.filter(n => n.is_flagged).length} isActive={columnVisibility.library && libraryActiveView === 'flagged'} onClick={() => handleSelect('flagged')} iconColor="text-red-700" />
+              <NavItem icon={Star} label="Favorites" count={savedNotes.filter(n => n.is_starred).length} isActive={columnVisibility.library && libraryActiveView === 'starred'} onClick={() => handleSelect('starred')} iconColor="text-orange-500" />
+            </div>
+            <div className="mt-2 px-3 md:px-4">
+              <button
+                onClick={() => { openColumn('library'); setHeaderVisible(false); if (onClose) onClose(); }}
+                className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 flex items-center justify-center">
+                    <LayoutList size={18} />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-bold text-sm">Dashboard Mode</div>
+                    <div className="text-[10px] opacity-70">Focus on Knowledge Base</div>
+                  </div>
+                </div>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </>
         )}
 
       </div>
