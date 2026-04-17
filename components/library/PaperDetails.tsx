@@ -43,7 +43,7 @@ export const AgentResponseFormatter: React.FC<{ content: string }> = ({ content 
                 // Level 2 Header (## Section)
                 if (line.startsWith('## ')) {
                     return (
-                        <h2 key={idx} className="text-sm font-black uppercase tracking-[0.25em] text-scholar-600 dark:text-white mt-6 mb-2 pb-1 border-b-2 border-scholar-100 dark:border-scholar-900/50">
+                        <h2 key={idx} className="text-sm font-black uppercase tracking-widest sm:tracking-[0.25em] text-scholar-600 dark:text-white mt-6 mb-2 pb-1 border-b-2 border-scholar-100 dark:border-scholar-900/50 break-words">
                             {renderContent(line.replace('## ', ''))}
                         </h2>
                     );
@@ -292,7 +292,8 @@ ${paper.abstract || paper.summary || 'No abstract available'}
     return (
         <div ref={detailsRef} className="flex flex-col h-full bg-white dark:bg-dark-card border-l border-gray-200 dark:border-gray-800 shadow-xl z-30 animate-slide-in-right font-quicksand">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/40">
+            {/* Header - Flexible Padding */}
+            <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/40">
                 <div className="flex items-center gap-2">
                     <button
                         onClick={onClose}
@@ -301,7 +302,7 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                     >
                         <X size={24} />
                     </button>
-                    <h4 className="text-sm font-black text-gray-400 dark:text-scholar-400 uppercase tracking-[0.2em] ml-2">Paper Details</h4>
+                    <h4 className="text-[10px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-[0.15em] sm:tracking-[0.2em] ml-2">Paper Details</h4>
                 </div>
 
                 <button
@@ -317,22 +318,20 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                 </button>
             </div>
 
-            {/* Content Container */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 sm:p-8 pt-2 sm:pt-2">
-                <div className="space-y-4 max-w-2xl mx-auto">
-                    {/* Title, Authors & Get Meta */}
-                    <div >
-                        <h1 className="text-xl sm:text-2xl font-bold  text-gray-900 dark:text-white leading-tight">
+            {/* Content Container - Secured with overflow-x-hidden for responsive stability */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 sm:p-8 pt-2 sm:pt-2">
+                <div className="space-y-4 max-w-2xl mx-auto min-w-0">
+                    {/* Title, Authors & Get Meta - min-w-0 for flex stability */}
+                    <div className="min-w-0">
+                        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white leading-tight break-words">
                             {paper.title}
                         </h1>
 
                         <div className="flex flex-wrap items-start justify-between gap-4">
-                            <p className="text-sm sm:text-base text-scholar-600 dark:text-scholar-400 font-semibold leading-relaxed flex-1 min-w-[200px]">
+                            <p className="text-sm sm:text-base text-scholar-600 dark:text-scholar-400 font-semibold leading-relaxed flex-1 min-w-0 break-words">
                                 {authors}
                             </p>
-
                         </div>
-
                     </div>
 
                     {/* Simple Metadata Section */}
@@ -345,47 +344,49 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                         )}
 
                         {/* Additional Info Grid */}
-                        <div className="grid grid-cols-1 gap-4 pt-2">
+                        <div className="grid grid-cols-1 gap-6 pt-2">
 
-                            <div className="flex justify-between pt-1">
+                            <div className="flex flex-col gap-4">
+                                {isMetadataComplete ? null : (
+                                    <div className="flex-shrink-0">
+                                        <button
+                                            onClick={handleGetMetadata}
+                                            disabled={isExtracting}
+                                            className="text-[10px] inline-flex items-center justify-center font-bold transition-all uppercase tracking-widest px-3 py-1.5 bg-scholar-50 dark:bg-scholar-900/20 border-2 border-scholar-200 dark:border-scholar-800 text-scholar-600 dark:text-scholar-400 rounded-xl hover:bg-scholar-100 dark:hover:bg-scholar-900/40 disabled:opacity-50 min-w-[120px]"
+                                        >
+                                            {isExtracting ? (
+                                                <div className="flex items-center gap-1.5">
+                                                    <Loader2 size={12} className="animate-spin" />
+                                                    <span>Extracting...</span>
+                                                </div>
+                                            ) : (
+                                                'Get metadata'
+                                            )}
+                                        </button>
+                                    </div>
+                                )}
+
                                 {/* Source URI */}
                                 {!isLocal && paper.uri && (
-                                    <div>
-                                        <span className="text-[9px] font-semibold  text-gray-700 dark:text-gray-400 uppercase tracking-wider ">Source</span>
+                                    <div className="min-w-0">
+                                        <span className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-0.5 block">Source Document URL</span>
                                         <a
                                             href={paper.uri}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-xs text-scholar-600 dark:text-scholar-400 hover:underline truncate-2-lines block transition-all"
+                                            className="text-xs text-scholar-600 dark:text-scholar-400 hover:text-scholar-700 font-medium break-all block transition-all"
                                         >
                                             {paper.uri}
                                         </a>
                                     </div>
                                 )}
-                                {isMetadataComplete ? '' : (
-                                    <button
-                                        onClick={handleGetMetadata}
-                                        disabled={isExtracting}
-                                        className={`flex-shrink-0 text-[10px] inline-flex items-center gap-1.5 font-bold transition-all uppercase tracking-widest px-2.5 py-1 border rounded-md disabled:cursor-not-allowed text-scholar-600 dark:text-scholar-400 border-scholar-200 dark:border-scholar-800 hover:bg-scholar-50 dark:hover:bg-scholar-900/30 disabled:opacity-50`}
-                                    >
-                                        {isExtracting ? (
-                                            <Loader2 size={10} className="animate-spin" />
-                                        ) : (
-                                            isMetadataComplete ? <Check size={10} /> : <Sparkles size={10} />
-                                        )}
-                                        {isExtracting
-                                            ? 'Extracting...'
-                                            : 'Get metadata'
-                                        }
-                                    </button>
-                                )}
                             </div>
 
 
 
-                            {/* Year & Publisher */}
+                            {/* Year & Publisher (Stacked on small screens) */}
                             {(paper.year || paper.publisher) && (
-                                <div className="grid grid-cols-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 sm:gap-x-4">
                                     {paper.year && (
                                         <div>
                                             <span className="text-[9px]  font-semibold dark:text-gray-400  text-gray-700 uppercase tracking-wider block"> Year</span>
@@ -423,8 +424,8 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                         </div>
                     </div>
 
-                    {/* Action Buttons - Brand Consistent */}
-                    <div className="grid grid-cols-2 gap-3 py-4 ">
+                    {/* Action Buttons - Brand Consistent (Stacked on mobile to prevent text cut-off) */}
+                    <div className="flex flex-col sm:grid sm:grid-cols-2 gap-3 py-4 ">
                         <button
                             onClick={() => handleActionWithPrecheck(onGenerateLiteratureReview)}
                             disabled={!!runningWorkflowId}
@@ -444,44 +445,48 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                     </div>
 
                     {/* Tabs Section - Replacing Abstract Section */}
-                    <div className="space-y-4 border-t pt-4 border-gray-400 dark:border-gray-500">
-                        <div className="flex items-center justify-between gap-x-6 gap-y-2">
+                    <div className="space-y-2 border-t pt-4 border-gray-400 dark:border-gray-500">
+                        <div className="flex flex-col gap-2">
                             <div className="flex flex-wrap gap-x-6 gap-y-2">
                                 {['abstract', 'breakdown', 'lit review', 'method', 'findings'].map((tab) => {
                                     const isThisTabRunning = runningWorkflowId === TAB_WORKFLOW_MAP[tab];
+                                    const isActive = activeTab === tab;
                                     return (
                                         <button
                                             key={tab}
                                             onClick={() => setActiveTab(tab)}
-                                            className={`uppercase tracking-[0.2em] font-black transition-all ${activeTab === tab
-                                                ? 'text-md font-black uppercase tracking-[0.25em] text-gray-600 dark:text-gray-300 underline underline-offset-4'
-                                                : 'text-[10px] text-gray-500 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-600'
+                                            className={`h-8 uppercase tracking-widest text-[11px] font-bold transition-all relative ${isActive
+                                                ? 'text-scholar-600 dark:text-scholar-400'
+                                                : 'text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-400'
                                                 }`}
                                         >
-                                            <div className="flex items-center gap-1.5">
+                                            <div className="flex items-center gap-1.5 h-full">
                                                 {tab}
                                                 {isThisTabRunning && <Loader2 size={10} className="animate-spin text-scholar-600 dark:text-scholar-400" />}
                                             </div>
+                                            {isActive && (
+                                                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-scholar-600 dark:bg-scholar-400 rounded-full animate-in fade-in zoom-in-x duration-200" />
+                                            )}
                                         </button>
                                     );
                                 })}
                             </div>
 
-                            {/* Content Controls: Copy & Regenerate */}
+                            {/* Content Controls: Moved down and far right */}
                             {hasAnyContent && !isAgentRunning && (
-                                <div className="flex items-center gap-1">
-                                    {/* Copy Button */}
+                                <div className="flex items-center justify-end gap-1 -mt-2">
                                     <button
                                         onClick={handleCopyContent}
-                                        className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-scholar-600 dark:text-gray-500 dark:hover:text-scholar-400 transition-all rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
-                                        title="Copy content to clipboard"
+                                        className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-scholar-600 dark:text-gray-500 dark:hover:text-scholar-400 transition-all rounded-md"
+                                        title="Copy section to clipboard"
                                     >
-                                        {copiedContent ? <Check size={20} className="text-scholar-600 dark:text-scholar-400" /> : <Copy size={20} />}
+
+                                        {copiedContent ? <Check size={16} className="text-scholar-600 dark:text-scholar-400" /> : <Copy size={20} />}
                                     </button>
 
                                     <button
                                         onClick={handleRegenerateContent}
-                                        className="p-1 px-2 text-gray-400 hover:text-scholar-600 dark:text-gray-500 dark:hover:text-scholar-400 transition-all rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+                                        className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-scholar-600 dark:text-gray-500 dark:hover:text-scholar-400 transition-all rounded-md"
                                         title="Regenerate this section"
                                     >
                                         <RotateCcw size={20} />

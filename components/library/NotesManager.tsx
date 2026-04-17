@@ -1245,9 +1245,9 @@ export const NotesManager: React.FC<NotesManagerProps> = ({ activeView }) => {
         />
       </div>
 
-      {/* Detail Sidebar - Now as a sibling for interactivity */}
+      {/* Detail Sidebar - Now responsive for all screen sizes */}
       {liveSelectedPaper && (
-        <div className="absolute right-0 top-0 w-[580px] h-full hidden xl:block shadow-2xl ring-1 ring-black/5 z-[997]">
+        <div className="absolute right-0 top-0 w-full sm:w-[500px] md:w-[580px] h-full shadow-2xl ring-1 ring-black/5 z-[997]">
           <PaperDetails
             paper={liveSelectedPaper}
             onClose={() => setSelectedPaperForDetails(null)}
