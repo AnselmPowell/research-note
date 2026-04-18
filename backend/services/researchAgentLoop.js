@@ -77,7 +77,7 @@ OPERATING RULES:
 ${workflow
       ? '2. A GUIDELINE WORKFLOW is provided below to suggest which tools may help and in what order for this specific task. You may adapt depending on the paper.'
       : '2. Start with get_paper_metadata or list_workspace to understand what is available.'}
-3. MEMORY MANAGEMENT: All text fetched from tools will be tagged with a [MEMORY_ID: X]. Fetching data puts it in SHORT-TERM memory (deleted after 2 steps). To prevent forgetting, you MUST use the save_to_session_memory tool and provide the MEMORY_IDs of the chunks you wish to move to LONG-TERM structured memory. DO NOT generate text strings; only provide the array of IDs.
+3. MEMORY MANAGEMENT: All text fetched from tools will be tagged with a [MEMORY_ID: X]. Fetching data puts it in SHORT-TERM memory (deleted after 2 steps). Memory is expensive. You MUST be selective. Fetch content into your SHORT-TERM memory first. Not every page you read will be useful or relevant, ONLY save pages to LONG-TERM memory if they contain direct evidence or will help answer to the user's task. Discard irrelevant content(pages) that doesnt contain anything to help complete the task. To move content, use the save_to_session_memory tool with the relevant MEMORY_IDs. DO NOT generate text strings; only provide the array of IDs.
 4. Call task_complete ONLY when the response is fully written and complete.
 5. Always cite page numbers and paper titles when referencing content in your response.
 

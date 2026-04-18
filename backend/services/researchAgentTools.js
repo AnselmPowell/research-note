@@ -194,7 +194,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
       };
 
       return {
-        observation: `[MEMORY_ID: ${memId}]\n${content}\n\nSYSTEM HINT: If this is important, use 'save_to_session_memory' with this [MEMORY_ID].`,
+        observation: `[MEMORY_ID: ${memId}]\n${content}\n\nSYSTEM HINT: Read this page content carefully. Does it answer the task? Is the page content relevant to help complete the task.\nIF YES: save to your long-term memory save_to_session_memory.\nIF NO: Dont save that page, Let it expire from short-term memory`,
         memoryType: 'short_term'
       };
     }
@@ -249,7 +249,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
       }
 
       return {
-        observation: `READ ${selectedPages.length} PAGES.\n\n${resultBlocks.join('\n\n')}\n\nSYSTEM HINT: Use 'save_to_session_memory' with these IDs to keep them in long-term context.`,
+        observation: `READ ${selectedPages.length} PAGES.\n\n${resultBlocks.join('\n\n')}\n\nSYSTEM HINT: Read these pages carefully. Do they answer the task? Is the content relevant to help complete the task.\nIF YES: save to your long-term memory using save_to_session_memory with the specific IDs.\nIF NO: Dont save the pages, Let them expire from short-term memory`,
         memoryType: 'short_term'
       };
     }
