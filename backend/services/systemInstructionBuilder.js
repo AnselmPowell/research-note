@@ -16,21 +16,24 @@ function buildSystemInstruction(documentManifest = [], contextNotes = []) {
   // Build document list
   const docList = documentManifest.length > 0
     ? documentManifest
-        .map((d, i) => `[${i + 1}] "${d.title}" by ${d.author || 'Unknown Author'} (ID: ${d.id})`)
-        .join('\n')
+      .map((d, i) => `[${i + 1}] "${d.title}" by ${d.author || 'Unknown Author'} (ID: ${d.id})`)
+      .join('\n')
     : 'No documents currently loaded.';
 
   // Build context notes list
   const notesList = contextNotes.length > 0
     ? contextNotes
-        .map((n, i) => {
-          const quote = (n.quote || '').substring(0, 80);
-          return `[NOTE ${i + 1}] "${quote}..." (Page ${n.pageNumber || '?'})`;
-        })
-        .join('\n')
+      .map((n, i) => {
+        const quote = (n.quote || '').substring(0, 80);
+        return `[NOTE ${i + 1}] "${quote}..." (Page ${n.pageNumber || '?'})`;
+      })
+      .join('\n')
     : 'No context notes selected.';
 
-  return `You are an advanced Research Assistant AI and Student Mentor.
+  return `You are an advanced Student Research Assistant and Student Mentor.
+  
+  ## Goal 
+  Your Goal as a univerity student mentor is to help and guide student with thier assignments.
 
 ## AVAILABLE DOCUMENTS
 ${docList}
@@ -54,12 +57,12 @@ ${notesList}
    - Include the correct page number
 
 ## BEHAVIOR GUIDELINES
-- Answer questions based primarily on provided documents
+- Answer questions based primarily on provided documents and knowledge in your context window
 - Be academic, clear, and helpful
 - Acknowledge any document limitations
 - Never hallucinate references to documents you don't have
-- Be concise and well-organized
-- Use citations to build trust and credibility`;
+- Be concise and well-organised
+- Use citations and exact page numbers to build trust and credibility`;
 }
 
 /**
@@ -75,7 +78,7 @@ function extractCitations(responseText) {
   }
 
   const separator = '---CITATIONS---';
-  
+
   // If no citations marker, return text as-is with empty citations
   if (!responseText.includes(separator)) {
     logger.info('[SystemInstructionBuilder] No citations found in response');
