@@ -27,9 +27,10 @@ const TOOL_SCHEMA = [
   },
   {
     name: 'get_and_read_multiple_pages',
-    description: `Read a range of consecutive pages. 
-      Each page will be tagged with its own [MEMORY_ID: X].
-      This is SHORT-TERM. Use 'save_to_session_memory' with the specific IDs you want to keep.`,
+    description: `Read a range of consecutive pages (e.g. 2 to 6 gets pages 2, 3, 4, 5, 6). 
+      DO NOT read more than 10 pages at a time.
+      Each page will be tagged with its own [MEMORY_ID: X] to allow you to pin specific pages.
+      This is SHORT-TERM. Use 'save_to_session_memory' with the specific IDs you want to keep long-term.`,
     parameters: {
       type: 'OBJECT',
       properties: {
