@@ -67,7 +67,7 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 animate-in fade-in duration-200">
+    <div role="dialog" className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/40 animate-in fade-in duration-200">
       <div 
         className="bg-white dark:bg-dark-card w-full max-w-md rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 overflow-hidden animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}

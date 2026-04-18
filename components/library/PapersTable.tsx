@@ -148,6 +148,8 @@ export const PapersTable: React.FC<PapersTableProps> = ({
                                 <tr
                                     className={`group transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer ${isExpanded ? 'bg-gray-50 dark:bg-gray-800/30' : ''}`}
                                     onClick={() => onExpand(paper.uri)}
+                                    data-paper-uri={paper.uri || paper.pdfUri || paper.id}
+                                    data-paper-title={paper.title}
                                 >
                                     <td className="py-5 pl-4 vertical-top" onClick={(e) => e.stopPropagation()}>
                                         <button
@@ -310,7 +312,7 @@ const ExpandedRowContent = ({
     const [activeTab, setActiveTab] = useState<'abstract' | 'breakdown' | 'findings'>('abstract');
 
     return (
-        <div className="px-4 py-4 sm:px-14 pb-6 space-y-4" data-paper-uri={paper.uri} data-paper-title={paper.title}>
+        <div className="px-4 py-4 sm:px-14 pb-6 space-y-4" data-paper-uri={paper.uri || paper.pdfUri || paper.id} data-paper-title={paper.title}>
             {/* Mobile badges shown in expanded view */}
             <div className="sm:hidden flex items-center gap-2 mb-2">
                 {notesCount > 0 && (

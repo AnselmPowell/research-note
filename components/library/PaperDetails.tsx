@@ -133,7 +133,12 @@ export const PaperDetails: React.FC<PaperDetailsProps> = ({
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (detailsRef.current && !detailsRef.current.contains(event.target as Node)) {
+            const target = event.target as HTMLElement;
+            const isSidebarClick = detailsRef.current && detailsRef.current.contains(target);
+            const isSelectionTrigger = target.closest('.selection-copy-button');
+            const isModalClick = target.closest('[role="dialog"]') || target.closest('.fixed.inset-0');
+
+            if (!isSidebarClick && !isSelectionTrigger && !isModalClick) {
                 onClose();
             }
         };
@@ -289,8 +294,12 @@ ${paper.abstract || paper.summary || 'No abstract available'}
         'findings': 'get_findings'
     };
 
+    // Resolve the most robust URI and Title for metadata matching
+    const paperUri = paper.uri || paper.pdfUri || paper.id;
+    const paperTitle = paper.title || 'Untitled Paper';
+
     return (
-        <div ref={detailsRef} className="flex flex-col h-full bg-white dark:bg-dark-card border-l border-gray-200 dark:border-gray-800 shadow-xl z-30 animate-slide-in-right font-quicksand">
+        <div ref={detailsRef} className="flex flex-col h-full bg-white dark:bg-dark-card border-l border-gray-200 dark:border-gray-800 shadow-xl z-30 animate-slide-in-right font-quicksand" data-paper-uri={paperUri} data-paper-title={paperTitle}>
             {/* Header */}
             {/* Header - Flexible Padding */}
             <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/40">
@@ -319,7 +328,7 @@ ${paper.abstract || paper.summary || 'No abstract available'}
             </div>
 
             {/* Content Container - Secured with overflow-x-hidden for responsive stability */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 sm:p-8 pt-2 sm:pt-2">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 sm:p-8 pt-2 sm:pt-2" data-paper-uri={paperUri} data-paper-title={paperTitle}>
                 <div className="space-y-4 max-w-2xl mx-auto min-w-0">
                     {/* Title, Authors & Get Meta - min-w-0 for flex stability */}
                     <div className="min-w-0">
@@ -495,8 +504,8 @@ ${paper.abstract || paper.summary || 'No abstract available'}
                             )}
                         </div>
 
-                        <div className="min-h-[200px]" data-paper-uri={paper.uri} data-paper-title={paper.title}>
-                            <div className="animate-fade-in">
+                        <div className="min-h-[200px]" data-paper-uri={paperUri} data-paper-title={paperTitle}>
+                            <div className="animate-fade-in" data-paper-uri={paperUri} data-paper-title={paperTitle}>
                                 {isAgentRunning && runningWorkflowId === TAB_WORKFLOW_MAP[activeTab] ? (
                                     <div className="flex flex-col items-center justify-center min-h-[200px] py-8 text-center  rounded-2xl">
                                         <Loader2 size={24} className="animate-spin text-scholar-600 dark:text-scholar-400 mb-3" />

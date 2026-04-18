@@ -37,7 +37,10 @@ export const SelectionNotesTrigger = () => {
             left: `${selection.position.x}px`,
           }}
           onClick={handleCreateNote}
-          onMouseDown={(e) => e.preventDefault()}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+          }}
         >
           <Plus size={14} />
           Create Note
