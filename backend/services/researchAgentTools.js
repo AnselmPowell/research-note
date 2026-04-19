@@ -42,21 +42,11 @@ const TOOL_SCHEMA = [
     }
   },
   {
-    name: 'get_paper_metadata',
-    description: `Get title, authors, abstract, and bibliography status.
-      This tool automatically saves its findings to your LONG-TERM memory under the paper's section.`,
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        paper_index: { type: 'NUMBER', description: 'Index of the paper (0-based).' }
-      },
-      required: ['paper_index']
-    }
-  },
-  {
-    name: 'get_paper_structure_map',
-    description: `Generates a Table of Contents mapping sections (Intro, Results, etc.) to page numbers.
-      Automatically saves to your LONG-TERM session memory. Use this to navigate large papers.`,
+    name: 'get_paper_details',
+    description: `Gets the paper's metadata (title, author, abstract, Harvard reference, total pages) 
+      AND its structure map (table of contents mapping section names to page numbers).
+      Returns both as a single SHORT-TERM observation tagged with a [MEMORY_ID].
+      The agent decides whether to save this to long-term memory using save_to_session_memory.`,
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -156,7 +146,10 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
   switch (toolName) {
 
     case 'get_and_read_page_content': {
-      const { paper_index, page_number } = params;
+      // Support common LLM naming variations
+      const paper_index = params.paper_index ?? params.paperIndex;
+      const page_number = params.page_number ?? params.page ?? params.pageNum;
+
       if (typeof paper_index !== 'number' || paper_index < 0 || paper_index >= papers.length) {
         return {
           observation: `ERROR: "paper_index" is required and must be a number from 0 to ${papers.length - 1}. Provided: ${paper_index}`,
@@ -185,7 +178,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
       }
 
       const memId = generateId('Page', paper_index, page_number);
-      const content = `[Page ${page_number}]:\n${paper.pages[pageIdx]}`;
+      const content = `[PDF Page ${page_number}]:\n${paper.pages[pageIdx]}`;
 
       sessionContextPool[memId] = {
         type: 'page',
@@ -201,7 +194,11 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
     }
 
     case 'get_and_read_multiple_pages': {
-      const { paper_index, start_page, end_page } = params;
+      // Support common LLM naming variations
+      const paper_index = params.paper_index ?? params.paperIndex;
+      const start_page = params.start_page ?? params.startPage ?? params.start;
+      const end_page = params.end_page ?? params.endPage ?? params.end;
+
       if (typeof paper_index !== 'number' || paper_index < 0 || paper_index >= papers.length) {
         return {
           observation: `ERROR: "paper_index" is required and must be a number from 0 to ${papers.length - 1}. Provided: ${paper_index}`,
@@ -237,7 +234,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
       for (let i = 0; i < selectedPages.length; i++) {
         const pageNum = startIdx + i + 1;
         const memId = generateId('Page', paper_index, pageNum);
-        const textChunk = `[Page ${pageNum}]:\n${selectedPages[i]}`;
+        const textChunk = `[PDF Page ${pageNum}]:\n${selectedPages[i]}`;
 
         sessionContextPool[memId] = {
           type: 'page',
@@ -255,7 +252,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
       };
     }
 
-    case 'get_paper_metadata': {
+    case 'get_paper_details': {
       const { paper_index } = params;
       if (typeof paper_index !== 'number' || paper_index < 0 || paper_index >= papers.length) {
         return {
@@ -265,29 +262,108 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
       }
       const paper = papers[paper_index];
 
-      // Support both singular/plural naming and database naming
+      // ── PART 1: Metadata ─────────────────────────────────────────────────
+      // Support both camelCase (LoadedPdf route) and snake_case (savedPapers/DB route)
       const authorsRaw = paper.author || paper.authors;
       const authorDisplay = Array.isArray(authorsRaw) ? authorsRaw.join(', ') : (authorsRaw || 'Unknown');
       const pageCount = paper.totalPages || paper.num_pages || paper.numPages || 'Unknown';
+      const harvardRef = paper.harvardReference || paper.harvard_reference || 'Not available';
 
       const metadataContent = [
         `Title: ${paper.title || 'Unknown'}`,
-        `Identifier (URI): ${paper.uri || 'Unknown'}`,
         `Author: ${authorDisplay}`,
         `Total Pages: ${pageCount}`,
         `Abstract: ${paper.abstract || 'Not extracted'}`,
-        `Harvard Reference: ${paper.harvardReference || 'Not available'}`
+        `Harvard Reference: ${harvardRef}`
       ].join('\n');
 
-      return {
-        observation: `PAPER METADATA FOUND. (This has been AUTO-SAVED to your structured long-term memory under Paper ${paper_index}).\n\n${metadataContent}`,
-        memoryType: 'long_term',
-        memoryEntry: {
-          id: `Meta_P${paper_index}`, // Explicit deterministic ID
-          type: 'metadata',
-          paper_index: paper_index,
-          content: metadataContent
+      // ── PART 2: Structure Map ─────────────────────────────────────────────
+      // Check cache first: support both camelCase (LoadedPdf) and snake_case (DB row)
+      let structureContent = paper.structureMap || paper.structure_map || null;
+
+      // If not cached, generate via AI
+      if (!structureContent) {
+        if (!paper.pages || !Array.isArray(paper.pages) || paper.pages.length === 0) {
+          structureContent = 'Structure map unavailable — no page text extracted for this paper.';
+        } else {
+          const pagesToAnalyze = paper.pages.slice(0, 50);
+          const textToAnalyze = pagesToAnalyze.map((text, i) => `--- [PDF PAGE ${i + 1}] ---\n${text}`).join('\n\n');
+          const prompt = `Analyze the following academic text (this specific PDF has ${paper.pages.length} total pages).
+Construct a simple Table of Contents mapping sections to their PDF RELATIVE page numbers (1 to ${paper.pages.length}).
+
+IMPORTANT: Academic papers often have original publication page numbers (e.g. 140, 141) printed in the text. 
+IGNORING THESE IS CRITICAL. You MUST strictly use the [PDF PAGE X] markers provided in the text below. 
+If a section is on the 5th page of this PDF, identify it as Page 5, even if the text says "Page 144".
+
+Respond ONLY with a bulleted list of section names and their RELATIVE PDF page numbers.
+
+TEXT:
+${textToAnalyze}`;
+
+          // Tier 1: Gemini
+          if (genAI) {
+            try {
+              const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+              const result = await model.generateContent(prompt);
+              structureContent = result.response.text();
+            } catch (geminiErr) {
+              console.warn('[get_paper_details] Gemini structure generation failed:', geminiErr.message);
+            }
+          }
+
+          // Tier 2: OpenAI fallback
+          if (!structureContent && config.openaiApiKey) {
+            try {
+              const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${config.openaiApiKey}`
+                },
+                body: JSON.stringify({
+                  model: 'gpt-4o-mini',
+                  messages: [
+                    { role: 'system', content: 'You are a research assistant. Respond ONLY with a bulleted list of sections and page numbers. No prose.' },
+                    { role: 'user', content: prompt }
+                  ]
+                })
+              });
+              if (response.ok) {
+                const data = await response.json();
+                structureContent = data.choices[0]?.message?.content || null;
+              }
+            } catch (openaiErr) {
+              console.warn('[get_paper_details] OpenAI structure generation failed:', openaiErr.message);
+            }
+          }
+
+          if (!structureContent) {
+            structureContent = 'Structure map could not be generated — no AI provider available.';
+          }
+
+          // Fire-and-forget: cache to DB for future sessions (skip local:// files)
+          if (paper.uri && !paper.uri.startsWith('local://')) {
+            const { updateStructureMap } = require('./databaseService');
+            updateStructureMap(paper.uri, structureContent).catch(err =>
+              console.warn('[get_paper_details] Failed to cache structure_map to DB:', err.message)
+            );
+          }
         }
+      }
+
+      const fullContent = `METADATA:\n${metadataContent}\n\nSTRUCTURE MAP:\n${structureContent}`;
+      const memId = `Details_P${paper_index}`;
+
+      // Register in short-term context pool — agent decides whether to save
+      sessionContextPool[memId] = {
+        type: 'paper_details',
+        paper_index: paper_index,
+        content: fullContent
+      };
+
+      return {
+        observation: `[MEMORY_ID: ${memId}]\n${fullContent}\n\nSYSTEM HINT: This is in SHORT-TERM memory. Use save_to_session_memory with ["${memId}"] to pin it to your long-term memory if this paper's details are needed to complete the task.`,
+        memoryType: 'short_term'
       };
     }
 
@@ -337,7 +413,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
         .join('\n');
 
       return {
-        observation: `SEARCH: "${keyword}" found ${total} time(s) in "${paper.title}":\n${pageList}`,
+        observation: `SEARCH: "${keyword}" found ${total} time(s) in "${paper.title}":\n${pageList}\n\nNEXT STEP: Use get_and_read_page_content(paper_index: ${paper_index}, page_number: [page from list]) to read the content.`,
         memoryType: 'short_term'
       };
     }
@@ -388,7 +464,7 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
       });
 
       return {
-        observation: `MULTI-SEARCH RESULTS for "${paper.title}":\n${allResults.join('\n')}`,
+        observation: `MULTI-SEARCH RESULTS for "${paper.title}":\n${allResults.join('\n')}\n\nNEXT STEP: Use get_and_read_page_content(paper_index: ${paper_index}, page_number: [page from list]) to read the specific results.`,
         memoryType: 'short_term'
       };
     }
@@ -417,83 +493,6 @@ async function executeTool(toolName, params, workspace, genAI, sessionContextPoo
         memoryType: 'short_term'
       };
     }
-
-    case 'get_paper_structure_map': {
-      const { paper_index } = params;
-      if (typeof paper_index !== 'number' || paper_index < 0 || paper_index >= papers.length) {
-        return {
-          observation: `ERROR: "paper_index" is required and must be a number.`,
-          memoryType: 'short_term'
-        };
-      }
-
-      const paper = papers[paper_index];
-      if (!paper.pages || !Array.isArray(paper.pages)) {
-        return {
-          observation: `ERROR: No text content available for mapping.`,
-          memoryType: 'short_term'
-        };
-      }
-
-      const pagesToAnalyze = paper.pages.slice(0, 50);
-      const textToAnalyze = pagesToAnalyze.map((text, i) => `--- PAGE ${i + 1} ---\n${text}`).join('\n\n');
-
-      const prompt = `Analyze the following academic text (up to 50 pages) and construct a simple Table of Contents mapping logical sections to page numbers. Respond ONLY with a bulleted list.\n\nTEXT:\n${textToAnalyze}`;
-
-      const buildStructureResult = (structure) => ({
-        observation: `GENERATED STRUCTURE MAP:\n${structure}\n(This has been AUTO-SAVED to your long-term memory).`,
-        memoryType: 'long_term',
-        memoryEntry: {
-          id: `Struct_P${paper_index}`,
-          type: 'structure',
-          paper_index: paper_index,
-          content: `Document Structure:\n${structure}`
-        }
-      });
-
-      // TIER 1: Gemini (only if available)
-      if (genAI) {
-        try {
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
-          const result = await model.generateContent(prompt);
-          return buildStructureResult(result.response.text());
-        } catch (geminiErr) {
-          // Gemini failed — fall through to OpenAI below
-          console.warn('[get_paper_structure_map] Gemini failed, trying OpenAI fallback:', geminiErr.message);
-        }
-      }
-
-      // TIER 2: OpenAI fallback (used when Gemini is unavailable or failed)
-      if (!config.openaiApiKey) {
-        return { observation: `ERROR: AI service not available — no fallback configured.`, memoryType: 'short_term' };
-      }
-      try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.openaiApiKey}`
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: [
-              { role: 'system', content: 'You are a research assistant. Respond ONLY with a bulleted list of sections and page numbers. No prose.' },
-              { role: 'user', content: prompt }
-            ]
-          })
-        });
-        if (!response.ok) {
-          const errBody = await response.text();
-          return { observation: `ERROR: OpenAI fallback failed (${response.status}): ${errBody}`, memoryType: 'short_term' };
-        }
-        const data = await response.json();
-        const structure = data.choices[0]?.message?.content || '';
-        return buildStructureResult(structure);
-      } catch (openaiErr) {
-        return { observation: `ERROR: ${openaiErr.message}`, memoryType: 'short_term' };
-      }
-    }
-
 
     case 'list_workspace': {
       const paperSummaries = papers.length > 0

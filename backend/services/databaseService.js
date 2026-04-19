@@ -75,7 +75,14 @@ async function initSchema() {
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, 
     UNIQUE(note_id, folder_id))`;
   
+  // Add structure_map column to existing tables (safe — IF NOT EXISTS prevents errors)
+  await sql`ALTER TABLE papers ADD COLUMN IF NOT EXISTS structure_map TEXT`;
+
   logger.info('✅ Database schema initialized');
+}
+
+async function updateStructureMap(uri, structureMap) {
+  await getDb()`UPDATE papers SET structure_map = ${structureMap} WHERE uri = ${uri}`;
 }
 
 async function savePaper(paper, userId) {
@@ -188,5 +195,5 @@ async function assignNote(noteId, folderId) {
 
 module.exports = {
   initSchema, savePaper, saveNote, getAllLibraryData, getFolders,
-  deletePaper, updateNote, deleteNote, toggleStar, toggleFlag, createFolder, assignNote
+  deletePaper, updateNote, deleteNote, toggleStar, toggleFlag, createFolder, assignNote, updateStructureMap
 };

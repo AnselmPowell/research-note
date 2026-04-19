@@ -32,10 +32,11 @@ export const runResearchAgentTask = async (
     title: pdf.metadata?.title || 'Untitled',
     author: pdf.metadata?.author || 'Unknown',
     abstract: pdf.metadata?.subject || '',
-    harvardReference: pdf.metadata?.harvardReference || '',  // PdfMetadata already has this field
+    harvardReference: pdf.metadata?.harvardReference || '',
     totalPages: pdf.numPages,
     pages: pdf.pages,               // string[] — one string per page
-    references: pdf.references || []
+    references: pdf.references || [],
+    structureMap: pdf.structureMap || null  // Pass cached structure map — avoids DB re-generation
   }));
 
   // Package notes — normalise field names between DB format and in-memory format

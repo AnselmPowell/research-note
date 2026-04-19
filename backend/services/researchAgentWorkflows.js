@@ -37,7 +37,8 @@ PRIORITY 2 — Keyword Search
   Action: Read the identified pages using get_and_read_page_content and copy the content word for word.
 
 PRIORITY 3 — Structural Synthesis (Last Resort)
-  Action: If no explicit abstract exists, use get_paper_structure_map to locate "Introduction", "Results", and "Conclusion" / "Discussion".
+  Action: If no explicit abstract exists, use get_paper_details to get the structure of the paper (structure map/Table of Contents).
+  Decide: Review the structure to see if this paper is actually relevant to the task. If yes, save it with save_to_session_memory, then read the Introduction and Conclusion sections.
   Action: Read these sections and synthesize a high-quality academic abstract (max 300 words) that describes the Aim, Method, Results, and Conclusions.
 
 Call task_complete with the extracted or synthesized abstract text.`,
@@ -49,11 +50,12 @@ Call task_complete with the extracted or synthesized abstract text.`,
   get_methodology: `
 You have been asked to extract the research methodology from a targeted academic paper.
 
-SUGGESTED STEP 1 — Get paper metadata
-  Action: Use get_paper_metadata. This auto-saves the abstract/metadata for you.
+SUGGESTED STEP 1 — Get paper details (Initial Check)
+  Action: Use get_paper_details. Review the metadata and the structure of the paper (structure map/Table of Contents) in the observation.
+  Decision: Use this output to decide if the paper is useful for the task. If it is relevant, save it using save_to_session_memory.
 
 SUGGESTED STEP 2 — Locate Methodology
-  Action: Use get_paper_structure_map to see exactly which pages contain the 'Methods' section.
+  Action: Use the structure you received to find which pages contain the 'Methods' section.
   If not available, use search_multiple_keyword for terms like ["methodology", "research design", "data collection"].
 
 SUGGESTED STEP 3 — Read and Pin
@@ -70,11 +72,12 @@ SUGGESTED STEP 4 — Compile and Complete
   get_findings: `
 You have been asked to identify the research questions, extract key findings, and highlight any gaps in a targeted academic paper.
 
-SUGGESTED STEP 1 — Get paper metadata
-  Action: Call get_paper_metadata.
+SUGGESTED STEP 1 — Get paper details (Initial Check)
+  Action: Call get_paper_details. Review the metadata and the structure of the paper (structure map/Table of Contents) in the observation.
+  Decision: Use this output to decide if the paper is useful for the task. If it is relevant, save it using save_to_session_memory.
 
 SUGGESTED STEP 2 — Locate key sections
-  Action: Use get_paper_structure_map to find the "Introduction", "Results"/"Findings", and "Discussion"/"Conclusion".
+  Action: Use the structure to find the "Introduction", "Results"/"Findings", and "Discussion"/"Conclusion".
   If needed, use search_multiple_keyword for keywords=["results", "findings", "research questions", "future research", "limitations"].
 
 SUGGESTED STEP 3 — Read and Pin
@@ -94,12 +97,13 @@ SUGGESTED STEP 4 — Compile and Complete
   format_reference: `
 You have been asked to format a correct Harvard reference for a targeted paper.
 
-SUGGESTED STEP 1 — Get paper metadata
-  Action: Call get_paper_metadata. This auto-saves the reference if available.
+SUGGESTED STEP 1 — Get paper details (Initial Check)
+  Action: Call get_paper_details. The metadata block may already contain the Harvard Reference.
+  Decision: Check if the reference is present. If it is, save it using save_to_session_memory and call task_complete immediately.
 
-SUGGESTED STEP 2 — Read cover pages
-  If details are missing, use get_and_read_multiple_pages (start=1, end=2).
-  Tip: Pin the cover page IDs using save_to_session_memory.
+SUGGESTED STEP 2 — Read cover pages (if reference not in metadata)
+  If details are missing, use get_and_read_multiple_pages (start=1, end=2) to find publisher details.
+  Tip: save the cover page IDs to context using save_to_session_memory.
 
 SUGGESTED STEP 3 — Compile and Complete
   Call task_complete with the correctly formatted Harvard reference.`,
@@ -114,9 +118,10 @@ You have been asked to write a structured comparison of multiple papers in the w
 SUGGESTED STEP 1 — List available papers
   Action: Call list_workspace() to see paper indices.
 
-SUGGESTED STEP 2 — Build your dossier
-  Action: For every paper, call get_paper_metadata and get_paper_structure_map (these auto-save).
-  Then read the conclusions using get_and_read_multiple_pages and call save_to_session_memory for the conclusion IDs.
+SUGGESTED STEP 2 — Build your dossier (Relevance Check)
+  Action: For every paper, call get_paper_details. 
+  Decision: Review the metadata and the structure of the paper (structure map). Determine if the paper effectively contributes to the comparison.
+  If useful: Save the details using save_to_session_memory. Then read the conclusions using get_and_read_multiple_pages and call save_to_session_memory for the conclusion IDs.
 
 SUGGESTED STEP 3 — Analyze Themes
   Look at your LONG-TERM STRUCTURED MEMORY (which is now organized by paper). Identify themes and differences.
@@ -135,9 +140,10 @@ Whether there is one paper or multiple, your goal is to identify core themes, de
 SUGGESTED STEP 1 — Understand the scope
   Action: Call list_workspace(). Note the paper indices and student notes available.
 
-SUGGESTED STEP 2 — Populate your structured memory
-  Action: For every paper available, call get_paper_metadata and get_paper_structure_map (these auto-save).
-  If student notes exist for a paper, call get_notes_for_paper(paper_uri) and pin useful Note IDs using save_to_session_memory.
+SUGGESTED STEP 2 — Populate your structured memory (Relevance Check)
+  Action: For every paper available, call get_paper_details. Review the metadata and the structure of the paper (structure map/Table of Contents) in the observation.
+  Decision: Use this to decide if the paper is worth including in the review.
+  If yes: Save with save_to_session_memory. If student notes exist for a paper, call get_notes_for_paper(paper_uri) and pin useful Note IDs.
   Read abstracts and conclusions/discussions for all content and pin relevant segments to long-term memory.
 
 SUGGESTED STEP 3 — Identify key themes
@@ -154,18 +160,16 @@ SUGGESTED STEP 4 — Synthesise and Complete
 You have been asked to create a plain-language Paper Breakdown for a student who 
 wants to fully understand this academic paper without prior expertise.
 
-STEP 1 — Read the opening pages
+STEP 1 — Get paper details (Initial Check)
+  Action: Use get_paper_details to get the structure of the paper (structure map). 
+  Decision: Use this structure to see if the internal sections will help answer the student's task. If yes, save with save_to_session_memory.
+
+STEP 2 — Read core overview pages
   Action: Use get_and_read_multiple_pages (start_page=1, end_page=4).
   Goal: Get the title, authors, abstract, introduction, and stated aims.
 
-STEP 2 — Identify what else to read
-  Action: Use get_paper_structure_map to get a full list of sections and pages.
-  Decide: Which sections will tell you the paper's TYPE, METHODS (if any), and 
-  main CONCLUSIONS? Read those pages using get_and_read_multiple_pages.
-  Save key page IDs using save_to_session_memory.
-
 STEP 3 — Read the conclusions/discussion
-  Action: Locate the "Conclusion" or "Discussion" section from the structure map.
+  Action: Locate the "Conclusion" or "Discussion" section from the paper structure.
   Read it using get_and_read_multiple_pages.
 
 STEP 4 — Compile and call task_complete

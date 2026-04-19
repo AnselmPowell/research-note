@@ -81,18 +81,19 @@ OPERATING RULES:
 1. Use tools to find and read relevant content. Do NOT guess or hallucinate content.
 ${workflow
       ? '2. A GUIDELINE WORKFLOW is provided below to suggest which tools may help and in what order for this specific task. You may adapt depending on the paper.'
-      : '2. Start with  list_workspace or get_paper_metadata to understand what is available.'}
+      : '2. Start with list_workspace or get_paper_details to understand what is available.'}
 3. MEMORY MANAGEMENT: All text or pages fetched from tools will be tagged with a [MEMORY_ID: X]. Fetching data puts it in SHORT-TERM memory (deleted after 2 steps). Memory is expensive. You MUST be selective. Fetch content into your SHORT-TERM memory first. Not every page you read will be useful or relevant, ONLY save pages to LONG-TERM memory if they contain direct evidence or will help answer to the user's task. Discard irrelevant content(pages) that doesnt contain anything to help complete the task. To move content, use the save_to_session_memory tool with the relevant MEMORY_IDs. DO NOT generate text strings; only provide the array of IDs.
 4. Write a final response back to the student once you are confident that you have gathered enough knowledge in your context window.
 5. Call task_complete ONLY when the response is fully written and complete.
 6. Always cite page numbers and paper titles when referencing content in your response.
 7. Use citations and exact page numbers to build trust and credibility dont 
 8. Never hallucinate references to documents you don't have. 
+9. PDF RELATIVE INDEXING: Always use 1-based PDF relative page numbers (e.g., 1 to Total Pages) for tool calls. If a paper is part of a larger volume and the text says "Page 140", but it is the 12th page of the PDF, use page_number: 12.
 
 CONSTRAINTS:
 1. THINKING LENGTH: Your "thinking" field MUST be under 3 sentences. Focus only on the immediate next action.
 2. NO REPETITION: Check the "RECENT TOOL OUTPUTS" or "WORKSPACE STATE" before acting. Do NOT call the same tool for the same paper if you already have the result.
-3. PARAMETER SAFETY: Any 'tool_call' for 'get_and_read_page_content', 'get_paper_metadata', or 'search_keyword' MUST include the "paper_index" from the workspace list.
+3. PARAMETER SAFETY: Any 'tool_call' for 'get_and_read_page_content', 'get_paper_details', or 'search_keyword' MUST include the "paper_index" from the workspace list.
 4. PAGE COORDINATES: To use 'get_and_read_page_content' or 'get_and_read_multiple_pages', you MUST specify which pages to read. NEVER call these tools without numeric page arguments.
 5. GATHERING KNOWNLEDE: In your context window all your long term memory to help answer the student(user) task is in Layer 3. Use 'get_and_read_page_content' or 'get_and_read_multiple_pages' to read pages. Use save_to_session_memory to save any pages what will help answer the students task.
 
@@ -135,9 +136,11 @@ Notes available: ${workspace.notes.length}`;
 
       const meta = pItems.filter(m => m.type === 'metadata');
       const struct = pItems.filter(m => m.type === 'structure');
+      const details = pItems.filter(m => m.type === 'paper_details');
       const pages = pItems.filter(m => m.type === 'page').sort((a, b) => (a.page_number || 0) - (b.page_number || 0));
       const pNotes = pItems.filter(m => m.type === 'note').sort((a, b) => (a.page_number || 0) - (b.page_number || 0));
 
+      if (details.length) structuredText += `\nPaper Details:\n` + details.map(m => m.content).join('\n');
       if (meta.length) structuredText += `\nMetadata:\n` + meta.map(m => m.content).join('\n');
       if (struct.length) structuredText += `\nStructure Map:\n` + struct.map(m => m.content).join('\n');
       if (pages.length) structuredText += `\nSaved Content:\n` + pages.map(m => m.content).join('\n\n');
@@ -193,6 +196,7 @@ Return an object with an "actions" array:
 CRITICAL PARAM RULES:
 - For save_to_session_memory, params key MUST be lowercase: { "memory_ids": ["Page_P0_Pg1", "Page_P0_Pg2"] }
 - The IDs come from [MEMORY_ID: X] tags in tool output. Copy them exactly as written.
+- For get_and_read_page_content: { "paper_index": 0, "page_number": 12 }
 - For get_and_read_multiple_pages: { "paper_index": 0, "start_page": 1, "end_page": 4 }
 
 For completing the task, the action is "task_complete". The "response" param must be a LONG-FORM STRING (not an object) containing your complete academic findings. You can use markdown for formatting.`;

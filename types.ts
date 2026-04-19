@@ -36,6 +36,7 @@ export interface LoadedPdf {
   pages: string[];
   references?: string[];
   numPages: number;
+  structureMap?: string;  // Cached structure map from DB — avoids regeneration on repeated agent calls
 }
 
 export interface KeywordSearchResult {
