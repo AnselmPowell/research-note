@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { BookOpenText, Sparkles, X, ArrowRight, Loader2, Check, Loader } from 'lucide-react';
+import { BookOpenText, Sparkles, X, ArrowRight, Loader2, Check, Loader, Edit2, Plus } from 'lucide-react';
 import { ResearchPhase } from '../../types';
 
 interface DynamicLoadingBoxProps {
@@ -13,6 +13,8 @@ interface DynamicLoadingBoxProps {
   insightQuestions?: string[];
   selectedQuestions?: string[];
   onToggleQuestion?: (q: string) => void;
+  onUpdateQuestion?: (index: number, newText: string) => void;
+  onAddQuestion?: (text: string) => void;
   onProceed?: () => void;
   hasSubmittedInsights?: boolean;
 }
@@ -65,7 +67,8 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
   gatheringStatus,
   insightQuestions = [],
   selectedQuestions = [],
-  onToggleQuestion,
+  onUpdateQuestion,
+  onAddQuestion,
   onProceed,
   hasSubmittedInsights = false
 }) => {
@@ -73,6 +76,11 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const [isTextVisible, setIsTextVisible] = useState(true);
   const [timeLeft, setTimeLeft] = useState(GRACE_PERIOD_SECONDS);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [tempEditText, setTempEditText] = useState("");
+  const [newQuestionText, setNewQuestionText] = useState("");
+
+  const isInteracting = editingIndex !== null || newQuestionText.trim().length > 0;
 
   const messagePool = useMemo(() => {
     const baseMessages = phaseMessages[researchPhase] || [];
@@ -127,10 +135,10 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
     };
   }, [messagePool]);
 
-  // Grace Period Timer Logic
+  // Grace Period Timer Logic - Pause if user is interacting (editing/adding)
   useEffect(() => {
-    if (researchPhase !== 'reviewing_insights') {
-      setTimeLeft(GRACE_PERIOD_SECONDS);
+    if (researchPhase !== 'reviewing_insights' || isInteracting) {
+      if (researchPhase !== 'reviewing_insights') setTimeLeft(GRACE_PERIOD_SECONDS);
       return;
     }
 
@@ -146,11 +154,25 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [researchPhase, onProceed]);
+  }, [researchPhase, onProceed, isInteracting]);
+
+  const handleSaveEdit = (index: number) => {
+    if (tempEditText.trim() && onUpdateQuestion) {
+      onUpdateQuestion(index, tempEditText.trim());
+    }
+    setEditingIndex(null);
+  };
+
+  const handleAddCustom = () => {
+    if (newQuestionText.trim() && onAddQuestion) {
+      onAddQuestion(newQuestionText.trim());
+      setNewQuestionText("");
+    }
+  };
 
   const isReviewing = researchPhase === 'reviewing_insights';
   const isFiltering = researchPhase === 'filtering';
-  const showInsights = insightQuestions.length > 0 && !hasSubmittedInsights && researchPhase !== 'extracting';
+  const showInsights = insightQuestions.length > 0 && !hasSubmittedInsights && researchPhase !== 'extracting' && researchPhase !== 'completed';
   const containerSizeClass = showInsights ? 'max-w-3xl' : 'max-w-md';
 
   return (
@@ -227,31 +249,81 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
               </div>
 
               <div className="grid gap-3">
-                {insightQuestions.map((q) => {
+                {insightQuestions.map((q, index) => {
                   const isSelected = selectedQuestions.includes(q);
+                  const isEditing = editingIndex === index;
+
                   return (
-                    <button
-                      key={q}
-                      onClick={() => onToggleQuestion?.(q)}
-                      className={`
-                        group relative text-lg w-full text-left p-2 rounded-xl border transition-all duration-300 flex items-center justify-between gap-2
-                        ${isSelected
-                          ? 'bg-white dark:bg-scholar-900/40 border-scholar-600 shadow-lg ring-1 ring-scholar-600'
-                          : 'bg-white/50 dark:bg-gray-900/20 border-gray-100 dark:border-gray-800 hover:border-scholar-300 dark:hover:border-scholar-700 hover:bg-white dark:hover:bg-gray-800 hover:shadow-md'
-                        }
-                      `}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          {isSelected && <Check size={16} className="text-scholar-600 animate-in zoom-in" />}
-                          <h4 className={`text-md font-bold tracking-tight transition-colors ${isSelected ? 'text-scholar-700 dark:text-scholar-400' : 'text-gray-900 dark:text-gray-100'}`}>
-                            {q}
-                          </h4>
+                    <div key={index} className="group relative">
+                      {isEditing ? (
+                        <div className="flex gap-2 p-3 bg-white dark:bg-scholar-900/20 border-2 border-scholar-600 rounded-xl shadow-inner">
+                          <input
+                            autoFocus
+                            className="flex-1 bg-transparent text-md font-bold text-gray-900 dark:text-white outline-none"
+                            value={tempEditText}
+                            onChange={(e) => setTempEditText(e.target.value)}
+                            onBlur={() => handleSaveEdit(index)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(index)}
+                          />
                         </div>
-                      </div>
-                    </button>
+                      ) : (
+                        <button
+                          onClick={() => onToggleQuestion?.(q)}
+                          className={`
+                            group/btn relative text-lg w-full text-left p-3 rounded-xl border transition-all duration-300 flex items-center justify-between gap-2
+                            ${isSelected
+                              ? 'bg-white dark:bg-scholar-900/40 border-scholar-600 shadow-lg ring-1 ring-scholar-600'
+                              : 'bg-white/50 dark:bg-gray-900/20 border-gray-100 dark:border-gray-800 hover:border-scholar-300 dark:hover:border-scholar-700 hover:bg-white dark:hover:bg-gray-800 hover:shadow-md'
+                            }
+                          `}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              {isSelected && <Check size={16} className="text-scholar-600 animate-in zoom-in" />}
+                              <h4 className={`text-md font-bold tracking-tight transition-colors ${isSelected ? 'text-scholar-700 dark:text-scholar-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                                {q}
+                              </h4>
+                            </div>
+                          </div>
+                          {/* Edit Icon on Hover */}
+                          <div className="flex items-center">
+                            <Edit2
+                              size={16}
+                              className="opacity-0 group-hover/btn:opacity-100 text-gray-400 hover:text-scholar-600 cursor-pointer p-0.5 transition-opacity"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingIndex(index);
+                                setTempEditText(q);
+                              }}
+                            />
+                          </div>
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
+
+                {/* Add Custom Question Field */}
+                <div className="mt-2 flex items-center gap-3 p-3 bg-gray-50/30 dark:bg-gray-900/20 border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl hover:border-scholar-300 dark:hover:border-scholar-700 group transition-all">
+                  <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-gray-400 group-hover:text-scholar-600 transition-colors">
+                    <Plus size={18} />
+                  </div>
+                  <input
+                    placeholder="Ask a custom research question..."
+                    className="flex-1 bg-transparent text-md font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-400"
+                    value={newQuestionText}
+                    onChange={(e) => setNewQuestionText(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
+                  />
+                  {newQuestionText.trim() && (
+                    <button
+                      onClick={handleAddCustom}
+                      className="px-3 py-1 bg-scholar-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest animate-in fade-in slide-in-from-right-2"
+                    >
+                      Add Query
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -111,6 +111,8 @@ interface ResearchContextType {
   selectedInsightQuestions: string[];
   hasSubmittedInsights: boolean;
   toggleInsightQuestion: (q: string) => void;
+  updateInsightQuestion: (index: number, newText: string) => void;
+  addInsightQuestion: (newText: string) => void;
   resolveInsights: () => void;
 }
 
@@ -333,6 +335,29 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setSelectedInsightQuestions(prev =>
       prev.includes(q) ? prev.filter(item => item !== q) : [...prev, q]
     );
+  }, []);
+
+  const updateInsightQuestion = useCallback((index: number, newText: string) => {
+    setInsightQuestions(prev => {
+      const oldText = prev[index];
+      const next = [...prev];
+      next[index] = newText;
+      
+      // Update selection list if the old version was selected
+      setSelectedInsightQuestions(selected => 
+        selected.map(q => q === oldText ? newText : q)
+      );
+      
+      return next;
+    });
+  }, []);
+
+  const addInsightQuestion = useCallback((newText: string) => {
+    if (!newText.trim()) return;
+    setInsightQuestions(prev => {
+      if (prev.includes(newText.trim())) return prev;
+      return [...prev, newText.trim()];
+    });
   }, []);
 
   const resolveInsights = useCallback(() => {
@@ -1610,6 +1635,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     selectedInsightQuestions,
     hasSubmittedInsights,
     toggleInsightQuestion,
+    updateInsightQuestion,
+    addInsightQuestion,
     resolveInsights
   }), [
     activeSearchMode, searchState, searchBarState, updateSearchBar, clearSearchBar,
@@ -1626,7 +1653,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     researchTimings, timeToFirstNotes, timeToFirstPaper, searchMetrics,
     accumulatedPapers, accumulatedNotes, paperResultsMetadata,
     addToPaperResults, clearPaperResults, removePaperFromResults, resetAccumulatedDataForMigration,
-    insightQuestions, selectedInsightQuestions, hasSubmittedInsights, toggleInsightQuestion, resolveInsights
+    insightQuestions, selectedInsightQuestions, hasSubmittedInsights, toggleInsightQuestion, 
+    updateInsightQuestion, addInsightQuestion, resolveInsights
   ]);
 
   return (

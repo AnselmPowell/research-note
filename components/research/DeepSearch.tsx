@@ -609,6 +609,8 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     insightQuestions,
     selectedInsightQuestions,
     toggleInsightQuestion,
+    updateInsightQuestion,
+    addInsightQuestion,
     resolveInsights,
     hasSubmittedInsights,
     status,
@@ -1361,6 +1363,8 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
             insightQuestions={insightQuestions}
             selectedQuestions={selectedInsightQuestions}
             onToggleQuestion={toggleInsightQuestion}
+            onUpdateQuestion={updateInsightQuestion}
+            onAddQuestion={addInsightQuestion}
             onProceed={resolveInsights}
             hasSubmittedInsights={hasSubmittedInsights}
           />
