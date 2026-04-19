@@ -122,6 +122,7 @@ SUGGESTED STEP 2 — Build your dossier (Relevance Check)
   Action: For every paper, call get_paper_details. 
   Decision: Review the metadata and the structure of the paper (structure map). Determine if the paper effectively contributes to the comparison.
   If useful: Save the details using save_to_session_memory. Then read the conclusions using get_and_read_multiple_pages and call save_to_session_memory for the conclusion IDs.
+  If the paper has notes shown in list_workspace, call get_paper_notes(paper_index: N) to load them. Pin only the notes that directly support the comparison.
 
 SUGGESTED STEP 3 — Analyze Themes
   Look at your LONG-TERM STRUCTURED MEMORY (which is now organized by paper). Identify themes and differences.
@@ -143,8 +144,8 @@ SUGGESTED STEP 1 — Understand the scope
 SUGGESTED STEP 2 — Populate your structured memory (Relevance Check)
   Action: For every paper available, call get_paper_details. Review the metadata and the structure of the paper (structure map/Table of Contents) in the observation.
   Decision: Use this to decide if the paper is worth including in the review.
-  If yes: Save with save_to_session_memory. If student notes exist for a paper, call get_notes_for_paper(paper_uri) and pin useful Note IDs.
-  Read abstracts and conclusions/discussions for all content and pin relevant segments to long-term memory.
+  If yes: Save with save_to_session_memory. If the list_workspace shows notes for that paper, call get_paper_notes(paper_index: N) to load them. Save only the relevant note IDs using save_to_session_memory.
+  Read abstracts and conclusions/discussions for all content and save relevant segments to long-term memory.
 
 SUGGESTED STEP 3 — Identify key themes
   Scrutinise your LONG-TERM STRUCTURED MEMORY. If multiple papers, group by shared themes. If one paper, identify the distinct thematic contributions.

@@ -96,14 +96,17 @@ const TOOL_SCHEMA = [
     parameters: { type: 'OBJECT', properties: {}, required: [] }
   },
   {
-    name: 'get_notes_for_paper',
-    description: `Get saved student notes for a paper. Individual notes will be tagged with MEMORY_IDs for pinning.`,
+    name: 'get_paper_notes',
+    description: `Get all saved student notes for a specific paper by its index.
+      Each note is tagged with its own [MEMORY_ID: Note_P{n}_Pg{page}_N{i}] so you can
+      selectively save only relevant notes using save_to_session_memory.
+      Notes are SHORT-TERM until saved. Saved notes appear under that paper in your long-term memory.`,
     parameters: {
       type: 'OBJECT',
       properties: {
-        paper_uri: { type: 'STRING', description: 'The paper URI identifier.' }
+        paper_index: { type: 'NUMBER', description: 'Index of the paper (0-based) from list_workspace.' }
       },
-      required: ['paper_uri']
+      required: ['paper_index']
     }
   },
   {
@@ -495,61 +498,88 @@ ${textToAnalyze}`;
     }
 
     case 'list_workspace': {
-      const paperSummaries = papers.length > 0
-        ? papers.map((p, i) => `  [${i}] "${p.title}" by ${p.author || 'Unknown'} (${p.totalPages} pages) — ID: ${p.uri || 'unknown'}`).join('\n')
-        : '  No papers loaded.';
+      let output = `WORKSPACE — All papers and notes available to you:\n`;
+      output += `(Use paper_index numbers below for all tool calls)\n`;
 
-      const noteSummaries = notes.length > 0
-        ? notes.slice(0, 20)
-          .map((n, i) => `  [${i}] "${(n.quote || '').substring(0, 60)}..." (Page ${n.pageNumber})`)
-          .join('\n')
-        : '  No saved notes.';
+      if (papers.length === 0) {
+        output += '\n  No papers loaded.\n';
+      } else {
+        papers.forEach((p, i) => {
+          const paperUri = p.uri || null;
+          const linked = paperUri
+            ? notes.filter(n => (n.pdfUri || n.paper_uri) === paperUri)
+            : [];
+          const noteHint = linked.length > 0
+            ? ` | ${linked.length} saved note(s) — call get_paper_notes(paper_index: ${i}) to access them`
+            : '';
+          output += `\n  [${i}] "${p.title}" by ${p.author || 'Unknown'} — ${p.totalPages} pages${noteHint}`;
+        });
+      }
 
-      return {
-        observation: [
-          `WORKSPACE:`,
-          `Papers (${papers.length} total):`,
-          paperSummaries,
-          ``,
-          `Notes (${notes.length} total):`,
-          noteSummaries
-        ].join('\n'),
-        memoryType: 'short_term'
-      };
+      // Unlinked notes (safety net)
+      const unlinkedCount = notes.filter(n => {
+        const uri = n.pdfUri || n.paper_uri;
+        return !uri || !papers.some(p => p.uri === uri);
+      }).length;
+      if (unlinkedCount > 0) {
+        output += `\n\n  [Unlinked Notes: ${unlinkedCount} note(s) not linked to a loaded paper]`;
+      }
+
+      return { observation: output.trim(), memoryType: 'short_term' };
     }
 
-    case 'get_notes_for_paper': {
-      const { paper_uri } = params;
-      const paperNotes = notes.filter(n => n.pdfUri === paper_uri || n.paper_uri === paper_uri);
-
-      if (paperNotes.length === 0) {
+    case 'get_paper_notes': {
+      const paper_index = params.paper_index ?? params.paperIndex;
+      if (typeof paper_index !== 'number' || paper_index < 0 || paper_index >= papers.length) {
         return {
-          observation: `No saved notes found for paper "${paper_uri}".`,
+          observation: `ERROR: "paper_index" is required and must be 0 to ${papers.length - 1}. Provided: ${paper_index}`,
+          memoryType: 'short_term'
+        };
+      }
+      const paper = papers[paper_index];
+      const paperUri = paper.uri || null;
+
+      // Guard: if paper has no URI we can't match notes reliably
+      if (!paperUri) {
+        return {
+          observation: `No notes can be retrieved — paper "${paper.title}" has no stored URI.`,
           memoryType: 'short_term'
         };
       }
 
-      // Resolve the actual workspace index so notes group correctly in Layer 3
-      const realPaperIndex = papers.findIndex(p => p.uri === paper_uri);
-      const targetIndex = realPaperIndex !== -1 ? realPaperIndex : 99;
+      const paperNotes = notes.filter(n => (n.pdfUri || n.paper_uri) === paperUri);
+
+      if (paperNotes.length === 0) {
+        return {
+          observation: `No saved notes found for "${paper.title}".`,
+          memoryType: 'short_term'
+        };
+      }
 
       const results = [];
       paperNotes.forEach((n, i) => {
-        const memId = generateId('Note', targetIndex, i);
-        const text = `Quote: "${n.quote}" (Pg ${n.pageNumber})`;
+        // ID mirrors page style: Note_P{paperIdx}_Pg{pageNum}_N{noteIdx}
+        const memId = `Note_P${paper_index}_Pg${n.pageNumber || 0}_N${i}`;
+        const lines = [
+          `Note from "${paper.title}" — Page ${n.pageNumber || '?'}`,
+          `Quote: "${n.quote}"`,
+          n.justification ? `Justification: ${n.justification}` : null,
+          n.relatedQuestion ? `Related Question: ${n.relatedQuestion}` : null,
+          n.tags?.length ? `Tags: ${n.tags.join(', ')}` : null
+        ].filter(Boolean).join('\n');
 
         sessionContextPool[memId] = {
           type: 'note',
-          paper_index: targetIndex,
-          page_number: n.pageNumber,
-          content: text
+          paper_index: paper_index,
+          page_number: n.pageNumber || 0,
+          content: lines
         };
 
-        results.push(`[MEMORY_ID: ${memId}]\n${text}`);
+        results.push(`[MEMORY_ID: ${memId}]\n${lines}`);
       });
 
       return {
-        observation: `FOUND ${paperNotes.length} NOTES:\n\n${results.join('\n\n')}\n\nSYSTEM HINT: Use 'save_to_session_memory' with IDs to pin your favorite notes.`,
+        observation: `NOTES for "${paper.title}"\n (${paperNotes.length} total notes):\n\n${results.join('\n\n')}\n\nSYSTEM HINT: Review each note carefully. Save only the notes relevant to the task using save_to_session_memory. Saved notes will appear under [PAPER ${paper_index}] in your long-term memory.`,
         memoryType: 'short_term'
       };
     }
@@ -559,7 +589,7 @@ ${textToAnalyze}`;
       const memory_ids = params.memory_ids || params.MEMORY_IDs || params.memory_id;
       if (!Array.isArray(memory_ids) || memory_ids.length === 0) {
         return {
-          observation: 'ERROR: "memory_ids" must be a non-empty array of MEMORY_ID strings. Correct format: { "memory_ids": ["Page_P0_Pg1", "Page_P0_Pg2"] }. The IDs are shown in [MEMORY_ID: X] tags in tool output.',
+          observation: 'ERROR: "memory_ids" must be a non-empty array of MEMORY_ID strings. Correct format: { "memory_ids": ["Page_P0_Pg1", "Note_P0_Pg5_N1"] }. The IDs are shown in [MEMORY_ID: X] tags in tool output.',
           memoryType: 'short_term'
         };
       }

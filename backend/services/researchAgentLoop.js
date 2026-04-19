@@ -82,7 +82,7 @@ OPERATING RULES:
 ${workflow
       ? '2. A GUIDELINE WORKFLOW is provided below to suggest which tools may help and in what order for this specific task. You may adapt depending on the paper.'
       : '2. Start with list_workspace or get_paper_details to understand what is available.'}
-3. MEMORY MANAGEMENT: All text or pages fetched from tools will be tagged with a [MEMORY_ID: X]. Fetching data puts it in SHORT-TERM memory (deleted after 2 steps). Memory is expensive. You MUST be selective. Fetch content into your SHORT-TERM memory first. Not every page you read will be useful or relevant, ONLY save pages to LONG-TERM memory if they contain direct evidence or will help answer to the user's task. Discard irrelevant content(pages) that doesnt contain anything to help complete the task. To move content, use the save_to_session_memory tool with the relevant MEMORY_IDs. DO NOT generate text strings; only provide the array of IDs.
+3. MEMORY MANAGEMENT: All text, pages, or notes fetched from tools will be tagged with a [MEMORY_ID: X]. Fetching data puts it in SHORT-TERM memory (deleted after 2 steps). Memory is expensive. You MUST be selective. Fetch content into your SHORT-TERM memory first. Not every page or note you read will be useful or relevant, ONLY save content to LONG-TERM memory if it contains direct evidence or will help answer the student's task. Discard irrelevant content that doesn't help complete the task. To save content to context, use the save_to_session_memory tool with the relevant MEMORY_IDs. DO NOT generate text strings; only provide the array of IDs.
 4. Write a final response back to the student once you are confident that you have gathered enough knowledge in your context window.
 5. Call task_complete ONLY when the response is fully written and complete.
 6. Always cite page numbers and paper titles when referencing content in your response.
@@ -95,7 +95,7 @@ CONSTRAINTS:
 2. NO REPETITION: Check the "RECENT TOOL OUTPUTS" or "WORKSPACE STATE" before acting. Do NOT call the same tool for the same paper if you already have the result.
 3. PARAMETER SAFETY: Any 'tool_call' for 'get_and_read_page_content', 'get_paper_details', or 'search_keyword' MUST include the "paper_index" from the workspace list.
 4. PAGE COORDINATES: To use 'get_and_read_page_content' or 'get_and_read_multiple_pages', you MUST specify which pages to read. NEVER call these tools without numeric page arguments.
-5. GATHERING KNOWNLEDE: In your context window all your long term memory to help answer the student(user) task is in Layer 3. Use 'get_and_read_page_content' or 'get_and_read_multiple_pages' to read pages. Use save_to_session_memory to save any pages what will help answer the students task.
+5. GATHERING KNOWLEDGE: In your context window, all your long-term memory to help answer the student (user) task is in Layer 3. Use 'get_and_read_page_content' or 'get_and_read_multiple_pages' to read pages. Use 'get_paper_notes' to read student notes. Use 'save_to_session_memory' to save any pages or notes that will help answer the student's task.
 
 `;
 
@@ -107,15 +107,22 @@ CONSTRAINTS:
 
   // ── LAYER 2: Workspace Environment ───────────────────────────────────────
   const paperList = workspace.papers.length > 0
-    ? workspace.papers
-      .map((p, i) => `  [${i}] "${p.title}" by ${p.author || 'Unknown'} — ${p.totalPages} pages`)
-      .join('\n')
+    ? workspace.papers.map((p, i) => {
+      const paperUri = p.uri || null;
+      const linked = paperUri
+        ? workspace.notes.filter(n => (n.pdfUri || n.paper_uri) === paperUri)
+        : [];
+      const noteHint = linked.length > 0
+        ? ` [${linked.length} note(s) → get_paper_notes(paper_index: ${i})]`
+        : '';
+      return `  [${i}] "${p.title}" by ${p.author || 'Unknown'} — ${p.totalPages} pages${noteHint}`;
+    }).join('\n')
     : '  No papers loaded.';
 
   const layer2 = `\nWORKSPACE STATE:
 Papers available: ${workspace.papers.length}
 ${paperList}
-Notes available: ${workspace.notes.length}`;
+Notes available: ${workspace.notes.length} (linked to papers above where shown)`;
 
   // ── LAYER 2b: Workflow Steps (optional — only present if workflowId was given) ──
   const layer2b = workflow
@@ -198,6 +205,7 @@ CRITICAL PARAM RULES:
 - The IDs come from [MEMORY_ID: X] tags in tool output. Copy them exactly as written.
 - For get_and_read_page_content: { "paper_index": 0, "page_number": 12 }
 - For get_and_read_multiple_pages: { "paper_index": 0, "start_page": 1, "end_page": 4 }
+- For get_paper_notes: { "paper_index": 0 }
 
 For completing the task, the action is "task_complete". The "response" param must be a LONG-FORM STRING (not an object) containing your complete academic findings. You can use markdown for formatting.`;
 
