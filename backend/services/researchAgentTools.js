@@ -112,7 +112,7 @@ const TOOL_SCHEMA = [
   {
     name: 'save_to_session_memory',
     description: `CRITICAL: Move temporary content to LONG-TERM memory using their [MEMORY_ID: X].
-      Provide an array of IDs you want to keep (e.g. ["Paper_0_Page_12_A9B1", "Note_3_X1Y2"]).`,
+      Provide an array of IDs you want to keep pages, notes, or paper details (e.g. ["Page_P0_Pg12", "Note_P1_Pg5_N0", "Details_P2"]).`,
     parameters: {
       type: 'OBJECT',
       properties: {
