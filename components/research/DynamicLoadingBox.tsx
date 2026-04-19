@@ -67,6 +67,7 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
   gatheringStatus,
   insightQuestions = [],
   selectedQuestions = [],
+  onToggleQuestion,
   onUpdateQuestion,
   onAddQuestion,
   onProceed,
@@ -79,8 +80,9 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [tempEditText, setTempEditText] = useState("");
   const [newQuestionText, setNewQuestionText] = useState("");
+  const [isAddingQuestion, setIsAddingQuestion] = useState(false);
 
-  const isInteracting = editingIndex !== null || newQuestionText.trim().length > 0;
+  const isInteracting = editingIndex !== null || newQuestionText.trim().length > 0 || isAddingQuestion;
 
   const messagePool = useMemo(() => {
     const baseMessages = phaseMessages[researchPhase] || [];
@@ -285,16 +287,18 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
                               </h4>
                             </div>
                           </div>
-                          {/* Edit Icon on Hover */}
-                          <div className="flex items-center">
+                          {/* Edit Icon on Hover - Large Hit Area */}
+                          <div 
+                            className="opacity-0 group-hover/btn:opacity-100 flex items-center justify-center w-10 h-10 -mr-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingIndex(index);
+                              setTempEditText(q);
+                            }}
+                          >
                             <Edit2
-                              size={16}
-                              className="opacity-0 group-hover/btn:opacity-100 text-gray-400 hover:text-scholar-600 cursor-pointer p-0.5 transition-opacity"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingIndex(index);
-                                setTempEditText(q);
-                              }}
+                              size={20}
+                              className="text-gray-400 hover:text-scholar-600 transition-colors"
                             />
                           </div>
                         </button>
@@ -304,26 +308,45 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
                 })}
 
                 {/* Add Custom Question Field */}
-                <div className="mt-2 flex items-center gap-3 p-3 bg-gray-50/30 dark:bg-gray-900/20 border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-xl hover:border-scholar-300 dark:hover:border-scholar-700 group transition-all">
-                  <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-gray-400 group-hover:text-scholar-600 transition-colors">
-                    <Plus size={18} />
-                  </div>
-                  <input
-                    placeholder="Ask a custom research question..."
-                    className="flex-1 bg-transparent text-md font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-400"
-                    value={newQuestionText}
-                    onChange={(e) => setNewQuestionText(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
-                  />
-                  {newQuestionText.trim() && (
+                {!isAddingQuestion ? (
+                  <div className="flex justify-center mt-4">
                     <button
-                      onClick={handleAddCustom}
-                      className="px-3 py-1 bg-scholar-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest animate-in fade-in slide-in-from-right-2"
+                      onClick={() => setIsAddingQuestion(true)}
+                      className="p-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-full text-gray-400 hover:text-scholar-600 hover:border-scholar-200 hover:scale-110 shadow-sm transition-all group"
+                      title="Add custom query"
                     >
-                      Add Query
+                      <Plus size={24} className="group-hover:rotate-90 transition-transform" />
                     </button>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex items-center gap-3 p-3 bg-gray-50/30 dark:bg-gray-900/20 border-2 border-scholar-200 dark:border-scholar-800 rounded-xl animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="p-2 bg-scholar-50 dark:bg-scholar-900/30 rounded-lg text-scholar-600">
+                      <Plus size={20} />
+                    </div>
+                    <input
+                      autoFocus
+                      placeholder="Type your question..."
+                      className="flex-1 bg-transparent text-md font-bold text-gray-800 dark:text-gray-200 outline-none placeholder:text-gray-400"
+                      value={newQuestionText}
+                      onChange={(e) => setNewQuestionText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleAddCustom();
+                        if (e.key === 'Escape') setIsAddingQuestion(false);
+                      }}
+                      onBlur={() => {
+                        if (!newQuestionText.trim()) setIsAddingQuestion(false);
+                      }}
+                    />
+                    {newQuestionText.trim() && (
+                      <button
+                        onClick={handleAddCustom}
+                        className="px-3 py-1 bg-scholar-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest"
+                      >
+                        Add
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
