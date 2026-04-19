@@ -8,8 +8,11 @@ import {
     ZoomIn,
     ZoomOut,
     File,
-    Menu
+    Menu,
+    Plus
 } from 'lucide-react';
+import { CreateNoteModal } from '../library/CreateNoteModal';
+import { useDatabase } from '../../database/DatabaseContext';
 import { useUI } from '../../contexts/UIContext';
 
 import { LeftArrowIcon, RightArrowIcon, NewFileIcon, CopyIcon, SearchIcon, ZoomInIcon, ZoomOutIcon } from '../ui/icons';
@@ -47,6 +50,8 @@ interface PdfViewerProps {
     navigateToResult: (direction: 'next' | 'prev') => void;
     documentTextIndex: PageTextIndex[] | null;
     onScrollActivity?: () => void;
+    pdfUri?: string;
+    pdfTitle?: string;
 }
 
 /**
@@ -343,7 +348,8 @@ const escapeHTML = (str: string) => {
 
 export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
     const { handleScroll: globalHandleScroll } = useUI();
-    const { pdfDoc, pdfjsLib, currentPage, numPages, onPageChange, onNewFile, zoomLevel, onZoom, searchResults, activeResultIndex, documentTextIndex, onScrollActivity } = props;
+    const { pdfDoc, pdfjsLib, currentPage, numPages, onPageChange, onNewFile, zoomLevel, onZoom, searchResults, activeResultIndex, documentTextIndex, onScrollActivity, pdfUri, pdfTitle } = props;
+    const { savedPapers, saveNote } = useDatabase();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const textLayerRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -369,6 +375,9 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
         y: number;
         text: string;
     }>({ visible: false, x: 0, y: 0, text: '' });
+
+    const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+    const [noteModalData, setNoteModalData] = useState({ text: '', uri: '', page: 0 });
 
     useEffect(() => {
         if (toastMessage) {
@@ -775,24 +784,58 @@ export const PdfViewer: React.FC<PdfViewerProps> = (props) => {
     return (
         <div className="w-full h-full flex flex-col items-center relative overflow-hidden">
             {selectionDetails.visible && (
-                <button
+                <div
                     id="selection-copy-button"
                     className="selection-copy-button"
                     style={{
                         top: `${selectionDetails.y}px`,
                         left: `${selectionDetails.x}px`,
                     }}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        copyToClipboard(selectionDetails.text);
-                        window.getSelection()?.removeAllRanges();
-                        setSelectionDetails({ ...selectionDetails, visible: false });
-                    }}
+                    onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
                 >
-                    <CopyIcon />
-                    Copy
-                </button>
+                    <button
+                        className="flex items-center gap-1.5"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(selectionDetails.text);
+                            window.getSelection()?.removeAllRanges();
+                            setSelectionDetails({ ...selectionDetails, visible: false });
+                        }}
+                    >
+                        <CopyIcon />
+                        Copy
+                    </button>
+
+                    <span className="w-px h-4 bg-white/30 mx-1 flex-shrink-0" />
+
+                    <button
+                        className="flex items-center gap-1.5 dark:text-scholar-300"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setNoteModalData({ text: selectionDetails.text, uri: pdfUri || '', page: currentPage });
+                            setIsNoteModalOpen(true);
+                            window.getSelection()?.removeAllRanges();
+                            setSelectionDetails({ ...selectionDetails, visible: false });
+                        }}
+                    >
+                        <Plus size={14} />
+                        Create Note
+                    </button>
+                </div>
             )}
+
+            <CreateNoteModal
+                isOpen={isNoteModalOpen}
+                onClose={() => setIsNoteModalOpen(false)}
+                savedPapers={savedPapers}
+                onSave={async (note, paperMetadata) => {
+                    await saveNote(note, paperMetadata);
+                    setIsNoteModalOpen(false);
+                }}
+                initialContent={noteModalData.text}
+                initialPaperUri={noteModalData.uri}
+                initialPageNumber={noteModalData.page}
+            />
 
             <div
                 ref={scrollContainerRef}

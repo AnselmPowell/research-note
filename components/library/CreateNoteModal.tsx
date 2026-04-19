@@ -9,6 +9,7 @@ interface CreateNoteModalProps {
   onSave: (note: DeepResearchNote, paperMetadata?: any) => Promise<void>;
   initialContent?: string;
   initialPaperUri?: string;
+  initialPageNumber?: number;
 }
 
 export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
@@ -17,7 +18,8 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
   savedPapers,
   onSave,
   initialContent = '',
-  initialPaperUri = ''
+  initialPaperUri = '',
+  initialPageNumber = 0
 }) => {
   const [content, setContent] = useState('');
   const [selectedPaperUri, setSelectedPaperUri] = useState('');
@@ -29,10 +31,10 @@ export const CreateNoteModal: React.FC<CreateNoteModalProps> = ({
     if (isOpen) {
       setContent(initialContent);
       setSelectedPaperUri(initialPaperUri);
-      setPageNumber(0);
+      setPageNumber(initialPageNumber);
       setIsSaving(false);
     }
-  }, [isOpen, initialContent, initialPaperUri]);
+  }, [isOpen, initialContent, initialPaperUri, initialPageNumber]);
 
   if (!isOpen) return null;
 

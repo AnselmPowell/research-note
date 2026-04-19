@@ -678,6 +678,8 @@ export const PdfWorkspace: React.FC = () => {
                                 navigateToResult={navigateToResult}
                                 documentTextIndex={documentTextIndexCache.current}
                                 onScrollActivity={handleScrollActivity}
+                                pdfUri={activePdf.id}
+                                pdfTitle={(activePdf as any).metadata?.title || activePdf.file.name}
                             />
                         ) : isNewPdfLoading ? (
                             // Show preparing spinner as soon as a new PDF is activated
