@@ -368,14 +368,24 @@ export const searchAllSources = async (
 
     if (onStatusUpdate) onStatusUpdate('Searching academic sources...');
 
-    // Promise.allSettled: one API failing never blocks the others
+    // Incremental tracking
+    let completedCount = 0;
+    const totalAis = 5;
+    const updateProgress = (apiName: string, count: number) => {
+        completedCount++;
+        if (onStatusUpdate) {
+            onStatusUpdate(`Searching... ${completedCount}/${totalAis} sources checked (${apiName} found ${count})`);
+        }
+    };
+
+    // Promise.allSettled with incremental reporting
     const [arxivResult, openAlexResult, cseResult, pdfVectorResult, groundingResult] =
         await Promise.allSettled([
-            searchArxiv(arxivQueries, undefined, originalTopics),
-            fetchOpenAlex(booleanQuery),
-            fetchGoogleCSE(booleanQuery),
-            fetchPDFVector(booleanQuery, allKeywords),
-            fetchGoogleGrounding(groundingQ)
+            searchArxiv(arxivQueries, undefined, originalTopics).then(res => { updateProgress('ArXiv', res.length); return res; }),
+            fetchOpenAlex(booleanQuery).then(res => { updateProgress('OpenAlex', res.length); return res; }),
+            fetchGoogleCSE(booleanQuery).then(res => { updateProgress('Google', res.length); return res; }),
+            fetchPDFVector(booleanQuery, allKeywords).then(res => { updateProgress('PDFs', res.length); return res; }),
+            fetchGoogleGrounding(groundingQ).then(res => { updateProgress('Grounding', res.length); return res; })
         ]);
 
     const arxivPapers = arxivResult.status === 'fulfilled' ? arxivResult.value : [];

@@ -199,7 +199,7 @@ interface DeepResearchNote {
   citations: Citation[];
 }
 
-type ResearchPhase = 'idle' | 'initializing' | 'searching' | 'filtering' | 'extracting' | 'completed' | 'failed';
+type ResearchPhase = 'idle' | 'initialising' | 'searching' | 'filtering' | 'extracting' | 'completed' | 'failed';
 ```
 
 ## Recent Technical Changes (Feb 2026)

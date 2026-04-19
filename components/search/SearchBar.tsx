@@ -89,7 +89,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   const historyRef = useRef<HTMLDivElement>(null);
 
   // Determine if deep research is currently active/loading
-  const isDeepLoading = ['initializing', 'searching', 'filtering', 'extracting', 'reviewing_insights'].includes(researchPhase);
+  const isDeepLoading = ['initialising', 'searching', 'filtering', 'extracting', 'reviewing_insights', 'awaiting_purpose'].includes(researchPhase);
 
   // Handle PDF loading and navigation when PDFs are processed
   useEffect(() => {

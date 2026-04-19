@@ -7,12 +7,12 @@ function getEnvVar(key: string): string {
   if (typeof process !== 'undefined' && process.env && process.env[key]) {
     return process.env[key] || '';
   }
-  
+
   // PRIORITY 2: Runtime window.ENV (for VITE_ variables)
   if (typeof window !== 'undefined' && (window as any).ENV) {
     return (window as any).ENV[key] || '';
   }
-  
+
   // PRIORITY 3: Development build-time fallback
   return '';
 }
@@ -20,13 +20,13 @@ function getEnvVar(key: string): string {
 const neonAuthUrl = getEnvVar('VITE_NEON_AUTH_URL');
 
 // Enhanced debugging
-console.log('[NeonAuth] Initializing auth client...');
+console.log('[NeonAuth] Initialising auth client...');
 console.log('[NeonAuth] Environment check:', {
   VITE_NEON_AUTH_URL: neonAuthUrl ? `SET (${neonAuthUrl.substring(0, 40)}...)` : 'NOT SET',
   NODE_ENV: getEnvVar('NODE_ENV'),
   VITE_MICROSOFT_CLIENT_ID: getEnvVar('VITE_MICROSOFT_CLIENT_ID') ? 'SET' : 'NOT SET',
-  accessMode: typeof process !== 'undefined' && process.env && process.env.VITE_NEON_AUTH_URL ? 'RAILWAY_PROCESS_ENV' : 
-              typeof window !== 'undefined' && (window as any).ENV ? 'WINDOW_ENV' : 'BUILD_TIME'
+  accessMode: typeof process !== 'undefined' && process.env && process.env.VITE_NEON_AUTH_URL ? 'RAILWAY_PROCESS_ENV' :
+    typeof window !== 'undefined' && (window as any).ENV ? 'WINDOW_ENV' : 'BUILD_TIME'
 });
 
 if (!neonAuthUrl) {
@@ -102,9 +102,9 @@ export async function getSession() {
 // Social Authentication Functions
 export async function signInWithGoogle() {
   try {
-    const result = await authClient.signIn.social({ 
+    const result = await authClient.signIn.social({
       provider: 'google',
-      redirectTo: window.location.origin 
+      redirectTo: window.location.origin
     });
     if (result.error) {
       throw new Error(result.error.message);
@@ -118,9 +118,9 @@ export async function signInWithGoogle() {
 
 export async function signInWithMicrosoft() {
   try {
-    const result = await authClient.signIn.social({ 
+    const result = await authClient.signIn.social({
       provider: 'microsoft',
-      redirectTo: window.location.origin 
+      redirectTo: window.location.origin
     });
     if (result.error) {
       throw new Error(result.error.message);

@@ -118,7 +118,7 @@ interface ResearchContextState {
   activeSearchMode: 'web' | 'deep' | 'upload';
 
   // Deep research pipeline
-  researchPhase: 'idle' | 'initializing' | 'searching' | 'filtering' | 'extracting' | 'completed' | 'failed';
+  researchPhase: 'idle' | 'initialising' | 'searching' | 'filtering' | 'extracting' | 'completed' | 'failed';
   arxivKeywords: string[];
   arxivCandidates: ArxivPaper[];
   filteredCandidates: ArxivPaper[];
@@ -139,7 +139,7 @@ interface ResearchContextState {
 
 // Key methods
 const performDeepResearch = async (query: DeepResearchQuery) => {
-  setResearchPhase('initializing');
+  setResearchPhase('initialising');
 
   // Phase 1: Intent modeling
   const searchTerms = await generateArxivSearchTerms(topics, questions);

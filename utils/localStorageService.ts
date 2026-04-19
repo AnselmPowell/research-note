@@ -490,5 +490,31 @@ export const localStorageService = {
     } catch (error) {
       console.error('[LocalStorage] Failed to trim results:', error);
     }
+  },
+
+  // Research Purpose Persistence
+  saveResearchPurpose: (purpose: string): void => {
+    try {
+      localStorage.setItem('research_purpose', purpose);
+    } catch (error) {
+      console.error('[LocalStorage] Failed to save research purpose:', error);
+    }
+  },
+
+  getResearchPurpose: (): string => {
+    try {
+      return localStorage.getItem('research_purpose') || '';
+    } catch (error) {
+      console.error('[LocalStorage] Failed to load research purpose:', error);
+      return '';
+    }
+  },
+
+  clearResearchPurpose: (): void => {
+    try {
+      localStorage.removeItem('research_purpose');
+    } catch (error) {
+      console.error('[LocalStorage] Failed to clear research purpose:', error);
+    }
   }
 };

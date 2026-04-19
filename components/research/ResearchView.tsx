@@ -66,7 +66,7 @@ export const ResearchView: React.FC = () => {
   }, [researchPhase, filteredCandidates, arxivCandidates]);
 
   const isBlurred = researchPhase === 'filtering';
-  const isSearching = researchPhase === 'searching' || researchPhase === 'initializing';
+  const isSearching = researchPhase === 'searching' || researchPhase === 'initialising';
 
   // ─── Shared UI State ───────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<TabType>(() => {

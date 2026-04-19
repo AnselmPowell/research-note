@@ -114,6 +114,10 @@ interface ResearchContextType {
   updateInsightQuestion: (index: number, newText: string) => void;
   addInsightQuestion: (newText: string) => void;
   resolveInsights: () => void;
+  // NEW: Research Purpose for deeper context
+  researchPurpose: string;
+  submitResearchPurpose: (purpose: string) => void;
+  skipResearchPurpose: () => void;
 }
 
 const ResearchContext = createContext<ResearchContextType | undefined>(undefined);
@@ -146,6 +150,19 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (saved) setSearchHistory(JSON.parse(saved));
     } catch (e) {
       console.error("Failed to load search history", e);
+    }
+  }, []);
+
+  // Load persisted research purpose
+  useEffect(() => {
+    try {
+      const savedPurpose = localStorageService.getResearchPurpose();
+      if (savedPurpose) {
+        setResearchPurpose(savedPurpose);
+        researchPurposeRef.current = savedPurpose;
+      }
+    } catch (e) {
+      console.error("Failed to load research purpose", e);
     }
   }, []);
 
@@ -342,12 +359,12 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const oldText = prev[index];
       const next = [...prev];
       next[index] = newText;
-      
+
       // Update selection list if the old version was selected
-      setSelectedInsightQuestions(selected => 
+      setSelectedInsightQuestions(selected =>
         selected.map(q => q === oldText ? newText : q)
       );
-      
+
       return next;
     });
   }, []);
@@ -367,6 +384,33 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setInsightPromiseResolver(null);
     }
   }, [insightPromiseResolver]);
+
+  // NEW: Research Purpose gating
+  const [researchPurpose, setResearchPurpose] = useState<string>('');
+  const researchPurposeRef = useRef<string>('');
+  const [purposePromiseResolver, setPurposePromiseResolver] = useState<(() => void) | null>(null);
+
+  // Keep ref in sync for async pipeline access
+  useEffect(() => {
+    researchPurposeRef.current = researchPurpose;
+  }, [researchPurpose]);
+
+  const submitResearchPurpose = useCallback((purpose: string) => {
+    setResearchPurpose(purpose);
+    researchPurposeRef.current = purpose; // SYNCHRONOUS UPDATE to avoid race conditions
+    localStorageService.saveResearchPurpose(purpose); // Persist
+    if (purposePromiseResolver) {
+      purposePromiseResolver();
+      setPurposePromiseResolver(null);
+    }
+  }, [purposePromiseResolver]);
+
+  const skipResearchPurpose = useCallback(() => {
+    if (purposePromiseResolver) {
+      purposePromiseResolver();
+      setPurposePromiseResolver(null);
+    }
+  }, [purposePromiseResolver]);
 
   // Auto-save deep research results whenever they change (debounced to prevent excessive writes)
   useEffect(() => {
@@ -855,8 +899,18 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setInsightQuestions([]); // RESET
     setSelectedInsightQuestions([]); // RESET
     setHasSubmittedInsights(false); // RESET
-    setInsightPromiseResolver(null); // RESET
-  }, []);
+    // NOTE: researchPurpose is NOT reset here to allow persistence across searches
+
+    // RESOLVE any hanging promises to avoid memory leaks/hanging async functions
+    if (insightPromiseResolver) {
+      insightPromiseResolver();
+      setInsightPromiseResolver(null);
+    }
+    if (purposePromiseResolver) {
+      purposePromiseResolver();
+      setPurposePromiseResolver(null);
+    }
+  }, [insightPromiseResolver, purposePromiseResolver]);
 
   // Complete reset for sign out - clears all research and search data
   const resetAllResearchData = useCallback(() => {
@@ -876,6 +930,10 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Clear persisted search results
     localStorageService.clearWebSearchResults();
     localStorageService.clearDeepResearchResults();
+
+    // Clear purpose on full reset
+    setResearchPurpose('');
+    localStorageService.clearResearchPurpose();
   }, [resetSearch, clearSearchBar, setIsDeepSearchBarExpanded]);
 
   const performWebSearch = useCallback(async (query: string) => {
@@ -924,7 +982,17 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (prev === 'extracting') { setGatheringStatus("Research stopped. Showing partial results."); return 'completed'; }
       else { setGatheringStatus("Research stopped."); setArxivCandidates([]); setFilteredCandidates([]); return 'idle'; }
     });
-  }, []);
+
+    // RESOLVE any hanging promises to allow the async function to exit gracefully
+    if (insightPromiseResolver) {
+      insightPromiseResolver();
+      setInsightPromiseResolver(null);
+    }
+    if (purposePromiseResolver) {
+      purposePromiseResolver();
+      setPurposePromiseResolver(null);
+    }
+  }, [insightPromiseResolver, purposePromiseResolver]);
 
   const analyzeArxivPapers = useCallback(async (papers: ArxivPaper[], userQuestions: string[], keywords: string[], signal?: AbortSignal) => {
     const PAPER_CONCURRENCY = 3;
@@ -1330,8 +1398,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setTimeToFirstPaper(null);
     console.log('[📊 Timing] 🔍 Deep research pipeline started');
 
-    setResearchPhase('initializing');
-    startPhaseTimer('initializing');
+    setResearchPhase('initialising');
+    startPhaseTimer('initialising');
     setArxivCandidates([]);
     setFilteredCandidates([]);
     setInsightQuestions([]); // RESET
@@ -1384,24 +1452,54 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       // Then do ArXiv search
       if (signal.aborted) return;
-      endPhaseTimer('initializing');
+      endPhaseTimer('initialising');
       const structuredTerms = await generateArxivSearchTerms(query.topics, query.questions);
       setInsightQuestions(structuredTerms.insight_questions || []); // CAPTURE
       const displayKeywords = [structuredTerms.primary_keyword, ...structuredTerms.secondary_keywords].filter(Boolean);
       setArxivKeywords(displayKeywords);
 
       if (signal.aborted) return;
-      setResearchPhase('searching');
+
+      // START BACKGROUND SEARCH
       startPhaseTimer('searching');
       setGatheringStatus("Searching academic repositories...");
-      const searchResult = await searchAllSources(structuredTerms, query.topics, query.questions, (msg) => setGatheringStatus(msg));
+      // KICK OFF SEARCH IN BACKGROUND
+      const searchPromise = searchAllSources(structuredTerms, query.topics, query.questions, (msg) => setGatheringStatus(msg));
+
+      // NEW: Gating for Insight Questions Review
+      if (structuredTerms.insight_questions?.length > 0 && !signal.aborted && !hasSubmittedInsights) {
+        setResearchPhase('reviewing_insights');
+        setGatheringStatus("Reviewing research suggestions...");
+        await new Promise<void>((resolve) => {
+          setInsightPromiseResolver(() => resolve);
+        });
+        if (signal.aborted) return;
+      }
+
+      // NEW: CRITICAL UX IMPROVEMENT - 1 second pause before asking for purpose
+      setResearchPhase('searching');
+      setGatheringStatus("Almost ready...");
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (signal.aborted) return;
+
+      // NEW: Gating for Research Purpose
+      setResearchPhase('awaiting_purpose');
+      setGatheringStatus("Understanding your goal...");
+      await new Promise<void>((resolve) => {
+        setPurposePromiseResolver(() => resolve);
+      });
+
+      if (signal.aborted) return;
+
+      // NOW SYNCHRONIZE WITH SEARCH RESULTS
+      const searchResult = await searchPromise;
+      endPhaseTimer('searching');
 
       // NEW: Store search metrics
       setSearchMetrics(searchResult.metrics);
       const candidates = searchResult.papers;
 
       if (signal.aborted) return;
-      endPhaseTimer('searching');
       setArxivCandidates(candidates);
 
       if (candidates.length > 0) {
@@ -1457,25 +1555,23 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         endPhaseTimer('filtering');
 
-        // NEW: Gating for Insight Questions Review
-        if (structuredTerms.insight_questions?.length > 0 && !signal.aborted && !hasSubmittedInsights) {
-          setResearchPhase('reviewing_insights');
-          setGatheringStatus("Reviewing research suggestions...");
-          await new Promise<void>((resolve) => {
-            setInsightPromiseResolver(() => resolve);
-          });
-          if (signal.aborted) return;
-        }
-
         setResearchPhase('extracting');
         startPhaseTimer('extracting');
 
         const totalSources = userPdfs.length + filtered.length;
         setGatheringStatus(`Found ${totalSources} relevant sources. Gathering notes...`);
 
-        // Combine user PDFs + ArXiv papers (user PDFs processed first)
         // Combine user questions + Selected AI Insight Questions (using Ref to avoid stale closure)
-        const finalQuestionsForExtraction = [...query.questions, ...selectedInsightQuestionsRef.current];
+        // AND inject research purpose context if provided
+        const purposePrefix = researchPurposeRef.current.trim()
+          ? [`Context/Purpose of this research: ${researchPurposeRef.current.trim()}`]
+          : [];
+
+        const finalQuestionsForExtraction = [
+          ...purposePrefix,
+          ...query.questions,
+          ...selectedInsightQuestionsRef.current
+        ];
 
         console.log('[ResearchContext] 📝 FINAL QUESTIONS FOR EXTRACTION:', {
           original: query.questions.length,
@@ -1637,7 +1733,10 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     toggleInsightQuestion,
     updateInsightQuestion,
     addInsightQuestion,
-    resolveInsights
+    resolveInsights,
+    researchPurpose,
+    submitResearchPurpose,
+    skipResearchPurpose
   }), [
     activeSearchMode, searchState, searchBarState, updateSearchBar, clearSearchBar,
     searchHistory, addToHistory, removeFromHistory, clearHistory,
@@ -1653,7 +1752,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     researchTimings, timeToFirstNotes, timeToFirstPaper, searchMetrics,
     accumulatedPapers, accumulatedNotes, paperResultsMetadata,
     addToPaperResults, clearPaperResults, removePaperFromResults, resetAccumulatedDataForMigration,
-    insightQuestions, selectedInsightQuestions, hasSubmittedInsights, toggleInsightQuestion, 
+    insightQuestions, selectedInsightQuestions, hasSubmittedInsights, toggleInsightQuestion,
     updateInsightQuestion, addInsightQuestion, resolveInsights
   ]);
 

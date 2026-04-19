@@ -27,7 +27,7 @@ const MESSAGE_CYCLE_DURATION = FADE_OUT_DURATION + FADE_IN_DURATION + DISPLAY_DU
 const GRACE_PERIOD_SECONDS = 24;
 
 const phaseMessages: Record<ResearchPhase, string[]> = {
-  initializing: [
+  initialising: [
     'Connecting to multiple academic libraries...',
     'Understanding your topic...',
     'Preparing the search...'
@@ -39,7 +39,7 @@ const phaseMessages: Record<ResearchPhase, string[]> = {
     'Retrieving academic sources...'
   ],
   filtering: [
-    'Analyzing papers...',
+    'Analysing papers...',
     'Reading papers to check for relevancy...',
     'Processing top research papers...',
     'Filtering to match your query...',
@@ -52,8 +52,13 @@ const phaseMessages: Record<ResearchPhase, string[]> = {
   extracting: [
     'Extracting key insights from selected sources...',
     'Synthesizing theoretical frameworks...',
-    'Analyzing methodology and results...',
+    'Analysing methodology and results...',
     'Compiling research notes...'
+  ],
+  awaiting_purpose: [
+    'Refining research objectives...',
+    'Understanding your goals...',
+    'Optimising the analysis context...'
   ],
   completed: [],
   idle: [],
@@ -173,14 +178,16 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
   };
 
   const isReviewing = researchPhase === 'reviewing_insights';
+  const isSearching = researchPhase === 'searching' || researchPhase === 'initialising';
   const isFiltering = researchPhase === 'filtering';
   const showInsights = insightQuestions.length > 0 && !hasSubmittedInsights && researchPhase !== 'extracting' && researchPhase !== 'completed';
+  const shouldShowBox = isReviewing || isFiltering || isSearching || showInsights;
   const containerSizeClass = showInsights ? 'max-w-3xl' : 'max-w-md';
 
   return (
     <div className="absolute inset-0 flex items-center justify-center z-40 p-2 pointer-events-none">
       <div className={` 
-        ${(isReviewing || isFiltering || showInsights) ? 'bg-white p-8 dark:bg-dark-card rounded-[2rem] shadow-2xl border border-gray-100 dark:border-gray-800' : ''} 
+        ${shouldShowBox ? 'bg-white p-8 dark:bg-dark-card rounded-[2rem] shadow-2xl border border-gray-100 dark:border-gray-800' : ''} 
         w-full  duration-500 pointer-events-auto flex flex-col max-h-[70vh] overflow-hidden
         ${containerSizeClass}
       `}>
@@ -288,7 +295,7 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
                             </div>
                           </div>
                           {/* Edit Icon on Hover - Large Hit Area */}
-                          <div 
+                          <div
                             className="opacity-0 group-hover/btn:opacity-100 flex items-center justify-center w-10 h-10 -mr-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all cursor-pointer"
                             onClick={(e) => {
                               e.stopPropagation();

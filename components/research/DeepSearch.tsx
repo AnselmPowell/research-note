@@ -5,6 +5,7 @@ import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
 import { useDatabase } from '../../database/DatabaseContext';
 import { DynamicLoadingBox } from './DynamicLoadingBox';
+import { ResearchPurposeModal } from './ResearchPurposeModal';
 import {
   Loader2,
   FileText,
@@ -613,6 +614,9 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     addInsightQuestion,
     resolveInsights,
     hasSubmittedInsights,
+    submitResearchPurpose,
+    skipResearchPurpose,
+    researchPurpose,
     status,
     arxivKeywords: generatedKeywords
   } = useResearch();
@@ -680,7 +684,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   }, [setActivePdf, openColumn, loadPdfFromUrl]);
 
   const isBlurred = researchPhase === 'filtering';
-  const isSearching = researchPhase === 'searching' || researchPhase === 'initializing';
+  const isSearching = researchPhase === 'searching' || researchPhase === 'initialising';
 
   const totalNotes = useMemo(() =>
     currentTabCandidates.reduce((acc, paper) => acc + (paper.notes?.length || 0), 0),
@@ -1255,7 +1259,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                 </>
               )}
             </div>
-            {(['initializing', 'searching', 'filtering', 'extracting'].includes(researchPhase)) && (
+            {(['initialising', 'searching', 'filtering', 'extracting'].includes(researchPhase)) && (
               <button
                 onClick={stopDeepResearch}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 rounded-md hover:bg-red-100 dark:hover:bg-red-900/40 transition-all animate-pulse shadow-sm"
@@ -1351,8 +1355,8 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
         )}
       </div>
 
-      {/* ── DYNAMIC LOADING BOX (Phases: initializing, searching, filtering) ──── */}
-      {(researchPhase === 'initializing' ||
+      {/* ── DYNAMIC LOADING BOX (Phases: initialising, searching, filtering) ──── */}
+      {(researchPhase === 'initialising' ||
         researchPhase === 'searching' ||
         researchPhase === 'filtering' ||
         researchPhase === 'reviewing_insights') && (
@@ -1369,6 +1373,15 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
             hasSubmittedInsights={hasSubmittedInsights}
           />
         )}
+
+      {/* ── RESEARCH PURPOSE MODAL (Phase: awaiting_purpose) ────────────────── */}
+      {researchPhase === 'awaiting_purpose' && (
+        <ResearchPurposeModal
+          initialValue={researchPurpose}
+          onSubmit={submitResearchPurpose}
+          onSkip={skipResearchPurpose}
+        />
+      )}
     </>
   );
 };

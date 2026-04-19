@@ -42,10 +42,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initAuth = async () => {
       try {
-        console.log('[Auth] Initializing authentication...');
-        
+        console.log('[Auth] Initialising authentication...');
+
         const result = await authClient.getSession();
-        
+
         if (result.data?.session && result.data?.user) {
           console.log('[Auth] User session found:', result.data.user.email);
           setUser(result.data.user);
@@ -89,11 +89,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       console.log('[Auth] Signing in user:', email);
-      
+
       const hasDataToMigrate = dataMigrationService.hasLocalDataToMigrate();
-      
+
       const result = await authClient.signIn.email({ email, password });
-      
+
       if (result.error) {
         throw new Error(result.error.message);
       }
@@ -102,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const sessionResult = await authClient.getSession();
       if (sessionResult.data?.user) {
         console.log('[Auth] Sign in successful');
-        
+
         // Check if this was a password reset from Microsoft auth
         const pendingMicrosoftMapping = localStorage.getItem('pending_microsoft_mapping');
         if (pendingMicrosoftMapping) {
@@ -117,18 +117,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.error('[Auth] Failed to create Microsoft mapping:', error);
           }
         }
-        
+
         setUser(sessionResult.data.user);
-        
+
         // ✅ NEW: Migrate localStorage data if exists
         if (hasDataToMigrate) {
           console.log('[Auth] 🔄 Starting data migration...');
-          
+
           try {
             const migrationResult = await dataMigrationService.migrateAnonymousDataToUser(
               sessionResult.data.user.id
             );
-            
+
             if (migrationResult.success) {
               console.log('[Auth] ✅ Data migration successful:', migrationResult);
               // Clear "My Results" localStorage
@@ -159,17 +159,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       console.log('[Auth] Signing up user:', email);
-      
+
       // Check if there's localStorage data to migrate
       const hasDataToMigrate = dataMigrationService.hasLocalDataToMigrate();
       const migrationPreview = dataMigrationService.getMigrationPreview();
-      
+
       if (hasDataToMigrate) {
         console.log('[Auth] 📊 Migration preview:', migrationPreview);
       }
-      
+
       const result = await authClient.signUp.email({ email, password, name });
-      
+
       if (result.error) {
         throw new Error(result.error.message);
       }
@@ -179,16 +179,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (sessionResult.data?.user) {
         console.log('[Auth] Sign up successful');
         setUser(sessionResult.data.user);
-        
+
         // ✅ NEW: Migrate localStorage data to user account if exists
         if (hasDataToMigrate) {
           console.log('[Auth] 🔄 Starting data migration...');
-          
+
           try {
             const migrationResult = await dataMigrationService.migrateAnonymousDataToUser(
               sessionResult.data.user.id
             );
-            
+
             if (migrationResult.success) {
               console.log('[Auth] ✅ Data migration successful');
               console.log('[Auth] 📊 Migrated:', {
@@ -198,10 +198,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 accumulatedPapers: migrationResult.migratedAccumulatedPapers,
                 accumulatedNotes: migrationResult.migratedAccumulatedNotes
               });
-              
+
               // Clear the "My Results" localStorage now that data is in database
               localStorageService.clearPaperResultsAfterMigration();
-              
+
             } else {
               console.warn('[Auth] ⚠️ Data migration failed:', migrationResult.error);
               // Continue anyway - don't fail signup if migration fails
@@ -226,13 +226,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = useCallback(async (resetCallbacks?: (() => void)[]) => {
     setIsLoading(true);
-    
+
     try {
       console.log('[Auth] Signing out user');
       await authClient.signOut();
       setUser(null);
       setError(null);
-      
+
       // Call reset functions to clear all app state
       if (resetCallbacks) {
         console.log('[Auth] Clearing app state...');
@@ -244,14 +244,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         });
       }
-      
+
       console.log('[Auth] Sign out successful');
     } catch (err) {
       console.error('[Auth] Sign out error:', err);
       // Even if sign out fails, clear local state and app state
       setUser(null);
       setError(null);
-      
+
       if (resetCallbacks) {
         resetCallbacks.forEach(callback => {
           try {
@@ -277,9 +277,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // We must NOT call getSession() here — there is no session yet at this point.
       // The session will be read by initAuth on the next page load (post-redirect).
       // Migration of anonymous data is also handled in initAuth for this reason.
-      const result = await authClient.signIn.social({ 
+      const result = await authClient.signIn.social({
         provider: 'google',
-        redirectTo: window.location.origin 
+        redirectTo: window.location.origin
       });
 
       // If an error is returned BEFORE the redirect (e.g. misconfigured provider),
@@ -309,17 +309,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       console.log('[Auth] Signing in with Microsoft (Custom OAuth)...');
-      
+
       // Use custom Microsoft authentication
       const result = await customMicrosoftSignIn();
-      
+
       if (!result.success) {
         throw new Error(result.error || 'Microsoft authentication failed');
       }
 
       console.log('[Auth] Microsoft sign in successful');
       setUser(result.user);
-      
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Microsoft sign in failed';
       console.error('[Auth] Microsoft sign in error:', errorMessage);

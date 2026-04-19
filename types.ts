@@ -50,10 +50,10 @@ export interface KeywordSearchResult {
   status: 'match' | 'no match';
 }
 
-export type AcademicStatus = 
-  | 'Not academic paper' 
-  | 'Not Sure' 
-  | 'Possible academic paper' 
+export type AcademicStatus =
+  | 'Not academic paper'
+  | 'Not Sure'
+  | 'Possible academic paper'
   | 'Definitely academic paper';
 
 export interface AcademicVerificationResult {
@@ -134,7 +134,7 @@ export interface ArxivSearchStructured {
 }
 
 export type SearchMode = 'web' | 'deep' | 'upload' | 'results';
-export type ResearchPhase = 'idle' | 'initializing' | 'searching' | 'filtering' | 'reviewing_insights' | 'extracting' | 'completed' | 'failed';
+export type ResearchPhase = 'idle' | 'initialising' | 'searching' | 'filtering' | 'reviewing_insights' | 'awaiting_purpose' | 'extracting' | 'completed' | 'failed';
 
 // NEW: Search API metrics tracking
 export interface SearchMetrics {
