@@ -80,6 +80,39 @@ async function callOpenAI(prompt) {
   }
 }
 
+async function callOpenAIEmbedding(input) {
+  if (!config.openaiApiKey) {
+    throw new Error('OpenAI API key not configured');
+  }
+
+  try {
+    console.log('[callOpenAIEmbedding] 🔄 Attempting OpenAI Embedding API call...');
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.openaiApiKey}`
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: input,
+        dimensions: 768
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`OpenAI Embedding Error: ${response.status} - ${err}`);
+    }
+
+    const data = await response.json();
+    console.log('[callOpenAIEmbedding] ✅ OpenAI Embedding API call successful');
+    return data;
+  } catch (error) {
+    console.error('[callOpenAIEmbedding] ❌ Error in OpenAI Embedding call:', error.message);
+    throw error;
+  }
+}
 
 async function enhanceMetadata(firstFourPagesText, currentMetadata) {
   const prompt = `You are analyzing the first 4 pages of a research paper to extract detailed academic metadata.
@@ -556,47 +589,72 @@ User query:
 }
 
 async function getEmbedding(text, taskType) {
-  if (!genAI) return [];
+  if (!genAI && !config.openaiApiKey) return [];
   taskType = taskType || 'RETRIEVAL_DOCUMENT';
 
   const cacheKey = taskType + ':' + text.trim();
   if (cache.has(cacheKey)) return cache.get(cacheKey);
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-embedding-2-preview' });
-      const result = await model.embedContent({
-        content: { parts: [{ text }] },
-        taskType
-      });
+  // TIER 1: Gemini Embedding
+  try {
+    if (!genAI) throw new Error('Gemini not initialized');
 
-      const vec = result.embedding?.values || [];
-      if (vec.length > 0) cache.set(cacheKey, vec);
-      return vec;
-    } catch (error) {
-      console.error('[getEmbedding] Error on attempt', attempt + 1, ':', {
-        status: error?.status,
-        message: error?.message,
-        model: 'gemini-embedding-2-preview'
-      });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const model = genAI.getGenerativeModel({ model: 'gemini-embedding-2-preview' });
+        const result = await model.embedContent({
+          content: { parts: [{ text }] },
+          taskType
+        });
 
-      if (error?.status === 429 && attempt < 2) {
-        const backoff = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
-        await delay(backoff);
-        continue;
-      }
-      if (attempt === 2) {
-        logger.error('[getEmbedding] All attempts failed, returning empty vector');
-        return [];
+        const vec = result.embedding?.values || [];
+        if (vec.length > 0) {
+          cache.set(cacheKey, vec);
+          return vec;
+        }
+        throw new Error('Empty vector returned');
+      } catch (error) {
+        console.error('[getEmbedding] Error on attempt', attempt + 1, ':', {
+          status: error?.status,
+          message: error?.message,
+          model: 'gemini-embedding-2-preview'
+        });
+
+        if (error?.status === 429 && attempt < 2) {
+          const backoff = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
+          await delay(backoff);
+          continue;
+        }
+        if (attempt === 2) {
+          throw new Error('All Gemini attempts failed');
+        }
       }
     }
+  } catch (geminiError) {
+    console.warn('[getEmbedding] Tier 1 (Gemini) failed:', geminiError.message);
+
+    // TIER 2: OpenAI Fallback
+    try {
+      console.log('[getEmbedding] Tier 2: Attempting OpenAI fallback...');
+      const data = await callOpenAIEmbedding([text]);
+      const vec = data?.data?.[0]?.embedding || [];
+      if (vec.length > 0) {
+        cache.set(cacheKey, vec);
+        return vec;
+      }
+      throw new Error('Empty vector returned from OpenAI');
+    } catch (gptError) {
+      console.error('[getEmbedding] Tier 2 (OpenAI) failed:', gptError.message);
+    }
   }
+
+  // TIER 3: Basic fallback
   return [];
 }
 
 
 async function getBatchEmbeddings(texts, taskType) {
-  if (!genAI || !config.geminiApiKey) {
+  if (!config.geminiApiKey && !config.openaiApiKey) {
     return texts.map(() => []);
   }
   taskType = taskType || 'RETRIEVAL_DOCUMENT';
@@ -629,67 +687,92 @@ async function getBatchEmbeddings(texts, taskType) {
   }
 
   await asyncPool(3, batches, async (batch) => {
-    const requests = batch.texts.map(t => ({
-      model: 'models/gemini-embedding-2-preview',
-      content: { parts: [{ text: t }] },
-      taskType
-    }));
+    // TIER 1: Gemini Batch Embedding
+    try {
+      if (!config.geminiApiKey) throw new Error('Gemini API key missing');
 
-    for (let attempt = 0; attempt < 4; attempt++) {
+      const requests = batch.texts.map(t => ({
+        model: 'models/gemini-embedding-2-preview',
+        content: { parts: [{ text: t }] },
+        taskType
+      }));
+
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2-preview:batchEmbedContents?key=${config.geminiApiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ requests })
+            }
+          );
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[getBatchEmbeddings] API error:', {
+              status: response.status,
+              statusText: response.statusText,
+              error: errorText,
+              model: 'gemini-embedding-2-preview',
+              attempt: attempt + 1
+            });
+
+            if (response.status === 429 || response.status === 503) {
+              throw new Error('Rate Limit');
+            }
+            throw new Error('HTTP ' + response.status + ': ' + errorText);
+          }
+
+          const data = await response.json();
+
+          if (!data.embeddings || !Array.isArray(data.embeddings)) {
+            throw new Error('Invalid embeddings response');
+          }
+
+          const embeddings = data.embeddings.map(e => e.values || []);
+
+          embeddings.forEach((emb, i) => {
+            const originalIndex = batch.indices[i];
+            const text = batch.texts[i];
+            cache.set(taskType + ':' + text.trim(), emb);
+            results[originalIndex] = emb;
+          });
+
+          return; // Success, exit attempt loop & batch process
+        } catch (err) {
+          if (attempt < 3) {
+            const backoff = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
+            await delay(backoff);
+            continue;
+          }
+          throw new Error('All Gemini attempts failed for batch');
+        }
+      }
+    } catch (geminiError) {
+      console.warn('[getBatchEmbeddings] Tier 1 (Gemini) failed:', geminiError.message);
+
+      // TIER 2: OpenAI Fallback
       try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2-preview:batchEmbedContents?key=${config.geminiApiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ requests })
-          }
-        );
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('[getBatchEmbeddings] API error:', {
-            status: response.status,
-            statusText: response.statusText,
-            error: errorText,
-            model: 'gemini-embedding-2-preview',
-            attempt: attempt + 1
+        console.log('[getBatchEmbeddings] Tier 2: Attempting OpenAI fallback...');
+        const data = await callOpenAIEmbedding(batch.texts);
+        
+        if (data && data.data && Array.isArray(data.data)) {
+          // Sort the returned data by 'index' to ensure matching alignment
+          const sortedData = data.data.sort((a, b) => a.index - b.index);
+          
+          sortedData.forEach((item, i) => {
+            const emb = item.embedding || [];
+            const originalIndex = batch.indices[i];
+            const text = batch.texts[i];
+            cache.set(taskType + ':' + text.trim(), emb);
+            results[originalIndex] = emb;
           });
-
-          if (response.status === 429 || response.status === 503) {
-            throw new Error('Rate Limit');
-          }
-          throw new Error('HTTP ' + response.status + ': ' + errorText);
+        } else {
+          throw new Error('Invalid response structure from OpenAI');
         }
-
-        const data = await response.json();
-
-        // SAFETY: Validate response structure before processing
-        if (!data.embeddings || !Array.isArray(data.embeddings)) {
-          console.error('[getBatchEmbeddings] Invalid response structure:', {
-            hasEmbeddings: !!data.embeddings,
-            isArray: Array.isArray(data.embeddings),
-            responseKeys: data ? Object.keys(data) : 'null',
-            attempt: attempt + 1
-          });
-          throw new Error('Invalid embeddings response: missing or invalid embeddings field');
-        }
-
-        const embeddings = data.embeddings.map(e => e.values || []);
-
-        embeddings.forEach((emb, i) => {
-          const originalIndex = batch.indices[i];
-          const text = batch.texts[i];
-          cache.set(taskType + ':' + text.trim(), emb);
-          results[originalIndex] = emb;
-        });
-
-        break;
-      } catch (err) {
-        if (attempt < 3) {
-          const backoff = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
-          await delay(backoff);
-        }
+      } catch (gptError) {
+        console.error('[getBatchEmbeddings] Tier 2 (OpenAI) failed:', gptError.message);
       }
     }
   });
