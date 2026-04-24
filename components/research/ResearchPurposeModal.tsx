@@ -55,7 +55,7 @@ export const ResearchPurposeModal: React.FC<ResearchPurposeModalProps> = ({
             <textarea
               autoFocus
               placeholder=" "
-              className={`w-full h-64 bg-gray-50/50 dark:bg-gray-900/40 border ${isOverLimit ? 'border-red-500 animate-pulse' : 'border-gray-200 dark:border-gray-700'} rounded-3xl p-6 text-md font-bold text-gray-800 dark:text-white outline-none resize-none placeholder:text-gray-400 placeholder:font-medium transition-all shadow-inner`}
+              className={`w-full h-64 bg-gray-50/50 dark:bg-gray-900/40 border ${isOverLimit ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'} rounded-3xl p-6 text-md font-bold text-gray-800 dark:text-white outline-none resize-none placeholder:text-gray-400 placeholder:font-medium transition-all shadow-inner`}
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
               onKeyDown={(e) => {
@@ -77,7 +77,7 @@ export const ResearchPurposeModal: React.FC<ResearchPurposeModalProps> = ({
         <div className="px-10 pb-8 flex justify-between items-center">
           <div className="flex-1">
             {isOverLimit && (
-              <span className="text-red-500 text-xs font-black uppercase tracking-widest animate-in fade-in slide-in-from-left-2">
+              <span className="text-red-500 text-xs font-black uppercase tracking-widest">
                 {wordCount} / 150 Words - Please shorten
               </span>
             )}

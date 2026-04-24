@@ -320,7 +320,8 @@ const ResearchCardNote: React.FC<{
   sourceTitle?: string;
   showScore?: boolean;
   sourcePaper?: ArxivPaper;
-}> = React.memo(({ id, note, isSelected, onSelect, sourceTitle, showScore, sourcePaper }) => {
+  isTop5?: boolean;
+}> = React.memo(({ id, note, isSelected, onSelect, sourceTitle, showScore, sourcePaper, isTop5 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [justCopied, setJustCopied] = useState(false);
 
@@ -425,11 +426,16 @@ const ResearchCardNote: React.FC<{
     <div
       className={`relative group/note transition-all duration-300 ease-in-out border rounded-xl overflow-hidden cursor-pointer
         ${isExpanded ? "bg-white dark:bg-dark-card" : "bg-white/50 dark:bg-dark-card"}
-        ${isSelected ? 'border-scholar-500 ring-1 ring-scholar-500' : 'border-gray-200 dark:border-gray-700 hover:shadow-sm'}
+        ${isSelected ? 'border-scholar-500 ring-1 ring-scholar-500' : isTop5 ? 'border-amber-400 dark:border-amber-500 shadow-lg shadow-amber-500/10 ring-2 ring-amber-400/20' : 'border-gray-200 dark:border-gray-700 hover:shadow-sm'}
         ${isExpanded ? 'shadow-md ring-1 ring-scholar-100 dark:ring-scholar-900' : ''}
       `}
       onClick={() => setIsExpanded(!isExpanded)}
     >
+      {isTop5 && (
+        <div className="absolute top-0 right-0 w-8 h-8 flex items-center justify-center bg-amber-500 text-white rounded-bl-xl shadow-sm z-10 animate-fade-in">
+          <Sparkles size={14} fill="currentColor" />
+        </div>
+      )}
       <div className="p-4">
         <div className="flex items-start gap-3">
           <div className="pt-1">
@@ -618,7 +624,9 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     skipResearchPurpose,
     researchPurpose,
     status,
-    arxivKeywords: generatedKeywords
+    arxivKeywords: generatedKeywords,
+    topNoteIds,
+    rankTopNotes
   } = useResearch();
 
   const accumulatedPapers = arxivCandidates;
@@ -746,11 +754,22 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
           }))
       );
       // Sort by: status priority first, then relevance score
-      return allNotes.sort((a, b) => {
+      const sorted = allNotes.sort((a, b) => {
         const priorityDiff = getStatusPriority(b.sourcePaper.analysisStatus) - getStatusPriority(a.sourcePaper.analysisStatus);
         if (priorityDiff !== 0) return priorityDiff;
         return (b.relevanceScore || 0) - (a.relevanceScore || 0);
       });
+
+      // 🔥 Refined Reordering: Bubble Top 5 insights to the absolute top
+      if (topNoteIds && topNoteIds.length > 0) {
+        const topOnes = allNotes
+          .filter(n => topNoteIds.includes(n.uniqueId))
+          .sort((a, b) => topNoteIds.indexOf(a.uniqueId) - topNoteIds.indexOf(b.uniqueId));
+        const remaining = allNotes.filter(n => !topNoteIds.includes(n.uniqueId));
+        return [...topOnes, ...remaining];
+      }
+
+      return sorted;
     } else if (sortBy === 'newest-papers') {
       return [...filteredPapers].sort((a, b) => {
         const priorityDiff = getStatusPriority(b.analysisStatus) - getStatusPriority(a.analysisStatus);
@@ -1089,8 +1108,28 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
             )}
           </div>
 
-          {/* RIGHT: Filter Toggle + Expand/Collapse */}
+            {/* RIGHT: Filter Toggle + Expand/Collapse */}
           <div className="flex items-center gap-2 z-20">
+            {/* Top 5 Insights Button */}
+            {sortBy === 'most-relevant-notes' && selectableNotesTotalCount > 10 && researchPhase === 'completed' && (
+              <button
+                onClick={(e) => { e.stopPropagation(); rankTopNotes(); }}
+                disabled={researchPhase === 'ranking_notes'}
+                className={`flex items-center gap-2 px-3 py-2.5 text-xs font-bold rounded-lg transition-all ${topNoteIds.length > 0
+                  ? 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border border-amber-200/50'
+                  : 'text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                  }`}
+                title="Identify top 5 most critical insights"
+              >
+                {researchPhase === 'ranking_notes' ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : (
+                  <Sparkles size={20} className={topNoteIds.length > 0 ? "fill-amber-500" : ""} />
+                )}
+                <span>Top 5 Insights</span>
+              </button>
+            )}
+
             <button
               onClick={() => onShowFiltersChange(!showFilters)}
               className={`flex items-center gap-2 px-3 py-2.5 text-xs font-bold rounded-lg transition-all ${showFilters || searchQuery || localFilters.paper !== 'all' || localFilters.query !== 'all' || localFilters.hasNotes
@@ -1298,6 +1337,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                 sourceTitle={note.sourcePaper.title}
                 sourcePaper={note.sourcePaper}
                 showScore={true}
+                isTop5={topNoteIds.includes(note.uniqueId)}
               />
             ))
           ) : (

@@ -1655,6 +1655,77 @@ async function generateInsightQueries(userQuestions, contextQuery) {
   }
 }
 
+async function rankNotes(notes, queries, purpose) {
+  const notesList = notes.map(n => `ID: ${n.id}\nNote: ${n.content}`).join('\n\n');
+  
+  // User requested order: {notes at the top, then research purpose, then questions, then the output needed}
+  const prompt = `--- NOTES START ---
+${notesList}
+--- NOTES END ---
+
+RESEARCH PURPOSE:
+${purpose || 'Not provided'}
+
+RESEARCH QUESTIONS/QUERIES:
+${queries.join(', ')}
+
+TASK:
+Identify and select the TOP 5 most relevant insights from the notes provided above. 
+These insights must be the most valuable for the student's research purpose and questions.
+
+OUTPUT REQUIREMENTS:
+1. Return EXACTLY 5 Note IDs.
+2. Return them as a JSON array of strings, ranked from most relevant to least relevant (1 to 5).
+3. Output ONLY the JSON array.
+
+REQUIRED FORMAT:
+["id1", "id2", "id3", "id4", "id5"]`;
+
+  // TIER 1: Gemini
+  try {
+    if (!genAI) throw new Error('Gemini not available');
+
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.5-flash-lite',
+      generationConfig: { 
+        responseMimeType: 'application/json',
+        temperature: 0.1 
+      }
+    });
+
+    const result = await withTimeout(
+      model.generateContent(prompt),
+      30000,
+      'Gemini Rank Notes'
+    );
+
+    const response = await result.response;
+    const text = cleanJson(response.text());
+    const rankedIds = JSON.parse(text);
+    
+    console.log('[rankNotes] ✅ Tier 1 (Gemini) success');
+    return Array.isArray(rankedIds) ? rankedIds.slice(0, 5) : [];
+  } catch (geminiError) {
+    console.warn('[rankNotes] Tier 1 (Gemini) failed:', geminiError.message);
+
+    // TIER 2: GPT Fallback
+    try {
+      const gptResult = await withTimeout(
+        callOpenAI(prompt),
+        30000,
+        'GPT Rank Notes'
+      );
+      
+      const rankedIds = Array.isArray(gptResult) ? gptResult : (gptResult.selections || []);
+      console.log('[rankNotes] ✅ Tier 2 (GPT) success');
+      return Array.isArray(rankedIds) ? rankedIds.slice(0, 5) : [];
+    } catch (gptError) {
+      console.error('[rankNotes] ❌ All Tiers failed:', gptError.message);
+      return [];
+    }
+  }
+}
+
 module.exports = {
   enhanceMetadata,
   generateSearchVariations,
@@ -1665,5 +1736,6 @@ module.exports = {
   extractNotesFromPages,
   performSearch,
   generateInsightQueries,
-  searchWithGrounding
+  searchWithGrounding,
+  rankNotes
 };

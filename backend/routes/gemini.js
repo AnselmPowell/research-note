@@ -193,6 +193,14 @@ router.post('/insight-queries', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.post('/rank-notes', async (req, res, next) => {
+  try {
+    const { notes, queries, purpose } = req.body.data;
+    const result = await geminiService.rankNotes(notes, queries, purpose);
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+});
+
 // Gemini Grounding Search — uses Google Search tool via Gemini SDK
 // Query is pre-built by aggregator with filetype:pdf / site operators.
 // Returns raw results array; normaliseGrounding() in aggregator maps to ArxivPaper[].

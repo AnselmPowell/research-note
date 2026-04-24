@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { SearchState, SearchMode, DeepResearchQuery, ArxivPaper, DeepResearchNote, LoadedPdf, SearchBarState, ResearchPhase, ResearchTimings, SearchMetrics } from '../types';
-import { performSearch, generateArxivSearchTerms, filterRelevantPapers, findRelevantPages, extractNotesFromPages, generateInsightQueries } from '../services/geminiService';
+import { performSearch, generateArxivSearchTerms, filterRelevantPapers, findRelevantPages, extractNotesFromPages, generateInsightQueries, rankTopNotes as rankNotesAI } from '../services/geminiService';
 import { extractPdfData, fetchPdfBuffer } from '../services/pdfService';
 import { searchAllSources } from '../services/searchAggregator';
 import { localStorageService } from '../utils/localStorageService';
@@ -98,6 +98,9 @@ interface ResearchContextType {
   timeToFirstPaper: number | null;
   // NEW: search metrics tracking
   searchMetrics: SearchMetrics | null;
+  // NEW: Top Note Ranking
+  topNoteIds: string[];
+  rankTopNotes: () => Promise<void>;
   // NEW: Accumulated results for "My Results" tab (persistent across searches)
   accumulatedPapers: ArxivPaper[];
   accumulatedNotes: DeepResearchNote[];
@@ -210,6 +213,10 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         if (savedDeepResearch.searchBarState) {
           setSearchBarState(savedDeepResearch.searchBarState);
+        }
+        
+        if (savedDeepResearch.topNoteIds) {
+          setTopNoteIds(savedDeepResearch.topNoteIds);
         }
 
         // Set research phase to 'completed' so UI knows to display results
@@ -336,6 +343,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [timeToFirstPaper, setTimeToFirstPaper] = useState<number | null>(null);
   // NEW: Search metrics tracking
   const [searchMetrics, setSearchMetrics] = useState<SearchMetrics | null>(null);
+  const [topNoteIds, setTopNoteIds] = useState<string[]>([]);
 
   const [insightQuestions, setInsightQuestions] = useState<string[]>([]);
   const [selectedInsightQuestions, setSelectedInsightQuestions] = useState<string[]>([]);
@@ -1406,6 +1414,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setSelectedInsightQuestions([]); // RESET
     setHasSubmittedInsights(false); // RESET
     setSearchState(prev => ({ ...prev, query: query.topics.join(', ') }));
+    setTopNoteIds([]); // RESET Top 5 ranking
 
     try {
       // CASE 1: URLs only (no topics) = Search only user PDFs
@@ -1734,9 +1743,61 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     updateInsightQuestion,
     addInsightQuestion,
     resolveInsights,
-    researchPurpose,
+    topNoteIds,
     submitResearchPurpose,
-    skipResearchPurpose
+    skipResearchPurpose,
+    rankTopNotes: async () => {
+      if (deepResearchResults.length === 0) return;
+      
+      const previousPhase = researchPhase;
+      setResearchPhase('ranking_notes');
+      setGatheringStatus("Identifying top 5 insights...");
+      
+      try {
+        // Collect all available notes with their calculated uniqueIds
+        // We reuse the same logic as DeepSearch.tsx for consistency
+        const getNoteId = (paperId: string, page: number, index: number) => `${paperId}-p${page}-i${index}`;
+        
+        const notesToRank: { uniqueId: string; quote: string }[] = [];
+        filteredCandidates.forEach(paper => {
+          (paper.notes || []).forEach((note, idx) => {
+             if ((note?.quote || '').trim().length > 0) {
+               notesToRank.push({
+                 uniqueId: getNoteId(paper.id, note.pageNumber, idx),
+                 quote: note.quote
+               });
+             }
+          });
+        });
+
+        if (notesToRank.length === 0) {
+           toastService.info("No insights found to rank");
+           setResearchPhase(previousPhase);
+           return;
+        }
+
+        const queries = [...arxivKeywords, ...selectedInsightQuestions];
+        const result = await rankNotesAI(notesToRank, queries, researchPurpose);
+        
+        if (result && Array.isArray(result)) {
+           setTopNoteIds(result);
+           // Persist
+           const current = localStorageService.getDeepResearchResults();
+           if (current) {
+             localStorageService.saveDeepResearchResults({
+               ...current,
+               topNoteIds: result
+             });
+           }
+           toastService.success("Top 5 insights identified");
+        }
+      } catch (error) {
+        console.error("[ResearchContext] ❌ Ranking failed:", error);
+        toastService.error("Ranking failed - please try again");
+      } finally {
+        setResearchPhase(previousPhase);
+      }
+    }
   }), [
     activeSearchMode, searchState, searchBarState, updateSearchBar, clearSearchBar,
     searchHistory, addToHistory, removeFromHistory, clearHistory,
@@ -1753,7 +1814,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     accumulatedPapers, accumulatedNotes, paperResultsMetadata,
     addToPaperResults, clearPaperResults, removePaperFromResults, resetAccumulatedDataForMigration,
     insightQuestions, selectedInsightQuestions, hasSubmittedInsights, toggleInsightQuestion,
-    updateInsightQuestion, addInsightQuestion, resolveInsights
+    updateInsightQuestion, addInsightQuestion, resolveInsights,
+    topNoteIds, researchPurpose, arxivKeywords, submitResearchPurpose, skipResearchPurpose
   ]);
 
   return (

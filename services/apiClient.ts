@@ -100,6 +100,8 @@ export const api = {
     search: (query: string) => apiCall<SearchResultData>('/gemini/search', 'POST', { query }),
     insightQueries: (userQuestions: string, contextQuery: string) =>
       apiCall<string[]>('/gemini/insight-queries', 'POST', { userQuestions, contextQuery }),
+    rankNotes: (notes: { id: string; content: string }[], queries: string[], purpose: string) =>
+      apiCall<string[]>('/gemini/rank-notes', 'POST', { notes, queries, purpose }),
   },
 
   database: {

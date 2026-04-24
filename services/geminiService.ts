@@ -103,6 +103,20 @@ export const extractNotesFromPages = async (
   }
 };
 
+export const rankTopNotes = async (
+  notes: { uniqueId: string; quote: string }[],
+  queries: string[],
+  purpose: string
+): Promise<string[]> => {
+  try {
+    const noteData = notes.map(n => ({ id: n.uniqueId, content: n.quote }));
+    return await api.gemini.rankNotes(noteData, queries, purpose);
+  } catch (error) {
+    console.error('[geminiService] ❌ Rank notes failed:', error);
+    throw error;
+  }
+};
+
 export const performSearch = async (query: string): Promise<SearchResultData> => {
   return await api.gemini.search(query);
 };
