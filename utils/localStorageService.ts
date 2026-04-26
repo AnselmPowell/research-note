@@ -341,6 +341,8 @@ export const localStorageService = {
     filteredCandidates: any[];
     deepResearchResults: any[];
     searchBarState: any;
+    topNoteIds?: string[];        // ✅ NEW: Top 5 ranked note IDs
+    hasRankedOnce?: boolean;      // ✅ NEW: Track if user has ranked
   }): void => {
     try {
       const saveData = {

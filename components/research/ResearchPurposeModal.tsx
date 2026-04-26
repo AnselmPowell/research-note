@@ -13,6 +13,19 @@ export const ResearchPurposeModal: React.FC<ResearchPurposeModalProps> = ({
   onSkip
 }) => {
   const [purpose, setPurpose] = useState(initialValue);
+  const [savedPurpose, setSavedPurpose] = useState<string>('');
+
+  // Load saved purpose from localStorage for display
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('research_purpose');
+      if (saved) {
+        setSavedPurpose(saved);
+      }
+    } catch (e) {
+      console.error('Failed to load saved research purpose', e);
+    }
+  }, []);
 
   const handleSubmit = () => {
     const wordCount = purpose.trim().split(/\s+/).filter(Boolean).length;
@@ -54,7 +67,7 @@ export const ResearchPurposeModal: React.FC<ResearchPurposeModalProps> = ({
           <div className="group relative">
             <textarea
               autoFocus
-              placeholder=" "
+              placeholder={savedPurpose ? `${savedPurpose}\n\n(Enter new purpose or modify above)` : " "}
               className={`w-full h-64 bg-gray-50/50 dark:bg-gray-900/40 border ${isOverLimit ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'} rounded-3xl p-6 text-md font-bold text-gray-800 dark:text-white outline-none resize-none placeholder:text-gray-400 placeholder:font-medium transition-all shadow-inner`}
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}

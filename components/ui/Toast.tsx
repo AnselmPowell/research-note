@@ -4,6 +4,7 @@ import { toastService, Toast } from '../../services/toastService';
 
 export const ToastContainer: React.FC = () => {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const unsubscribe = toastService.subscribe((newToast) => {
@@ -14,8 +15,13 @@ export const ToastContainer: React.FC = () => {
   }, []);
 
   const removeToast = (id: string) => {
+    // Prevent duplicate removal calls
+    if (removingIds.has(id)) return;
+    
+    setRemovingIds(prev => new Set(prev).add(id));
     setToasts(prev => prev.filter(t => t.id !== id));
-    toastService.dismiss(id);
+    // Don't call toastService.dismiss - it creates a circular reference
+    // The toast is already removed from state above
   };
 
   return (
@@ -33,11 +39,9 @@ interface ToastItemProps {
 }
 
 const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss }) => {
-  // Register dismiss callback
-  useEffect(() => {
-    toastService.registerDismissCallback(toast.id, onDismiss);
-  }, [toast.id, onDismiss]);
-
+  // ✅ FIXED: Removed the registerDismissCallback that was causing infinite loop
+  // The parent component handles dismissal through state management only
+  
   const bgColors = {
     success: 'bg-green-50 border-green-200',
     error: 'bg-red-50 border-red-200',

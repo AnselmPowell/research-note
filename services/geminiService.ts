@@ -86,15 +86,52 @@ export const extractNotesFromPages = async (
   onStreamUpdate?: (notes: DeepResearchNote[]) => void
 ): Promise<DeepResearchNote[]> => {
   
+  console.log('[🔴 extractNotesFromPages-FRONTEND] 📤 Calling API endpoint:', {
+    relevantPagesCount: relevantPages.length,
+    userQuestionsLength: userQuestions.length,
+    hasPaperTitle: !!paperTitle,
+    hasAbstract: !!paperAbstract,
+    hasReferences: !!referenceList,
+    hasCallback: !!onStreamUpdate,
+    paperTitle: paperTitle?.substring(0, 50)
+  });
+
   try {
     const response = await api.gemini.extractNotes({
       relevantPages, userQuestions, paperTitle, paperAbstract, referenceList
     });
 
+    console.log('[🔴 extractNotesFromPages-FRONTEND] 📥 API Response received:', {
+      isArray: Array.isArray(response),
+      responseLength: response?.length || 0,
+      responseType: typeof response,
+      firstNoteKeys: response?.[0] ? Object.keys(response[0]) : 'N/A',
+      firstThreeNotes: response?.slice(0, 3).map((n: any) => ({
+        quote: n.quote?.substring(0, 50),
+        pageNumber: n.pageNumber,
+        pdfUri: n.pdfUri?.substring(0, 30),
+        hasRelatedQuestion: !!n.relatedQuestion
+      })) || 'No notes',
+      sampleIds: response?.slice(0, 2).map((n: any) => n.pdfUri) || []
+    });
+
+    // ✅ CRITICAL FIX: Call the callback to stream notes if provided
+    if (onStreamUpdate && response && Array.isArray(response) && response.length > 0) {
+      console.log('[🔴 extractNotesFromPages-FRONTEND] 🔄 Calling onStreamUpdate callback with', response.length, 'notes');
+      onStreamUpdate(response);
+    } else if (onStreamUpdate) {
+      console.log('[🔴 extractNotesFromPages-FRONTEND] ⚠️  onStreamUpdate provided but response is:', {
+        isArray: Array.isArray(response),
+        length: response?.length,
+        type: typeof response
+      });
+    } else {
+      console.log('[🔴 extractNotesFromPages-FRONTEND] ⚠️  No onStreamUpdate callback provided');
+    }
   
     return response;
   } catch (error) {
-    console.error('[FRONTEND-EXTRACT] ❌ API CALL FAILED:', {
+    console.error('[🔴 extractNotesFromPages-FRONTEND] ❌ API CALL FAILED:', {
       errorMessage: error instanceof Error ? error.message : String(error),
       errorType: error instanceof Error ? error.constructor.name : typeof error,
       errorStack: error instanceof Error ? error.stack : undefined

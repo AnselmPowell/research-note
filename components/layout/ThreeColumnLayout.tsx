@@ -328,9 +328,9 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         {showMiddle && (
           <div
             style={{ width: getColumnWidth('middle') }}
-            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-sm min-w-[320px]`}
+            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl  overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-sm min-w-[320px]`}
           >
-            {isHeaderVisible === true && (
+            {/* {isHeaderVisible === true && (
               <ColumnHeader
                 title="Research"
                 icon={BookOpenText}
@@ -342,7 +342,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
                 onTitleClick={handleTitleClick}
                 onToggleLock={toggleLock}
               />
-            )}
+            )} */}
             <div onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar relative">{middleContent}</div>
           </div>
         )}
@@ -353,9 +353,9 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
         {showLibrary && (
           <div
             style={{ width: getColumnWidth('library'), minWidth: '45%' }}
-            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-sm`}
+            className={`flex flex-col h-full bg-cream dark:bg-dark-card rounded-xl  overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]`}
           >
-            {isHeaderVisible === true && (
+            {/* {isHeaderVisible === true && (
               <ColumnHeader
                 title="Library"
                 icon={Library}
@@ -367,7 +367,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
                 onTitleClick={handleTitleClick}
                 onToggleLock={toggleLock}
               />
-            )}
+            )} */}
             <div className="flex-1 overflow-hidden relative">{libraryContent}</div>
           </div>
         )}
@@ -380,7 +380,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
             style={{ width: getColumnWidth('right'), minWidth: '45%' }}
             className={`flex flex-col h-full bg-cream dark:bg-dark-card border rounded-xl dark:border-gray-700 overflow-hidden shadow-sm transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]`}
           >
-            {isHeaderVisible === true && (
+            {/* {isHeaderVisible === true && (
               <ColumnHeader
                 title="Paper View"
                 icon={FileText}
@@ -392,7 +392,7 @@ export const ThreeColumnLayout: React.FC<ThreeColumnLayoutProps> = ({
                 onTitleClick={handleTitleClick}
                 onToggleLock={toggleLock}
               />
-            )}
+            )} */}
             <div onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar relative">{rightContent}</div>
           </div>
         )}

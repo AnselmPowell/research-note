@@ -74,6 +74,7 @@ export interface DeepResearchNote {
   relatedQuestion: string;
   pageNumber: number;
   pdfUri: string;
+  sourceId?: string;  // ← Links note back to its paper (paper.id or pdf.uri)
   relevanceScore?: number;
   tags?: string[];
   citations?: Citation[];

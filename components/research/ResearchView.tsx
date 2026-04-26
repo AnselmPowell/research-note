@@ -138,8 +138,8 @@ export const ResearchView: React.FC = () => {
 
       {/* ── STICKY HEADER ────────────────────────────────────────────────────── */}
       {(
-        <div className="sticky top-0 z-40 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm border-b border-gray-100 dark:border-gray-700 pb-0 px-4 sm:px-6 shadow-sm flex justify-center">
-          <div className="flex items-center justify-between py-3 gap-4 w-full max-w-5xl">
+        <div className="sticky top-0 z-40 bg-cream/95 dark:bg-dark-card/95 backdrop-blur-sm pb-0 px-4 sm:px-6 flex justify-center">
+          <div className="flex items-center justify-between px-10 py-3 gap-4 w-full max-w-5xl">
             <div className="flex items-center -mb-px">
               <button
                 onClick={() => { setActiveTab('web'); setActiveSearchMode('web'); }}

@@ -1,4 +1,21 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+// ═══════════════════════════════════════════════════════════════════════════════
+// CRITICAL DATA FLOW: Research Purpose vs Questions
+// ═══════════════════════════════════════════════════════════════════════════════
+// 
+// ResearchPurposeModal → Saves purpose to context and localStorage
+//   ├─ Purpose is ONLY used for "Top 5 Insights" LLM (rankTopNotes)
+//   ├─ Purpose is NOT sent to /extract-notes endpoint
+//   └─ /extract-notes receives ONLY the user's questions (no purpose metadata)
+//
+// DeepResearchFAB → Collects additional/extra questions from user
+//   ├─ These questions ARE sent to /extract-notes endpoint
+//   └─ Used alongside the original search terms for note extraction
+//
+// The ResearchPurposeModal is only rendered when researchPhase === 'awaiting_purpose'
+// After submission or skip, the phase transitions to 'reviewing_insights'
+// ═══════════════════════════════════════════════════════════════════════════════
+
 import { ArxivPaper, DeepResearchNote } from '../../types';
 import { useResearch } from '../../contexts/ResearchContext';
 import { useLibrary } from '../../contexts/LibraryContext';
@@ -6,6 +23,8 @@ import { useUI } from '../../contexts/UIContext';
 import { useDatabase } from '../../database/DatabaseContext';
 import { DynamicLoadingBox } from './DynamicLoadingBox';
 import { ResearchPurposeModal } from './ResearchPurposeModal';
+import { ResearchCardNote } from './ResearchCardNote';
+import { Top5SquareCards } from './Top5SquareCards';
 import {
   Loader2,
   FileText,
@@ -311,267 +330,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
   );
 });
 
-// ─── ResearchCardNote ──────────────────────────────────────────────────────────
-const ResearchCardNote: React.FC<{
-  id: string;
-  note: DeepResearchNote;
-  isSelected: boolean;
-  onSelect: () => void;
-  sourceTitle?: string;
-  showScore?: boolean;
-  sourcePaper?: ArxivPaper;
-  isTop5?: boolean;
-}> = React.memo(({ id, note, isSelected, onSelect, sourceTitle, showScore, sourcePaper, isTop5 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [justCopied, setJustCopied] = useState(false);
-
-  const { toggleContextNote, isNoteInContext, setActiveSearchMode } = useResearch();
-  const { isNoteSaved, deleteNote, saveNote, savedNotes } = useDatabase();
-  const { setSearchHighlight, loadPdfFromUrl, setActivePdf } = useLibrary();
-  const { openColumn: openUIColumn, setColumnVisibility } = useUI();
-
-  const createPaperMetadata = useCallback((
-    note: DeepResearchNote,
-    sourcePaper?: ArxivPaper,
-    sourceTitle?: string
-  ) => {
-    if (sourcePaper) {
-      return {
-        uri: sourcePaper.pdfUri,
-        pdfUri: sourcePaper.pdfUri,
-        title: sourcePaper.title,
-        summary: sourcePaper.summary || '',
-        authors: sourcePaper.authors || [],
-        publishedDate: sourcePaper.publishedDate,
-      };
-    }
-    if ('sourcePaper' in note && (note as any).sourcePaper) {
-      const paper = (note as any).sourcePaper as ArxivPaper;
-      return {
-        uri: paper.pdfUri,
-        pdfUri: paper.pdfUri,
-        title: paper.title,
-        summary: paper.summary || '',
-        authors: paper.authors || [],
-        publishedDate: paper.publishedDate,
-      };
-    }
-    return {
-      uri: note.pdfUri,
-      pdfUri: note.pdfUri,
-      title: sourceTitle || 'Untitled Paper',
-      summary: '',
-      authors: [],
-      publishedDate: new Date().toISOString(),
-    };
-  }, []);
-
-  const isInContext = isNoteInContext(note);
-  const isSaved = isNoteSaved(note.pdfUri, note.quote);
-
-  const handleCopy = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(note.quote);
-    setJustCopied(true);
-    setTimeout(() => setJustCopied(false), 2000);
-  };
-
-  const handleContextToggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    toggleContextNote(note);
-  };
-
-  const handleSaveToggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    console.log('[Note Card] Save toggle clicked:', { noteUri: note.pdfUri, isSaved, sourceTitle, hasSourcePaper: !!sourcePaper });
-    if (isSaved) {
-      const savedNote = savedNotes.find(n => n.paper_uri === note.pdfUri && n.content === note.quote);
-      if (savedNote && savedNote.id) {
-        console.log('[Note Card] Deleting note:', savedNote.id);
-        deleteNote(savedNote.id);
-      }
-    } else {
-      console.log('[Note Card] Saving note with complete paper metadata');
-      const paperMetadata = createPaperMetadata(note, sourcePaper, sourceTitle);
-      console.log('[Note Card] Paper metadata being saved:', paperMetadata);
-      saveNote(note, paperMetadata);
-    }
-  };
-
-  const handleViewPdf = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    console.log('\n🔍 [VIEW PDF] User clicked "View PDF" button');
-    console.log('   📄 Paper:', sourceTitle);
-    console.log('   📝 Note quote:', note.quote.substring(0, 60) + '...');
-    console.log('   📍 Page number:', note.pageNumber);
-    console.log('   🔗 Note pdfUri:', note.pdfUri);
-    console.log('   ❓ Is pdfUri defined:', !!note.pdfUri);
-    console.log('   ❓ pdfUri type:', typeof note.pdfUri);
-    console.log('   ❓ pdfUri value:', note.pdfUri === undefined ? 'UNDEFINED' : note.pdfUri);
-    const cleanedQuote = note.quote.replace(/^[\W\d]+|[\W\d]+$/g, '').trim();
-    loadPdfFromUrl(note.pdfUri, sourceTitle);
-    setActivePdf(note.pdfUri);
-    setSearchHighlight({ text: cleanedQuote, fallbackPage: note.pageNumber });
-    // Close left sidebar when viewing from notes
-    setColumnVisibility(prev => ({ ...prev, left: false, right: true }));
-  };
-
-  const resolvedPaper: ArxivPaper | null =
-    sourcePaper || (('sourcePaper' in note) ? (note as any).sourcePaper as ArxivPaper : null);
-  const paperYear = resolvedPaper?.publishedDate?.match(/\b(19|20)\d{2}\b/)?.[0] ?? null;
-  const harvardRef = resolvedPaper?.harvardReference ?? null;
-
-
-  return (
-    <div
-      className={`relative group/note transition-all duration-300 ease-in-out border rounded-xl overflow-hidden cursor-pointer
-        ${isExpanded ? "bg-white dark:bg-dark-card" : "bg-white/50 dark:bg-dark-card"}
-        ${isSelected ? 'border-scholar-500 ring-1 ring-scholar-500' : isTop5 ? 'border-amber-400 dark:border-amber-500 shadow-lg shadow-amber-500/10 ring-2 ring-amber-400/20' : 'border-gray-200 dark:border-gray-700 hover:shadow-sm'}
-        ${isExpanded ? 'shadow-md ring-1 ring-scholar-100 dark:ring-scholar-900' : ''}
-      `}
-      onClick={() => setIsExpanded(!isExpanded)}
-    >
-      {isTop5 && (
-        <div className="absolute top-0 right-0 w-8 h-8 flex items-center justify-center bg-amber-500 text-white rounded-bl-xl shadow-sm z-10 animate-fade-in">
-          <Sparkles size={14} fill="currentColor" />
-        </div>
-      )}
-      <div className="p-4">
-        <div className="flex items-start gap-3">
-          <div className="pt-1">
-            <button
-              onClick={(e) => { e.stopPropagation(); onSelect(); }}
-              className={`transition-all ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-300 dark:text-gray-500 hover:text-scholar-600 dark:hover:text-scholar-400'}`}
-            >
-              {isSelected ? <Check size={20} strokeWidth={3} /> : <Square size={20} />}
-            </button>
-          </div>
-
-          <div className="flex-grow min-w-0">
-            {sourceTitle && showScore && (
-              <div className="mb-2 flex items-baseline gap-2 flex-wrap">
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleViewPdf(e); }}
-                  className="text-sm font-bold text-gray-800 dark:text-gray-100 hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors text-left leading-snug"
-                  title="Open in PDF viewer"
-                >
-                  {sourceTitle}
-                </button>
-                {paperYear && (
-                  <span className="text-xs font-semibold text-scholar-600 dark:text-scholar-400 flex-shrink-0">
-                    {paperYear}
-                  </span>
-                )}
-              </div>
-            )}
-            <p className={`text-sm sm:text-base text-gray-800 dark:text-gray-200 leading-relaxed font-serif ${!isExpanded ? 'line-clamp-3' : ''}`}>
-              "{note.quote}"
-            </p>
-
-            <div className="flex items-center mt-3 gap-2 flex-wrap">
-              <span className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-200 dark:border-gray-700">
-                PAGE {note.pageNumber}
-              </span>
-              {isInContext && (
-                <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                  IN CONTEXT
-                </span>
-              )}
-              {isSaved && (
-                <span className="bg-scholar-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                  SAVED
-                </span>
-              )}
-              {!isExpanded && (
-                <span className="text-xs text-scholar-600 dark:text-scholar-400 font-medium ml-auto opacity-0 group-hover/note:opacity-100 transition-opacity">
-                  Details
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div
-          className={`
-             absolute top-2 right-2 flex items-center gap-1
-             transition-all duration-300 
-             bg-white dark:bg-gray-800 p-1 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm
-             ${isExpanded ? 'opacity-100' : 'opacity-0 -translate-y-2 group-hover/note:opacity-100 group-hover/note:translate-y-0'}
-           `}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button onClick={handleSaveToggle} className={`p-1.5 rounded-md ${isSaved ? 'text-scholar-600 bg-scholar-50 dark:bg-scholar-900/30' : 'text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title="Save to Library">
-            <Plus size={16} />
-          </button>
-          <button onClick={handleContextToggle} className={`p-1.5 rounded-md ${isInContext ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30' : 'text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title="Add to Context">
-            <BookmarkPlus size={16} />
-          </button>
-          <button onClick={handleViewPdf} className="p-1.5 rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-scholar-600 dark:hover:text-scholar-400" title="View text in PDF">
-            <TextSearch size={16} />
-          </button>
-          <button onClick={handleCopy} className="p-1.5 rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" title="Copy text">
-            {justCopied ? <Check size={16} /> : <Copy size={16} />}
-          </button>
-        </div>
-
-        {isExpanded && (
-          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in">
-            {showScore && note.relevanceScore && (
-              <div className="absolute top-6 right-4 text-right">
-                <div className="text-lg font-bold text-scholar-600 dark:text-scholar-400">{Math.round(note.relevanceScore * 100)}%</div>
-              </div>
-            )}
-            {showScore && harvardRef && (
-              <div className="bg-gray-50 dark:bg-gray-900/40 rounded-xl p-3 border border-gray-100 dark:border-gray-800 mb-4">
-                <h4 className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  <Library size={11} /> Harvard Reference
-                </h4>
-                <p className="text-gray-600 dark:text-gray-300 text-xs leading-relaxed italic">
-                  {harvardRef}
-                </p>
-              </div>
-            )}
-            {note.justification && (
-              <div className="bg-scholar-50 dark:bg-scholar-900/20 rounded-xl p-4 border border-scholar-100 dark:border-scholar-800/30 mb-4">
-                <h4 className="text-scholar-800 dark:text-scholar-300 text-md font-black uppercase mb-2 flex items-center gap-2">
-                  Justification/Context
-                </h4>
-                <p className="text-gray-700 dark:text-gray-300 text-xs sm:text-sm leading-relaxed">{note.justification}</p>
-                {note.relatedQuestion && (
-                  <p className="text-gray-600 dark:text-gray-400 text-xs mt-3 leading-relaxed">
-                    <span className="font-semibold">Query:</span> {note.relatedQuestion}
-                  </p>
-                )}
-              </div>
-            )}
-            {note.citations && note.citations.length > 0 && (
-              <div className="mt-4">
-                <h4 className="text-gray-400 text-[10px] font-black uppercase mb-3 flex items-center gap-2">
-                  <Library size={12} /> References
-                </h4>
-                <ul className="space-y-3">
-                  {note.citations.map((cit, idx) => (
-                    <li key={idx} className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 leading-relaxed pl-3 border-l-2 border-scholar-200 dark:border-scholar-800">
-                      <span className="font-bold text-scholar-700 dark:text-scholar-400 mr-2 bg-scholar-50 dark:bg-scholar-900/30 px-1 rounded">{cit.inline}</span>
-                      {cit.full}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}, (prevProps, nextProps) => {
-  return (
-    prevProps.id === nextProps.id &&
-    prevProps.isSelected === nextProps.isSelected &&
-    prevProps.showScore === nextProps.showScore
-  );
-});
-
+// ─── Main DeepSearch Component ─────────────────────────────────────────────────
 // ─── DeepSearch Main Component ─────────────────────────────────────────────────
 // Self-contained deep research tab — reads all data from context (no prop drilling)
 
@@ -589,6 +348,16 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   const [isSelectMenuOpen, setIsSelectMenuOpen] = useState(false);
   const [isNoteSelectMenuOpen, setIsNoteSelectMenuOpen] = useState(false);
   const [justCopiedNotes, setJustCopiedNotes] = useState(false);
+
+  // ✅ Track which note from Top 5 should be highlighted/expanded (only one at a time)
+  const [highlightedNoteId, setHighlightedNoteId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // ✅ Control which single note is expanded (only one at a time)
+  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
+  
+  // ✅ Track which Top 5 note was clicked to move it to position 0
+  const [clickedTopNoteId, setClickedTopNoteId] = useState<string | null>(null);
 
   // Define setters to match expected handler names (minimizes diff)
   const onAllNotesExpandedChange = setAllNotesExpanded;
@@ -626,11 +395,14 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     status,
     arxivKeywords: generatedKeywords,
     topNoteIds,
+    hasRankedOnce,  // ✅ NEW: Import flag to hide button
     rankTopNotes
   } = useResearch();
 
   const accumulatedPapers = arxivCandidates;
   const accumulatedNotes = deepResearchResults;
+
+
 
   const handleBulkCopyNotes = useCallback(() => {
     if (selectedNoteIds.length === 0) return;
@@ -648,6 +420,8 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
   }, []);
+
+
 
   const { loadedPdfs, isPdfInContext, loadPdfFromUrl, setActivePdf, downloadingUris, failedUris } = useLibrary();
   const { openColumn, setColumnVisibility } = useUI();
@@ -735,7 +509,8 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     return 2;                                     // Top (all others: extracting, completed, downloading, processing, stopped)
   };
 
-  // ─── Filter Step 2: Sort ──────────────────────────────────────────────────────
+
+
   const content = useMemo(() => {
     if (sortBy === 'most-relevant-notes') {
       const allNotes = filteredPapers.flatMap(paper =>
@@ -747,14 +522,45 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
             }
             return true;
           })
-          .map((note, idx) => ({
-            ...note,
-            sourcePaper: paper,
-            uniqueId: getNoteId(paper.id, note.pageNumber, idx)
-          }))
+          .map((note, filterIdx) => {
+            // ✅ CRITICAL FIX: Use full quote length for uniqueness guarantee
+            // Substring(0, 50) can collide if two notes on same page start identically
+            // Using full quote ensures truly unique IDs
+            const fullQuoteHash = String(note.quote || '')
+              .replace(/[|\/\\]/g, '_')
+              .substring(0, 60);
+
+            // Get actual index in paper.notes array for consistency with rankTopNotes
+            const actualIndex = (paper.notes || []).findIndex((n: any) =>
+              n.quote === note.quote && n.pageNumber === note.pageNumber
+            );
+
+            const uniqueId = actualIndex >= 0
+              ? `${paper.id}|p${note.pageNumber}|i${actualIndex}|${fullQuoteHash}`
+              : `${paper.id}|p${note.pageNumber}|i${filterIdx}|${fullQuoteHash}`;
+
+            return {
+              ...note,
+              sourcePaper: paper,
+              sourceId: paper.id,  // ← Track source paper
+              uniqueId
+            };
+          })
       );
+      
+      // ✅ Deduplicate allNotes by uniqueId (safety measure)
+      const seenIds = new Set<string>();
+      const uniqueAllNotes = allNotes.filter(note => {
+        if (seenIds.has(note.uniqueId)) {
+          console.warn('[DeepSearch] Duplicate note in allNotes filtered:', note.uniqueId.substring(0, 50));
+          return false;
+        }
+        seenIds.add(note.uniqueId);
+        return true;
+      });
+      
       // Sort by: status priority first, then relevance score
-      const sorted = allNotes.sort((a, b) => {
+      const sorted = uniqueAllNotes.sort((a, b) => {
         const priorityDiff = getStatusPriority(b.sourcePaper.analysisStatus) - getStatusPriority(a.sourcePaper.analysisStatus);
         if (priorityDiff !== 0) return priorityDiff;
         return (b.relevanceScore || 0) - (a.relevanceScore || 0);
@@ -762,10 +568,27 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
 
       // 🔥 Refined Reordering: Bubble Top 5 insights to the absolute top
       if (topNoteIds && topNoteIds.length > 0) {
-        const topOnes = allNotes
+        const topOnes = uniqueAllNotes
           .filter(n => topNoteIds.includes(n.uniqueId))
           .sort((a, b) => topNoteIds.indexOf(a.uniqueId) - topNoteIds.indexOf(b.uniqueId));
-        const remaining = allNotes.filter(n => !topNoteIds.includes(n.uniqueId));
+        
+        // ✅ If user clicked a specific Top 5 note, move it to position 0
+        if (clickedTopNoteId && topOnes.some(n => n.uniqueId === clickedTopNoteId)) {
+          const clickedNote = topOnes.find(n => n.uniqueId === clickedTopNoteId)!;
+          const otherTopNotes = topOnes.filter(n => n.uniqueId !== clickedTopNoteId);
+          const finalTopOnes = [clickedNote, ...otherTopNotes];
+          const remaining = uniqueAllNotes.filter(n => !topNoteIds.includes(n.uniqueId));
+          
+          console.log('[DeepSearch] Moved clicked note to position 0:', {
+            clickedNoteId: clickedTopNoteId.substring(0, 50),
+            totalTopNotes: finalTopOnes.length,
+            remainingNotes: remaining.length
+          });
+          
+          return [...finalTopOnes, ...remaining];
+        }
+        
+        const remaining = uniqueAllNotes.filter(n => !topNoteIds.includes(n.uniqueId));
         return [...topOnes, ...remaining];
       }
 
@@ -784,7 +607,36 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
         return (b.notes?.length || 0) - (a.notes?.length || 0);
       });
     }
-  }, [filteredPapers, sortBy, localFilters.query]);
+  }, [filteredPapers, sortBy, localFilters.query, topNoteIds, clickedTopNoteId]);
+
+
+
+  // ✅ Handler for Top 5 card clicks - moves clicked note to position 0 and expands it
+  const handleHighlightNote = useCallback((noteId: string) => {
+    // ✅ Clear previous timer if exists
+    if (highlightTimerRef.current) {
+      clearTimeout(highlightTimerRef.current);
+    }
+    
+    // ✅ Track which Top 5 note was clicked (triggers reordering to position 0)
+    setClickedTopNoteId(noteId);
+    
+    // ✅ Set which note is expanded (only one at a time)
+    setExpandedNoteId(noteId);
+    setHighlightedNoteId(noteId);
+    
+    // ✅ Navigate to page 1 (clicked note will be moved to position 0 on page 1)
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    }
+    
+    // ✅ Auto-clear highlight after 3 seconds
+    highlightTimerRef.current = setTimeout(() => {
+      setHighlightedNoteId(null);
+      highlightTimerRef.current = null;
+    }, 3000);
+  }, [currentPage]);
+
 
 
   // ─── Pagination ────────────────────────────────────────────────────────────────
@@ -793,6 +645,44 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     return content.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [content, currentPage]);
+
+  // ✅ Extract Top 5 notes from FULL content (not paginated) for square cards
+  const top5Notes = useMemo(() => {
+    if (topNoteIds.length === 0 || sortBy !== 'most-relevant-notes') {
+      return [];
+    }
+
+    // ✅ Step 1: Deduplicate topNoteIds from backend (in case AI returned duplicates)
+    const uniqueTopNoteIds = Array.from(new Set(topNoteIds)).slice(0, 5);
+
+    // ✅ Step 2: Build unique notes list (prevent duplicate notes with same ID)
+    const seenIds = new Set<string>();
+    const uniqueNotes = (content as any[])
+      .filter(note => {
+        // Must be in top 5 IDs
+        if (!uniqueTopNoteIds.includes(note.uniqueId)) return false;
+        
+        // ✅ CRITICAL: Prevent duplicate notes
+        if (seenIds.has(note.uniqueId)) {
+          console.warn('[Top5Notes] Duplicate note filtered:', note.uniqueId.substring(0, 50));
+          return false;
+        }
+        
+        seenIds.add(note.uniqueId);
+        return true;
+      })
+      .sort((a, b) => uniqueTopNoteIds.indexOf(a.uniqueId) - uniqueTopNoteIds.indexOf(b.uniqueId));
+
+    console.log('[Top5Notes] Built unique list:', {
+      originalTopIds: topNoteIds.length,
+      uniqueIds: uniqueTopNoteIds.length,
+      foundNotes: uniqueNotes.length,
+      duplicatesFiltered: topNoteIds.length - uniqueNotes.length
+    });
+
+    return uniqueNotes;
+  }, [topNoteIds, content, sortBy]);
+
 
   // ─── Selection Actions ────────────────────────────────────────────────────────
   const { selectAllArxivPapers, clearArxivSelection } = useResearch();
@@ -1108,12 +998,17 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
             )}
           </div>
 
-            {/* RIGHT: Filter Toggle + Expand/Collapse */}
+          {/* RIGHT: Filter Toggle + Expand/Collapse */}
           <div className="flex items-center gap-2 z-20">
             {/* Top 5 Insights Button */}
-            {sortBy === 'most-relevant-notes' && selectableNotesTotalCount > 10 && researchPhase === 'completed' && (
+            {sortBy === 'most-relevant-notes' && selectableNotesTotalCount > 10 && researchPhase === 'completed' && !hasRankedOnce && (
               <button
-                onClick={(e) => { e.stopPropagation(); rankTopNotes(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  console.log('[🔴 DeepSearch] Top 5 button CLICKED');
+                  console.log('[🔴 DeepSearch] About to call rankTopNotes()');
+                  rankTopNotes();
+                }}
                 disabled={researchPhase === 'ranking_notes'}
                 className={`flex items-center gap-2 px-3 py-2.5 text-xs font-bold rounded-lg transition-all ${topNoteIds.length > 0
                   ? 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border border-amber-200/50'
@@ -1324,22 +1219,60 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
         )}
 
 
+        {/* ✅ TOP 5 INSIGHTS RANKING STATUS - Show above notes during ranking */}
+        {researchPhase === 'ranking_notes' && (
+          <div className="sticky top-0 z-40 bg-gradient-to-r from-scholar-50 to-scholar-100 dark:from-scholar-900/40 dark:to-scholar-800/40 border-b border-scholar-200 dark:border-scholar-700 rounded-b-xl p-4 mb-6 backdrop-blur-sm">
+            <div className="flex items-center justify-center gap-3">
+              <Loader2 size={18} className="animate-spin text-scholar-600 dark:text-scholar-400" />
+              <span className="text-sm font-semibold text-scholar-700 dark:text-scholar-300">
+                {status || "Analyzing top 5 insights..."}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ TOP 5 SQUARE CARDS - Horizontal row at top */}
+        {sortBy === 'most-relevant-notes' && top5Notes.length > 0 && (
+          <Top5SquareCards
+            topNotes={top5Notes}
+            topNoteIds={topNoteIds}
+            onSelectNote={onSelectNote}
+            onScrollToNote={handleHighlightNote}
+          />
+        )}
+
         {/* Paper results */}
-        <div className={sortBy === 'most-relevant-notes' ? "space-y-4" : "space-y-8"}>
+        <div className={sortBy === 'most-relevant-notes' ? "space-y-4 transition-all duration-300" : "space-y-8 transition-all duration-300"}>
           {sortBy === 'most-relevant-notes' ? (
-            (paginatedContent as any[]).filter((note: any) => (note?.quote || '').trim().length > 0).map((note) => (
-              <ResearchCardNote
-                key={note.uniqueId}
-                id={note.uniqueId}
-                note={note}
-                isSelected={selectedNoteIds.includes(note.uniqueId)}
-                onSelect={() => onSelectNote(note.uniqueId)}
-                sourceTitle={note.sourcePaper.title}
-                sourcePaper={note.sourcePaper}
-                showScore={true}
-                isTop5={topNoteIds.includes(note.uniqueId)}
-              />
-            ))
+            (paginatedContent as any[]).filter((note: any) => (note?.quote || '').trim().length > 0).map((note) => {
+              const isHighlighted = highlightedNoteId === note.uniqueId;
+              const isExpanded = expandedNoteId === note.uniqueId;
+              return (
+                <div
+                  key={note.uniqueId}
+                  data-note-id={note.uniqueId}
+                  className={`transition-all duration-500 ${
+                    isHighlighted ? 'ring-2 ring-scholar-500 rounded-xl' : ''
+                  }`}
+                >
+                  <ResearchCardNote
+                    id={note.uniqueId}
+                    note={note}
+                    isSelected={selectedNoteIds.includes(note.uniqueId)}
+                    onSelect={() => onSelectNote(note.uniqueId)}
+                    sourceTitle={note.sourcePaper.title}
+                    sourcePaper={note.sourcePaper}
+                    showScore={true}
+                    isTop5={topNoteIds.includes(note.uniqueId)}
+                    topNoteIds={topNoteIds}
+                    isExpanded={isExpanded}
+                    onToggleExpand={() => setExpandedNoteId(
+                      expandedNoteId === note.uniqueId ? null : note.uniqueId
+                    )}
+                  />
+                </div>
+              );
+            })
           ) : (
             (paginatedContent as ArxivPaper[]).map((paper) => (
               <PaperCard

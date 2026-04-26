@@ -51,8 +51,15 @@ class ToastService {
   }
 
   dismiss(id: string) {
-    this.dismissCallbacks.get(id)?.();
+    // ✅ FIX: Only call the callback if it exists, then delete it
+    // Prevent recursion by deleting BEFORE calling
+    const callback = this.dismissCallbacks.get(id);
     this.dismissCallbacks.delete(id);
+    
+    // Call after delete to prevent re-entry
+    if (callback) {
+      callback();
+    }
   }
 
   registerDismissCallback(id: string, callback: () => void) {

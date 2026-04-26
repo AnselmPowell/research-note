@@ -100,6 +100,7 @@ interface ResearchContextType {
   searchMetrics: SearchMetrics | null;
   // NEW: Top Note Ranking
   topNoteIds: string[];
+  hasRankedOnce: boolean;  // ✅ NEW: Track if user has ranked
   rankTopNotes: () => Promise<void>;
   // NEW: Accumulated results for "My Results" tab (persistent across searches)
   accumulatedPapers: ArxivPaper[];
@@ -217,6 +218,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         
         if (savedDeepResearch.topNoteIds) {
           setTopNoteIds(savedDeepResearch.topNoteIds);
+          setHasRankedOnce(true);  // ✅ NEW: If topNoteIds exist, user has ranked
         }
 
         // Set research phase to 'completed' so UI knows to display results
@@ -344,6 +346,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // NEW: Search metrics tracking
   const [searchMetrics, setSearchMetrics] = useState<SearchMetrics | null>(null);
   const [topNoteIds, setTopNoteIds] = useState<string[]>([]);
+  const [hasRankedOnce, setHasRankedOnce] = useState<boolean>(false);
 
   const [insightQuestions, setInsightQuestions] = useState<string[]>([]);
   const [selectedInsightQuestions, setSelectedInsightQuestions] = useState<string[]>([]);
@@ -393,6 +396,26 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [insightPromiseResolver]);
 
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // CRITICAL DATA FLOW: Research Purpose vs Questions
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 
+  // ResearchPurposeModal → Saves purpose to context and localStorage
+  //   ├─ Purpose is ONLY used for "Top 5 Insights" LLM (rankTopNotes)
+  //   ├─ Purpose is NOT sent to /extract-notes endpoint
+  //   └─ /extract-notes receives ONLY the user's questions (no purpose metadata)
+  //
+  // DeepResearchFAB → Collects additional/extra questions from user
+  //   ├─ These questions ARE sent to /extract-notes endpoint
+  //   └─ Used alongside the original search terms for note extraction
+  //
+  // When submitResearchPurpose is called:
+  //   - Empty string "" means user skipped or didn't submit new text
+  //   - Non-empty string means user explicitly entered/modified the purpose
+  //   - The purpose is saved to localStorage for future sessions
+  //   - Pipeline continues without blocking (async, non-blocking resolution)
+  // ═══════════════════════════════════════════════════════════════════════════════
+
   // NEW: Research Purpose gating
   const [researchPurpose, setResearchPurpose] = useState<string>('');
   const researchPurposeRef = useRef<string>('');
@@ -404,9 +427,21 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [researchPurpose]);
 
   const submitResearchPurpose = useCallback((purpose: string) => {
+    // CRITICAL: This is ONLY used for "Top 5 Insights" LLM ranking
+    // It is NOT sent to /extract-notes endpoint
+    // The /extract-notes endpoint receives ONLY the selected extra questions
+    
+    // If purpose string is empty, user skipped or didn't submit new text
+    // In either case, update the state and continue
     setResearchPurpose(purpose);
-    researchPurposeRef.current = purpose; // SYNCHRONOUS UPDATE to avoid race conditions
-    localStorageService.saveResearchPurpose(purpose); // Persist
+    researchPurposeRef.current = purpose;
+    
+    // Only persist if there's actual content (avoid overwriting with empty)
+    if (purpose.trim()) {
+      localStorageService.saveResearchPurpose(purpose); // Persist
+    }
+    
+    // Continue the research pipeline (non-blocking)
     if (purposePromiseResolver) {
       purposePromiseResolver();
       setPurposePromiseResolver(null);
@@ -414,6 +449,11 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [purposePromiseResolver]);
 
   const skipResearchPurpose = useCallback(() => {
+    // CRITICAL: Skip does NOT clear the purpose
+    // It preserves the existing purpose from localStorage
+    // This allows the "Top 5 Insights" LLM to still use it
+    // We simply move forward without submitting new data
+    
     if (purposePromiseResolver) {
       purposePromiseResolver();
       setPurposePromiseResolver(null);
@@ -900,6 +940,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setDeepResearchResults([]);
     setSelectedArxivIds(new Set());
     setProcessedPdfs([]); // Clear processed PDFs
+    setTopNoteIds([]);        // ✅ NEW: Clear rankings
+    setHasRankedOnce(false);  // ✅ NEW: Reset flag
     setShowUploadedTab(false); // Reset tab signal
     setUploadedPaperStatuses({}); // Clear uploaded paper statuses
     setShouldOpenPdfViewer(false); // Reset navigation intent
@@ -934,6 +976,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setShouldOpenPdfViewer(false);
     setNavigationHandled(false);
     setIsDeepSearchBarExpanded(false); // Reset deep search bar expansion
+    setTopNoteIds([]);        // ✅ NEW: Clear rankings
+    setHasRankedOnce(false);  // ✅ NEW: Reset flag
 
     // Clear persisted search results
     localStorageService.clearWebSearchResults();
@@ -1041,9 +1085,24 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (signal?.aborted) throw new Error("Aborted");
         const relevantPages = await findRelevantPages([{ uri: paper.pdfUri, pages: extracted.pages }], userQuestions.join("\n"), keywords);
         if (relevantPages.length > 0) {
+          // ✅ CRITICAL FIX: Stream notes to BOTH filteredCandidates AND deepResearchResults
           const onStreamNotes = (newNotes: DeepResearchNote[]) => {
+            console.log(`[🔴 analyzeArxivPapers] 📥 onStreamNotes called with ${newNotes.length} notes from paper ${paper.id}`);
+            
+            // Update filteredCandidates (for paper card display)
             setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, notes: [...(p.notes || []), ...newNotes] } : p));
             syncPaperStatusToAccumulated(paper.id, 'extracting', newNotes);  // NEW: Sync notes AND status
+            
+            // ✅ CRITICAL FIX: Also add notes to deepResearchResults (for ranking)
+            setDeepResearchResults(prev => {
+              const notesWithSourceId = newNotes.map(note => ({
+                ...note,
+                sourceId: note.sourceId || paper.id // Use paper.id as fallback
+              }));
+              const updated = [...prev, ...notesWithSourceId];
+              console.log(`[🔴 analyzeArxivPapers] ✅ deepResearchResults updated: ${prev.length} → ${updated.length} notes`);
+              return updated;
+            });
           };
           const allNotes = await extractNotesFromPages(
             relevantPages,
@@ -1057,16 +1116,20 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: 'completed', notes: allNotes } : p));
           syncPaperStatusToAccumulated(paper.id, 'completed', allNotes);  // NEW: Final sync
         } else {
+          console.log(`[🔴 analyzeArxivPapers] ⚠️  No relevant pages found for paper ${paper.id}`);
           setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: 'completed', notes: [] } : p));
           syncPaperStatusToAccumulated(paper.id, 'completed', []);  // NEW: Final sync
         }
       } catch (error: any) {
+        console.error(`[🔴 analyzeArxivPapers] ❌ Error processing paper ${paper.id}:`, error.message);
         const finalStatus = (error.message === "Aborted" || signal?.aborted) ? 'stopped' : 'failed';
         setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: finalStatus } : p));
         syncPaperStatusToAccumulated(paper.id, finalStatus);  // NEW: Sync failure status
       }
     };
+    console.log(`[🔴 analyzeArxivPapers] Starting analysis of ${papers.length} papers`);
     await asyncPool(PAPER_CONCURRENCY, papers, processPaper);
+    console.log(`[🔴 analyzeArxivPapers] ✅ Analysis complete`);
   }, [syncPaperStatusToAccumulated]);
 
   const analyzeLoadedPdfs = useCallback(async (pdfs: LoadedPdf[], questions: string, signal?: AbortSignal) => {
@@ -1104,13 +1167,21 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         console.log(`[CONTEXT-STATE-UPDATE] 🔄 Calling setDeepResearchResults...`);
         setDeepResearchResults(prev => {
-          const updated = [...prev, ...newNotes];
+          // ✅ CRITICAL FIX: Set sourceId to note.pdfUri as fallback
+          // This will be matched in rankTopNotes using filteredCandidates OR accumulatedPapers
+          const notesWithSourceId = newNotes.map(note => ({
+            ...note,
+            sourceId: note.sourceId || note.pdfUri // sourceId defaults to pdfUri for lookup
+          }));
+          
+          const updated = [...prev, ...notesWithSourceId];
           console.log(`[CONTEXT-STATE-UPDATE] ✅ deepResearchResults updated:`, {
             previousCount: prev.length,
-            addedCount: newNotes.length,
+            addedCount: notesWithSourceId.length,
             newTotalCount: updated.length,
             allPdfUris: updated.map(n => n.pdfUri),
-            allPageNumbers: updated.map(n => n.pageNumber)
+            allPageNumbers: updated.map(n => n.pageNumber),
+            allSourceIds: updated.map(n => n.sourceId)
           });
           return updated;
         });
@@ -1415,6 +1486,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setHasSubmittedInsights(false); // RESET
     setSearchState(prev => ({ ...prev, query: query.topics.join(', ') }));
     setTopNoteIds([]); // RESET Top 5 ranking
+    setHasRankedOnce(false);  // ✅ NEW: Reset flag for new search
 
     try {
       // CASE 1: URLs only (no topics) = Search only user PDFs
@@ -1485,22 +1557,22 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (signal.aborted) return;
       }
 
-      // NEW: CRITICAL UX IMPROVEMENT - 1 second pause before asking for purpose
-      setResearchPhase('searching');
-      setGatheringStatus("Almost ready...");
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // FIX: Do NOT block the pipeline for research purpose
+      // The modal will appear as a non-blocking UI overlay
+      // Pipeline continues immediately - purpose is optional enhancement
+      
+      // Show the purpose modal as non-blocking UI (only if insights were shown)
+      if (structuredTerms.insight_questions?.length > 0 && !signal.aborted) {
+        setResearchPhase('awaiting_purpose');
+        setGatheringStatus("Understanding your goal...");
+        // ✅ CRITICAL FIX: Do NOT await here - let pipeline continue
+        // The promise resolver is set but NOT awaited - user can interact in parallel
+      }
+
       if (signal.aborted) return;
 
-      // NEW: Gating for Research Purpose
-      setResearchPhase('awaiting_purpose');
-      setGatheringStatus("Understanding your goal...");
-      await new Promise<void>((resolve) => {
-        setPurposePromiseResolver(() => resolve);
-      });
-
-      if (signal.aborted) return;
-
-      // NOW SYNCHRONIZE WITH SEARCH RESULTS
+      // ✅ CRITICAL: Continue immediately to search results
+      // Do NOT wait for user input - let filtering/extraction proceed in parallel
       const searchResult = await searchPromise;
       endPhaseTimer('searching');
 
@@ -1656,6 +1728,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setArxivCandidates([]);
     setFilteredCandidates([]);
     setDeepResearchResults([]);
+    setTopNoteIds([]);        // ✅ NEW: Clear rankings
+    setHasRankedOnce(false);  // ✅ NEW: Reset flag
     setResearchPhase('idle');
     setGatheringStatus('');
     console.log('[ResearchContext] Deep research results cleared');
@@ -1744,57 +1818,215 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addInsightQuestion,
     resolveInsights,
     topNoteIds,
+    hasRankedOnce,  // ✅ NEW: Export flag
     submitResearchPurpose,
     skipResearchPurpose,
     rankTopNotes: async () => {
-      if (deepResearchResults.length === 0) return;
+      console.log('[🔴 rankTopNotes] BUTTON CLICKED - Function called');
+      
+      // ✅ CRITICAL FIX: Get notes from filteredCandidates directly (since that's where they actually are)
+      const notesFromFilteredPapers = filteredCandidates.flatMap(paper => 
+        (paper.notes || []).map(note => ({
+          ...note,
+          sourceId: paper.id,
+          sourcePaper: paper
+        }))
+      );
+      
+      console.log('[🔴 rankTopNotes] 📊 Collected notes from filteredCandidates:', {
+        papersCount: filteredCandidates.length,
+        totalNotesCollected: notesFromFilteredPapers.length,
+        notesByPaper: filteredCandidates.map(p => ({ paperId: p.id, noteCount: p.notes?.length || 0 }))
+      });
+
+      if (notesFromFilteredPapers.length === 0) {
+        console.log('[🔴 rankTopNotes] ❌ ABORTED: No notes found in filteredCandidates');
+        return;
+      }
+      
+      console.log('[🔴 rankTopNotes] ✅ Starting ranking process with', notesFromFilteredPapers.length, 'total notes');
       
       const previousPhase = researchPhase;
       setResearchPhase('ranking_notes');
       setGatheringStatus("Identifying top 5 insights...");
       
+      console.log('[🔴 rankTopNotes] Phase set to "ranking_notes", previous phase was:', previousPhase);
+      
       try {
-        // Collect all available notes with their calculated uniqueIds
-        // We reuse the same logic as DeepSearch.tsx for consistency
-        const getNoteId = (paperId: string, page: number, index: number) => `${paperId}-p${page}-i${index}`;
-        
-        const notesToRank: { uniqueId: string; quote: string }[] = [];
-        filteredCandidates.forEach(paper => {
-          (paper.notes || []).forEach((note, idx) => {
-             if ((note?.quote || '').trim().length > 0) {
-               notesToRank.push({
-                 uniqueId: getNoteId(paper.id, note.pageNumber, idx),
-                 quote: note.quote
-               });
-             }
-          });
+        // ✅ Validate notes have quotes before ranking
+        const validNotes = notesFromFilteredPapers.filter(note => {
+          const hasQuote = (note?.quote || '').trim().length > 0;
+          if (!hasQuote) {
+            console.warn('[🔴 rankTopNotes] ⚠️  Note missing quote:', {
+              pageNumber: note.pageNumber,
+              pdfUri: note.pdfUri,
+              relatedQuestion: note.relatedQuestion
+            });
+          }
+          return hasQuote;
+        });
+
+        console.log('[🔴 rankTopNotes] ✅ Validation complete:', {
+          totalNotes: notesFromFilteredPapers.length,
+          validNotesWithQuotes: validNotes.length,
+          invalidNotes: notesFromFilteredPapers.length - validNotes.length
+        });
+
+        if (validNotes.length === 0) {
+          console.log('[🔴 rankTopNotes] ❌ ABORTED: No valid notes with quotes');
+          setResearchPhase(previousPhase);
+          return;
+        }
+
+        // ✅ Build notes with matching IDs and sourceId
+        const notesToRank = validNotes
+          .map((note, idx) => {
+            // Get source paper to build correct uniqueId
+            // CRITICAL FIX: Match by BOTH id AND pdfUri to handle ArXiv and uploaded PDFs
+            let sourcePaper = filteredCandidates.find(p => p.id === note.sourceId);
+            if (!sourcePaper) {
+              sourcePaper = accumulatedPapers.find(p => p.id === note.sourceId || p.pdfUri === note.sourceId);
+            }
+            
+            if (!sourcePaper) {
+              console.warn('[🔴 rankTopNotes] ❌ Could not find source paper:', {
+                sourceId: note.sourceId,
+                pdfUri: note.pdfUri
+              });
+              return null;
+            }
+
+            // Find the note's position in its paper's notes array
+            const paperNotes = (sourcePaper as any).notes || [];
+            const noteIndex = paperNotes.findIndex((n: any) => 
+              n.quote === note.quote && n.pageNumber === note.pageNumber
+            );
+
+            if (noteIndex === -1) {
+              console.warn('[🔴 rankTopNotes] ❌ Note not found in paper:', {
+                paperId: sourcePaper.id,
+                quote: note.quote.substring(0, 30)
+              });
+              return null;
+            }
+
+            // Generate SAME ID format as display uses
+            // ✅ CRITICAL FIX: Use substring(0, 60) to match validation code below
+            const quoteHash = String(note.quote).substring(0, 60).replace(/[|\/\\]/g, '_');
+            const uniqueId = `${sourcePaper.id}|p${note.pageNumber}|i${noteIndex}|${quoteHash}`;
+
+            console.log('[🔴 rankTopNotes] Built note ID:', {
+              noteIdx: idx,
+              paperId: sourcePaper.id,
+              noteIndex,
+              quoteLength: note.quote.length,
+              hashLength: quoteHash.length,
+              uniqueId: uniqueId.substring(0, 80)
+            });
+
+            return {
+              uniqueId,
+              quote: note.quote
+            };
+          })
+          .filter(Boolean);
+
+        console.log('[🔴 rankTopNotes] 📊 Built notes for ranking:', {
+          totalValidNotes: validNotes.length,
+          successfullyBuilt: notesToRank.length,
+          failed: validNotes.length - notesToRank.length
         });
 
         if (notesToRank.length === 0) {
-           toastService.info("No insights found to rank");
-           setResearchPhase(previousPhase);
-           return;
+          console.log('[🔴 rankTopNotes] ❌ ABORTED: No notes could be built');
+          toastService.error("No notes could be ranked (format mismatch)");
+          setResearchPhase(previousPhase);
+          return;
         }
 
         const queries = [...arxivKeywords, ...selectedInsightQuestions];
+        
+        console.log('[🔴 rankTopNotes] 🌐 Calling backend API:', {
+          notesToRankCount: notesToRank.length,
+          queriesCount: queries.length,
+          hasPurpose: !!researchPurpose,
+          purposeLength: researchPurpose?.length || 0,
+          sampleNoteIds: notesToRank.slice(0, 2).map(n => n.uniqueId.substring(0, 50))
+        });
+
         const result = await rankNotesAI(notesToRank, queries, researchPurpose);
         
-        if (result && Array.isArray(result)) {
-           setTopNoteIds(result);
-           // Persist
-           const current = localStorageService.getDeepResearchResults();
-           if (current) {
-             localStorageService.saveDeepResearchResults({
-               ...current,
-               topNoteIds: result
-             });
-           }
-           toastService.success("Top 5 insights identified");
+        console.log('[🔴 rankTopNotes] 📨 Backend API Response:', {
+          success: !!result,
+          isArray: Array.isArray(result),
+          resultLength: result?.length || 0,
+          resultType: typeof result,
+          firstThreeIds: Array.isArray(result) ? result.slice(0, 3) : 'N/A'
+        });
+        
+        if (result && Array.isArray(result) && result.length > 0) {
+          console.log('[🔴 rankTopNotes] ✅ Result is valid array with', result.length, 'items');
+          
+          // ✅ Validate returned IDs match our format
+          const displayIds = validNotes.map((note, idx) => {
+            const sourcePaper = filteredCandidates.find(p => p.id === note.sourceId) || 
+                               accumulatedPapers.find(p => p.id === note.sourceId);
+            if (!sourcePaper) {
+              console.warn('[🔴 rankTopNotes] ❌ Display validation: Could not find paper');
+              return null;
+            }
+            const paperNotes = (sourcePaper as any).notes || [];
+            const noteIndex = paperNotes.findIndex((n: any) => 
+              n.quote === note.quote && n.pageNumber === note.pageNumber
+            );
+            if (noteIndex === -1) {
+              console.warn('[🔴 rankTopNotes] ❌ Display validation: Note not found in paper');
+              return null;
+            }
+            const quoteHash = String(note.quote).substring(0, 60).replace(/[|\/\\]/g, '_');
+            return `${sourcePaper.id}|p${note.pageNumber}|i${noteIndex}|${quoteHash}`;
+          }).filter(Boolean);
+
+          const matchCount = result.filter(id => displayIds.includes(id)).length;
+          
+          console.log('[🔴 rankTopNotes] 🔍 Validation Results:', {
+            returnedIds: result.length,
+            displayIdsBuilt: displayIds.length,
+            matchedIds: matchCount,
+            matchPercentage: displayIds.length > 0 ? ((matchCount / displayIds.length) * 100).toFixed(0) + '%' : 'N/A',
+            returnedIdsPreview: result.slice(0, 2),
+            displayIdsPreview: displayIds.slice(0, 2)
+          });
+
+          console.log('[🔴 rankTopNotes] ✅ Setting topNoteIds state with', result.length, 'IDs');
+          setTopNoteIds(result);
+          setHasRankedOnce(true);  // ✅ NEW: Mark as ranked
+          
+          const current = localStorageService.getDeepResearchResults();
+          if (current) {
+            console.log('[🔴 rankTopNotes] 💾 Saving to localStorage');
+            localStorageService.saveDeepResearchResults({
+              ...current,
+              topNoteIds: result,
+              hasRankedOnce: true  // ✅ NEW: Save to localStorage
+            });
+          }
+          console.log('[🔴 rankTopNotes] ✅ SUCCESS: Ranking complete');
+        } else {
+          console.warn('[🔴 rankTopNotes] ❌ API returned invalid response:', {
+            result,
+            isArray: Array.isArray(result),
+            length: result?.length
+          });
         }
       } catch (error) {
-        console.error("[ResearchContext] ❌ Ranking failed:", error);
-        toastService.error("Ranking failed - please try again");
+        console.error("[🔴 rankTopNotes] ❌ CRITICAL ERROR:", {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorType: error instanceof Error ? error.constructor.name : typeof error,
+          errorStack: error instanceof Error ? error.stack : undefined
+        });
       } finally {
+        console.log('[🔴 rankTopNotes] 🏁 Finally block: Restoring phase to:', previousPhase);
         setResearchPhase(previousPhase);
       }
     }
@@ -1815,7 +2047,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addToPaperResults, clearPaperResults, removePaperFromResults, resetAccumulatedDataForMigration,
     insightQuestions, selectedInsightQuestions, hasSubmittedInsights, toggleInsightQuestion,
     updateInsightQuestion, addInsightQuestion, resolveInsights,
-    topNoteIds, researchPurpose, arxivKeywords, submitResearchPurpose, skipResearchPurpose
+    topNoteIds, hasRankedOnce, researchPurpose, arxivKeywords, submitResearchPurpose, skipResearchPurpose
   ]);
 
   return (

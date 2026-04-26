@@ -80,6 +80,88 @@ async function callOpenAI(prompt) {
   }
 }
 
+/**
+ * Call OpenAI with proper system/user role separation
+ * Sends systemPrompt as system role and userPrompt as user role
+ */
+async function callOpenAIWithSystem(systemPrompt, userPrompt) {
+  if (!config.openaiApiKey) {
+    throw new Error('OpenAI API key not configured');
+  }
+
+  try {
+    console.log('[callOpenAIWithSystem] 🔄 Preparing request...');
+    console.log('[callOpenAIWithSystem] 📋 systemPrompt length:', systemPrompt.length);
+    console.log('[callOpenAIWithSystem] 📋 userPrompt length:', userPrompt.length);
+
+    const requestBody = {
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      response_format: { type: 'json_object' }
+    };
+
+    console.log('[callOpenAIWithSystem] 📤 Request body structure:', {
+      model: requestBody.model,
+      messageCount: requestBody.messages.length,
+      systemLength: requestBody.messages[0].content.length,
+      userLength: requestBody.messages[1].content.length,
+      responseFormat: requestBody.response_format.type
+    });
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.openaiApiKey}`
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    console.log('[callOpenAIWithSystem] 📥 Response status:', response.status);
+    console.log('[callOpenAIWithSystem] 📥 Response headers:', {
+      contentType: response.headers.get('content-type'),
+      xRateLimitRemaining: response.headers.get('x-ratelimit-remaining-requests')
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      console.error('[callOpenAIWithSystem] ❌ OpenAI API error:', { status: response.status, error: err });
+      throw new Error(`OpenAI Error: ${response.status} - ${err}`);
+    }
+
+    const data = await response.json();
+    
+    console.log('[callOpenAIWithSystem] ✅ Received JSON response');
+    console.log('[callOpenAIWithSystem] 📊 Response structure:', {
+      hasChoices: !!data.choices,
+      choicesLength: data.choices?.length,
+      firstChoiceKeys: data.choices?.[0] ? Object.keys(data.choices[0]) : 'N/A',
+      messageContent: data.choices?.[0]?.message?.content?.substring(0, 300)
+    });
+
+    const messageContent = data.choices[0]?.message?.content;
+    console.log('[callOpenAIWithSystem] 🔍 Message content type:', typeof messageContent);
+    console.log('[callOpenAIWithSystem] 🔍 Message content length:', messageContent?.length);
+    console.log('[callOpenAIWithSystem] 🔍 Message content first 500 chars:', messageContent?.substring(0, 500));
+
+    const parsed = JSON.parse(messageContent || '{}');
+    
+    console.log('[callOpenAIWithSystem] ✅ Successfully parsed JSON');
+    console.log('[callOpenAIWithSystem] 📦 Parsed object type:', typeof parsed);
+    console.log('[callOpenAIWithSystem] 📦 Parsed object keys:', Object.keys(parsed || {}));
+    console.log('[callOpenAIWithSystem] 📦 Parsed object:', JSON.stringify(parsed).substring(0, 500));
+
+    return parsed;
+  } catch (error) {
+    console.error('[callOpenAIWithSystem] ❌ Error in OpenAI call:', error.message);
+    console.error('[callOpenAIWithSystem] ❌ Error stack:', error.stack);
+    throw error;
+  }
+}
+
 async function callOpenAIEmbedding(input) {
   if (!config.openaiApiKey) {
     throw new Error('OpenAI API key not configured');
@@ -95,8 +177,9 @@ async function callOpenAIEmbedding(input) {
       },
       body: JSON.stringify({
         model: 'text-embedding-3-small',
-        input: input,
-        dimensions: 768
+        input: input
+        // ✅ FIX: Removed dimensions: 768 - use OpenAI default (1536)
+        // Dimension mismatch was causing NaN in cosine similarity
       })
     });
 
@@ -595,43 +678,27 @@ async function getEmbedding(text, taskType) {
   const cacheKey = taskType + ':' + text.trim();
   if (cache.has(cacheKey)) return cache.get(cacheKey);
 
-  // TIER 1: Gemini Embedding
+  // TIER 1: Gemini Embedding (NO RETRY - fail fast)
   try {
     if (!genAI) throw new Error('Gemini not initialized');
 
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-embedding-2-preview' });
-        const result = await model.embedContent({
-          content: { parts: [{ text }] },
-          taskType
-        });
+    const model = genAI.getGenerativeModel({ model: 'gemini-embedding-2-preview' });
+    const result = await model.embedContent({
+      content: { parts: [{ text }] },
+      taskType
+    });
 
-        const vec = result.embedding?.values || [];
-        if (vec.length > 0) {
-          cache.set(cacheKey, vec);
-          return vec;
-        }
-        throw new Error('Empty vector returned');
-      } catch (error) {
-        console.error('[getEmbedding] Error on attempt', attempt + 1, ':', {
-          status: error?.status,
-          message: error?.message,
-          model: 'gemini-embedding-2-preview'
-        });
-
-        if (error?.status === 429 && attempt < 2) {
-          const backoff = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
-          await delay(backoff);
-          continue;
-        }
-        if (attempt === 2) {
-          throw new Error('All Gemini attempts failed');
-        }
-      }
+    const vec = result.embedding?.values || [];
+    if (vec.length > 0) {
+      cache.set(cacheKey, vec);
+      return vec;
     }
+    throw new Error('Empty vector returned');
   } catch (geminiError) {
-    console.warn('[getEmbedding] Tier 1 (Gemini) failed:', geminiError.message);
+    console.warn('[getEmbedding] Tier 1 (Gemini) failed - switching to OpenAI:', {
+      error: geminiError.message,
+      status: geminiError?.status
+    });
 
     // TIER 2: OpenAI Fallback
     try {
@@ -687,7 +754,7 @@ async function getBatchEmbeddings(texts, taskType) {
   }
 
   await asyncPool(3, batches, async (batch) => {
-    // TIER 1: Gemini Batch Embedding
+    // TIER 1: Gemini Batch Embedding (NO RETRY - fail fast)
     try {
       if (!config.geminiApiKey) throw new Error('Gemini API key missing');
 
@@ -697,82 +764,118 @@ async function getBatchEmbeddings(texts, taskType) {
         taskType
       }));
 
-      for (let attempt = 0; attempt < 4; attempt++) {
-        try {
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2-preview:batchEmbedContents?key=${config.geminiApiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ requests })
-            }
-          );
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('[getBatchEmbeddings] API error:', {
-              status: response.status,
-              statusText: response.statusText,
-              error: errorText,
-              model: 'gemini-embedding-2-preview',
-              attempt: attempt + 1
-            });
-
-            if (response.status === 429 || response.status === 503) {
-              throw new Error('Rate Limit');
-            }
-            throw new Error('HTTP ' + response.status + ': ' + errorText);
-          }
-
-          const data = await response.json();
-
-          if (!data.embeddings || !Array.isArray(data.embeddings)) {
-            throw new Error('Invalid embeddings response');
-          }
-
-          const embeddings = data.embeddings.map(e => e.values || []);
-
-          embeddings.forEach((emb, i) => {
-            const originalIndex = batch.indices[i];
-            const text = batch.texts[i];
-            cache.set(taskType + ':' + text.trim(), emb);
-            results[originalIndex] = emb;
-          });
-
-          return; // Success, exit attempt loop & batch process
-        } catch (err) {
-          if (attempt < 3) {
-            const backoff = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
-            await delay(backoff);
-            continue;
-          }
-          throw new Error('All Gemini attempts failed for batch');
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2-preview:batchEmbedContents?key=${config.geminiApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requests })
         }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[getBatchEmbeddings] Tier 1 (Gemini) API error:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText.substring(0, 200),
+          model: 'gemini-embedding-2-preview'
+        });
+        throw new Error('HTTP ' + response.status + ': ' + errorText.substring(0, 100));
       }
+
+      const data = await response.json();
+
+      if (!data.embeddings || !Array.isArray(data.embeddings)) {
+        throw new Error('Invalid embeddings response');
+      }
+
+      const embeddings = data.embeddings.map(e => e.values || []);
+
+      embeddings.forEach((emb, i) => {
+        const originalIndex = batch.indices[i];
+        const text = batch.texts[i];
+        cache.set(taskType + ':' + text.trim(), emb);
+        results[originalIndex] = emb;
+      });
+
+      return; // Success, exit batch process
     } catch (geminiError) {
-      console.warn('[getBatchEmbeddings] Tier 1 (Gemini) failed:', geminiError.message);
+      console.warn('[getBatchEmbeddings] Tier 1 (Gemini) failed - switching to OpenAI:', {
+        error: geminiError.message,
+        status: geminiError?.status
+      });
 
       // TIER 2: OpenAI Fallback
       try {
         console.log('[getBatchEmbeddings] Tier 2: Attempting OpenAI fallback...');
         const data = await callOpenAIEmbedding(batch.texts);
         
-        if (data && data.data && Array.isArray(data.data)) {
-          // Sort the returned data by 'index' to ensure matching alignment
-          const sortedData = data.data.sort((a, b) => a.index - b.index);
+        // ✅ VALIDATION: Check response structure
+        if (!data || !data.data || !Array.isArray(data.data)) {
+          throw new Error('Invalid response structure from OpenAI: missing data array');
+        }
+
+        if (data.data.length === 0) {
+          throw new Error('OpenAI returned empty embeddings array');
+        }
+
+        // ✅ VALIDATION: Sort the returned data by 'index' to ensure matching alignment
+        const sortedData = data.data.sort((a, b) => a.index - b.index);
+        
+        console.log('[getBatchEmbeddings] 📊 Received embeddings:', {
+          count: sortedData.length,
+          expectedCount: batch.texts.length,
+          firstItemKeys: Object.keys(sortedData[0] || {})
+        });
+
+        let processedCount = 0;
+        let skippedCount = 0;
+
+        sortedData.forEach((item, i) => {
+          // ✅ VALIDATION: Check embedding exists and has values
+          if (!item.embedding || !Array.isArray(item.embedding) || item.embedding.length === 0) {
+            console.warn(`[getBatchEmbeddings] ⚠️  Embedding missing at index ${i}:`, {
+              hasEmbedding: !!item.embedding,
+              isArray: Array.isArray(item.embedding),
+              length: item.embedding?.length || 0
+            });
+            skippedCount++;
+            return;
+          }
+
+          // ✅ VALIDATION: Check for NaN values in embedding
+          const hasNaN = item.embedding.some(val => isNaN(val));
+          if (hasNaN) {
+            console.warn(`[getBatchEmbeddings] ⚠️  NaN detected in embedding at index ${i}`);
+            skippedCount++;
+            return;
+          }
+
+          const emb = item.embedding;
+          const originalIndex = batch.indices[i];
+          const text = batch.texts[i];
           
-          sortedData.forEach((item, i) => {
-            const emb = item.embedding || [];
-            const originalIndex = batch.indices[i];
-            const text = batch.texts[i];
-            cache.set(taskType + ':' + text.trim(), emb);
-            results[originalIndex] = emb;
-          });
-        } else {
-          throw new Error('Invalid response structure from OpenAI');
+          cache.set(taskType + ':' + text.trim(), emb);
+          results[originalIndex] = emb;
+          processedCount++;
+        });
+
+        console.log('[getBatchEmbeddings] 📏 Embeddings processing complete:', {
+          processed: processedCount,
+          skipped: skippedCount,
+          total: sortedData.length,
+          dimensions: sortedData[0]?.embedding?.length || 'unknown'
+        });
+
+        if (processedCount === 0) {
+          throw new Error('No valid embeddings were processed from OpenAI response');
         }
       } catch (gptError) {
-        console.error('[getBatchEmbeddings] Tier 2 (OpenAI) failed:', gptError.message);
+        console.error('[getBatchEmbeddings] ❌ Tier 2 (OpenAI) failed:', {
+          message: gptError.message,
+          error: gptError.toString()
+        });
       }
     }
   });
@@ -781,11 +884,44 @@ async function getBatchEmbeddings(texts, taskType) {
 }
 
 function cosineSimilarity(vecA, vecB) {
+  // ✅ FIX: Validate input vectors
+  if (!vecA || !vecB || vecA.length === 0 || vecB.length === 0) {
+    console.warn('[cosineSimilarity] ⚠️  Invalid input vectors:', {
+      vecAExists: !!vecA,
+      vecBExists: !!vecB,
+      vecALength: vecA?.length || 0,
+      vecBLength: vecB?.length || 0
+    });
+    return 0;
+  }
+
+  // ✅ FIX: Check for NaN values in vectors
+  if (vecA.some(val => isNaN(val)) || vecB.some(val => isNaN(val))) {
+    console.warn('[cosineSimilarity] ⚠️  NaN detected in input vectors');
+    return 0;
+  }
+
   const dotProduct = vecA.reduce((acc, val, i) => acc + val * vecB[i], 0);
   const magA = Math.sqrt(vecA.reduce((acc, val) => acc + val * val, 0));
   const magB = Math.sqrt(vecB.reduce((acc, val) => acc + val * val, 0));
+  
   if (magA === 0 || magB === 0) return 0;
-  return dotProduct / (magA * magB);
+  
+  const result = dotProduct / (magA * magB);
+  
+  // ✅ FIX: Detect and log NaN in result
+  if (isNaN(result)) {
+    console.warn('[cosineSimilarity] ⚠️  Result is NaN:', {
+      dotProduct,
+      magA,
+      magB,
+      vecALength: vecA.length,
+      vecBLength: vecB.length
+    });
+    return 0;
+  }
+
+  return result;
 }
 
 
@@ -1113,24 +1249,70 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
     console.log('   📋 Paper texts prepared, count:', paperTexts.length);
 
     const paperEmbeddings = await getBatchEmbeddings(paperTexts, 'RETRIEVAL_DOCUMENT');
-    console.log('   ✅ Batch embeddings complete, got', paperEmbeddings.length, 'embeddings');
-
+    
     const nullEmbeddingCount = paperEmbeddings.filter(e => !e || e.length === 0).length;
     console.log('   ⚠️  Papers with missing embeddings:', nullEmbeddingCount, '/', paperEmbeddings.length);
 
+    // ✅ CRITICAL FIX: Normalize embedding dimensions
+    // Problem: Gemini embeddings (3072) vs OpenAI embeddings (1536) cause NaN in cosine
+    // Solution: Truncate/pad all embeddings to match target vector length
+    const normalizedPaperEmbeddings = paperEmbeddings.map(emb => {
+      if (!emb || emb.length === 0) return emb;
+      
+      // If paper embedding is shorter, pad with zeros
+      if (emb.length < targetVector.length) {
+        const padded = [...emb, ...new Array(targetVector.length - emb.length).fill(0)];
+        return padded;
+      }
+      
+      // If paper embedding is longer, truncate to match target
+      if (emb.length > targetVector.length) {
+        const truncated = emb.slice(0, targetVector.length);
+        return truncated;
+      }
+      
+      // Already matching
+      return emb;
+    });
+
     // Calculate cosine similarity scores
     const scoredPapers = papers.map((paper, index) => {
-      const paperVector = paperEmbeddings[index];
+      const paperVector = normalizedPaperEmbeddings[index];
       let score = 0;
+      
+      // ✅ FIX: Validate vector before calculating similarity
       if (paperVector && paperVector.length > 0) {
-        score = cosineSimilarity(targetVector, paperVector);
+        // Check for NaN in paperVector
+        if (paperVector.some(val => isNaN(val))) {
+          console.warn(`[filterRelevantPapers] ⚠️  NaN detected in paper vector at index ${index}: ${paper.title.substring(0, 40)}`);
+          score = 0;
+        } else {
+          score = cosineSimilarity(targetVector, paperVector);
+          // Double-check result for NaN
+          if (isNaN(score)) {
+            console.warn(`[filterRelevantPapers] ⚠️  NaN result from cosine similarity at index ${index}: ${paper.title.substring(0, 40)}`);
+            score = 0;
+          }
+        }
       }
+      
       return Object.assign({}, paper, { relevanceScore: score });
+    });
+
+    // ✅ FIX: Enhanced logging with NaN detection
+    const nanScores = scoredPapers.filter(p => isNaN(p.relevanceScore)).length;
+    const zeroScores = scoredPapers.filter(p => p.relevanceScore === 0).length;
+    
+    console.log('   📊 Scoring complete:', {
+      total: scoredPapers.length,
+      nanScores: nanScores,
+      zeroScores: zeroScores,
+      validScores: scoredPapers.length - nanScores - zeroScores
     });
 
     console.log('   📊 Sample scores:', scoredPapers.slice(0, 3).map(p => ({
       title: p.title.substring(0, 40) + '...',
-      score: p.relevanceScore.toFixed(3)
+      score: isNaN(p.relevanceScore) ? 'NaN' : p.relevanceScore.toFixed(3)
     })));
 
     // Filter by threshold and sort by score
@@ -1303,6 +1485,35 @@ async function extractNotesFromPages(relevantPages, userQuestions, paperTitle, p
   console.log('   🔍 First page has pdfUri:', !!relevantPages?.[0]?.pdfUri);
   console.log('   📍 First page pdfUri:', relevantPages?.[0]?.pdfUri);
 
+  // ✅ CRITICAL FIX: Strip research purpose metadata prefix if present
+  // Sometimes userQuestions contains a metadata line that confuses the LLM
+  let cleanedQuestions = userQuestions;
+  
+  if (typeof userQuestions === 'string') {
+    const lines = userQuestions.split('\n');
+    // Check if first line starts with metadata markers
+    if (lines[0] && (lines[0].includes('Context/Purpose') || lines[0].includes('context') || lines[0].includes('research'))) {
+      // Remove first line and rejoin
+      cleanedQuestions = lines.slice(1).join('\n').trim();
+      console.log('[SERVICE] ✅ Stripped metadata prefix from userQuestions');
+      console.log('[SERVICE] Original first line:', lines[0].substring(0, 80));
+      console.log('[SERVICE] Cleaned questions:', cleanedQuestions.substring(0, 200));
+    }
+  }
+
+  // ✅ CRITICAL: Log cleanedQuestions in DETAIL
+  console.log('\n🔍 [CRITICAL] USER QUESTIONS ANALYSIS:');
+  console.log('   Type of cleanedQuestions:', typeof cleanedQuestions);
+  console.log('   Is Array?:', Array.isArray(cleanedQuestions));
+  console.log('   cleanedQuestions length:', cleanedQuestions?.length);
+  console.log('   cleanedQuestions value:', JSON.stringify(cleanedQuestions));
+  console.log('   cleanedQuestions first 500 chars:', String(cleanedQuestions || '').substring(0, 500));
+  console.log('   cleanedQuestions lines count:', String(cleanedQuestions || '').split('\n').length);
+  console.log('   cleanedQuestions split by newline:');
+  String(cleanedQuestions || '').split('\n').forEach((line, idx) => {
+    console.log(`      Line ${idx}: "${line.substring(0, 100)}"`);
+  });
+
   if (!genAI && !config.openaiApiKey) {
     logger.warn('No AI services for note extraction');
     return [];
@@ -1329,30 +1540,41 @@ async function extractNotesFromPages(relevantPages, userQuestions, paperTitle, p
       '==Page ' + (p.pageIndex + 1) + '==\n' + p.text + '\n==Page ' + (p.pageIndex + 1) + '=='
     ).join('\n\n');
 
+    // ✅ CRITICAL: Log contextText details
+    console.log('\n🔍 [CRITICAL] CONTEXT TEXT (Page Content) ANALYSIS:');
+    console.log('   contextText length:', contextText.length);
+    console.log('   contextText lines count:', contextText.split('\n').length);
+    console.log('   contextText first 300 chars:', contextText.substring(0, 300));
+    console.log('   contextText has "mental"?:', contextText.toLowerCase().includes('mental'));
+    console.log('   contextText has "toughness"?:', contextText.toLowerCase().includes('toughness'));
+    console.log('   contextText has "health"?:', contextText.toLowerCase().includes('health'));
+    console.log('   contextText has "athlete"?:', contextText.toLowerCase().includes('athlete'));
+    console.log('   contextText word count:', contextText.split(/\s+/).length);
+
     // ✅ ENHANCED SYSTEM PROMPT (from Python v1)
     const systemPrompt = `You are an research assistant analyzing academic papers to extract relevant information based on specific user queries.  
 
 
 
-Your Goal: Extract information from research papers that DIRECTLY relates to any of the user's queries below. Be STRICT! You must understand the user intent by the query wording and what they are truly asking for. Only extract content that DIRECTLY answers the user's queries
+Your Goal: Extract information from research papers that relates to any of the user's queries below. You must understand the user intent by the query wording and what they are truly asking for. Extract content that answers the user's queries or is relevant to them.
 
-CRITICAL INSTRUCTIONS - BE VERY STRICT:
-1. ONLY extract content that DIRECTLY answers the user's specific queries
-2. Do NOT extract content that is only remotely relevant
-3. If nothing in the pages DIRECTLY answers the user's queries, return an empty array
+CRITICAL INSTRUCTIONS:
+1. Extract content that answers or relates to the user's specific queries
+2. Include content that is relevant to what the user is asking about
+3. If nothing in the pages relates to the user's queries, return an empty array
 4. Extract the EXACT text from the page that answers the user's queries word for word
 5. Include sufficient surrounding text to maintain context
 6. Keep ALL citation references found in the text (like [1] or [Smith et al., 2020])
-7. ALWAYS include the correct page number for each extraction
-8. For each extraction, specify EXACTLY which user query it relates to (use the exact query wording)
+7. Always include the correct page number for each extraction
+8. For each extraction, specify which user query it relates to (use the exact query wording)
 
 JUSTIFICATION REQUIREMENT:
-- You MUST explain in detail what the extracted text is talking about in the broader context of the full academic paper
-- You MUST explain what the user is asking for and WHY the text you extracted relates to the user's query
-- You MUST explain WHY it answers what they are looking for including evidence from the text
-- If your justification does not DIRECTLY show how the text answers the user's question,State this in the justification be clear and honest.
-- The justification should not mislead the Student/user about the broader context of the academic paper/article purpose and findings.
-- If the user asks about X and the text in the page is about X, But the academic paper is about Y, then let that be known in the justification. 
+- Explain what the extracted text is discussing in the broader context of the academic paper
+- Explain what the user is asking for and why the text you extracted relates to the user's query
+- Explain why it answers what they are looking for including evidence from the text
+- If your justification does not clearly show how the text answers the user's question, state this in the justification
+- Be honest about the broader context of the academic paper/article purpose and findings
+- If the user asks about X and the text in the page is about X, but the academic paper is about Y, then let that be known in the justification 
 
 CITATION INSTRUCTIONS:
 1. Include any citation references (like "[1]" or "[Smith et al., 2020]") found in the extracted text word for word
@@ -1362,11 +1584,11 @@ CITATION INSTRUCTIONS:
 5. Format citations as an array: [{"inline": "[1]", "full": "Complete reference from the list"}]
 6. If you cannot find a matching reference in the list, use the inline citation text as the full reference
 
-RESPONSE FORMAT (STRICT JSON):
+RESPONSE FORMAT (JSON):
 {
   "notes": [{
     "quote": "The exact extracted text with [citations] preserved",
-    "justification": "Detailed explanation of what this text discusses in the paper's context, what the user is asking for, and why this text directly answers their query",
+    "justification": "Explanation of what this text discusses in the paper's context, what the user is asking for, and how this text relates to their query",
     "relatedQuestion": "The exact user query this answers",
     "pageNumber": 12,
     "relevanceScore": 0.95,
@@ -1377,7 +1599,7 @@ RESPONSE FORMAT (STRICT JSON):
   }]
 }
 
-Remember: Be STRICT! You must understand the user intent by the query wording and what they are truly asking for. Only extract content that DIRECTLY answers the user's queries. If nothing is directly relevant, return {"notes": []}.`;
+Remember: You must understand the user intent by the query wording and what they are truly asking for. Extract content that relates to the user's queries. If nothing is relevant, return {"notes": []}.`;
 
     // ✅ ENHANCED USER PROMPT WITH REFERENCE LIST
     const userPrompt = `PAPER CONTEXT:
@@ -1401,12 +1623,12 @@ ${contextText}\n\n
 ###################################
 
 USER'S SPECIFIC QUERIES (Extract ONLY content that DIRECTLY answers these):
-${userQuestions}
+${cleanedQuestions}
 #####################################
 TASK: 
-Extract passages that DIRECTLY answer the user's specific queries above. 
-Be STRICT - if content only seems remotely related, DO NOT include it.
-If nothing directly answers the queries, return {"notes": []}.\n
+Extract passages that relate to or answer the user's specific queries above. 
+If content seems remotely related, include it with justification.
+If nothing relates to the queries, return {"notes": []}.\n
 
 IMPORTANT FOR CITATIONS:
 - When you find inline citations like [1], [2], or [Smith et al., 2020] in the extracted text, match them to the REFERENCE LIST above
@@ -1415,6 +1637,31 @@ IMPORTANT FOR CITATIONS:
 
 Remember: You must justify WHY each extraction directly answers the user's query. If you cannot provide a strong justification, do not include it.\n
 Most importantly, must extract the EXACT text from the paper dont shorten or paraphrase or add or remove content.`;
+
+    // ✅ CRITICAL: Log userPrompt details to see what's being sent
+    console.log('\n🔍 [CRITICAL] USER PROMPT STRUCTURE:');
+    console.log('   userPrompt total length:', userPrompt.length);
+    console.log('   userPrompt lines:', userPrompt.split('\n').length);
+    console.log('   Section "USER\'S SPECIFIC QUERIES" exists?:', userPrompt.includes("USER'S SPECIFIC QUERIES"));
+    const querySectionStart = userPrompt.indexOf("USER'S SPECIFIC QUERIES");
+    const querySectionEnd = userPrompt.indexOf('#####################################', querySectionStart);
+    if (querySectionStart !== -1 && querySectionEnd !== -1) {
+      const querySection = userPrompt.substring(querySectionStart, querySectionEnd + 37);
+      console.log('   ✅ Query section found, length:', querySection.length);
+      console.log('   ✅ Query section FULL content:\n', querySection);
+    } else {
+      console.log('   ❌ Query section NOT found or malformed');
+    }
+    console.log('   Section "CONTENT FROM ACADEMIC PAPER" exists?:', userPrompt.includes('CONTENT FROM ACADEMIC PAPER'));
+    const contentSectionStart = userPrompt.indexOf('CONTENT FROM ACADEMIC PAPER');
+    const contentSectionEnd = userPrompt.indexOf('###################################');
+    if (contentSectionStart !== -1 && contentSectionEnd !== -1) {
+      const contentSection = userPrompt.substring(contentSectionStart, contentSectionStart + 300);
+      console.log('   ✅ Content section found');
+      console.log('   ✅ Content section preview:', contentSection);
+    } else {
+      console.log('   ❌ Content section NOT found');
+    }
 
     try {
       if (!genAI) throw new Error('Gemini not available');
@@ -1470,11 +1717,33 @@ Most importantly, must extract the EXACT text from the paper dont shorten or par
     } catch (error) {
       logger.warn('Gemini extraction failed, trying OpenAI');
 
-      // ✅ OPENAI FALLBACK (same enhanced prompt)
+      // ✅ OPENAI FALLBACK (proper system/user separation)
       try {
-        const openaiPrompt = `${systemPrompt}\n\n${userPrompt}`;
-        const parsed = await callOpenAI(openaiPrompt);
+        console.log('[OPENAI-FALLBACK] 🔄 Starting OpenAI extraction fallback...');
+        console.log('[OPENAI-FALLBACK] 📋 systemPrompt length:', systemPrompt.length);
+        console.log('[OPENAI-FALLBACK] 📋 userPrompt length:', userPrompt.length);
+        console.log('[OPENAI-FALLBACK] 📋 First 200 chars of systemPrompt:', systemPrompt.substring(0, 200));
+        console.log('[OPENAI-FALLBACK] 📋 First 200 chars of userPrompt:', userPrompt.substring(0, 200));
+
+        const parsed = await callOpenAIWithSystem(systemPrompt, userPrompt);
+        
+        console.log('[OPENAI-FALLBACK] ✅ Received response from OpenAI');
+        console.log('[OPENAI-FALLBACK] 📦 Raw parsed response type:', typeof parsed);
+        console.log('[OPENAI-FALLBACK] 📦 Raw parsed response:', JSON.stringify(parsed).substring(0, 500));
+        console.log('[OPENAI-FALLBACK] 📦 Response keys:', Object.keys(parsed || {}));
+        console.log('[OPENAI-FALLBACK] 📦 Is Array.isArray(parsed)?', Array.isArray(parsed));
+        console.log('[OPENAI-FALLBACK] 📦 parsed.notes exists?', !!parsed?.notes);
+        console.log('[OPENAI-FALLBACK] 📦 parsed.notes is array?', Array.isArray(parsed?.notes));
+        console.log('[OPENAI-FALLBACK] 📦 parsed.notes length:', parsed?.notes?.length || 'N/A');
+        
         const notes = Array.isArray(parsed) ? parsed : (parsed.notes || []);
+        
+        console.log('[OPENAI-FALLBACK] 🔍 Final notes array:', {
+          isArray: Array.isArray(notes),
+          length: notes.length,
+          firstNote: notes[0] ? Object.keys(notes[0]) : 'N/A',
+          content: notes.length > 0 ? JSON.stringify(notes[0]).substring(0, 300) : 'EMPTY ARRAY'
+        });
 
         console.log(`      ⚠️  OpenAI fallback: ${notes.length} notes returned`);
         console.log(`      🔗 Assigning pdfUri from batch[0]: ${batch[0]?.pdfUri}`);
@@ -1489,12 +1758,20 @@ Most importantly, must extract the EXACT text from the paper dont shorten or par
           citations: Array.isArray(note.citations) ? note.citations : []
         }));
 
+        console.log('[OPENAI-FALLBACK] 📊 Mapped notes count:', mappedNotes.length);
+        if (mappedNotes.length > 0) {
+          console.log('[OPENAI-FALLBACK] 📄 First mapped note:', JSON.stringify(mappedNotes[0]).substring(0, 300));
+        }
+
         if (onStreamCallback && mappedNotes.length > 0) {
           onStreamCallback(mappedNotes);
         }
 
         return mappedNotes;
       } catch (fallbackError) {
+        console.error('[OPENAI-FALLBACK] ❌ OpenAI fallback failed completely');
+        console.error('[OPENAI-FALLBACK] ❌ Error:', fallbackError.message);
+        console.error('[OPENAI-FALLBACK] ❌ Stack:', fallbackError.stack);
         logger.error('Both Gemini and OpenAI failed:', fallbackError);
         return [];
       }
@@ -1739,30 +2016,53 @@ async function generateInsightQueries(userQuestions, contextQuery) {
 }
 
 async function rankNotes(notes, queries, purpose) {
-  const notesList = notes.map(n => `ID: ${n.id}\nNote: ${n.content}`).join('\n\n');
-  
-  // User requested order: {notes at the top, then research purpose, then questions, then the output needed}
-  const prompt = `--- NOTES START ---
-${notesList}
---- NOTES END ---
+  if (!notes || notes.length === 0) {
+    console.warn('[rankNotes] ⚠️  No notes to rank');
+    return [];
+  }
+
+  console.log('[rankNotes] 📊 Starting ranking:', {
+    notesCount: notes.length,
+    queriesCount: queries.length
+  });
+
+  // ✅ STEP 1: Create simple number-to-ID mapping
+  const noteMapping = notes.map((note, idx) => ({
+    number: idx + 1,  // 1-based numbering (easier for LLM to understand)
+    id: note.id,
+    content: note.content.substring(0, 300)
+  }));
+
+  console.log('[rankNotes] 📝 Created mapping:', {
+    totalNotes: noteMapping.length,
+    mappingSample: noteMapping.slice(0, 2).map(m => ({ number: m.number, idLength: m.id.length, contentLength: m.content.length }))
+  });
+
+  // ✅ STEP 2: Build clean context for LLM with simple numbers
+  const notesForLLM = noteMapping.map(n => 
+    `=== NOTE ${n.number} ===\n${n.content}${n.content.length >= 300 ? '...' : ''}`
+  ).join('\n\n');
+
+  // ✅ STEP 3: Simple, clear prompt asking for numbers only
+  const prompt = `You are ranking research notes for relevance.
+
+${notesForLLM}
 
 RESEARCH PURPOSE:
 ${purpose || 'Not provided'}
 
-RESEARCH QUESTIONS/QUERIES:
-${queries.join(', ')}
+RESEARCH QUESTIONS:
+${queries.join('\n')}
 
 TASK:
-Identify and select the TOP 5 most relevant insights from the notes provided above. 
-These insights must be the most valuable for the student's research purpose and questions.
+Select the TOP 5 most relevant notes (by number) for this research.
+Rank from MOST relevant (#1) to LEAST relevant (#5).
 
-OUTPUT REQUIREMENTS:
-1. Return EXACTLY 5 Note IDs.
-2. Return them as a JSON array of strings, ranked from most relevant to least relevant (1 to 5).
-3. Output ONLY the JSON array.
+OUTPUT:
+Return ONLY a JSON array of 5 numbers.
+Example: [12, 3, 27, 8, 15]
 
-REQUIRED FORMAT:
-["id1", "id2", "id3", "id4", "id5"]`;
+Your answer:`;
 
   // TIER 1: Gemini
   try {
@@ -1784,27 +2084,107 @@ REQUIRED FORMAT:
 
     const response = await result.response;
     const text = cleanJson(response.text());
-    const rankedIds = JSON.parse(text);
     
-    console.log('[rankNotes] ✅ Tier 1 (Gemini) success');
-    return Array.isArray(rankedIds) ? rankedIds.slice(0, 5) : [];
-  } catch (geminiError) {
-    console.warn('[rankNotes] Tier 1 (Gemini) failed:', geminiError.message);
+    console.log('[rankNotes] 📨 Gemini raw response:', {
+      text: text.substring(0, 100),
+      length: text.length
+    });
 
-    // TIER 2: GPT Fallback
+    const rankedNumbers = JSON.parse(text);
+    
+    // ✅ STEP 4: Validate it's an array of numbers
+    if (!Array.isArray(rankedNumbers) || rankedNumbers.length === 0) {
+      console.warn('[rankNotes] ⚠️  Gemini returned invalid array:', rankedNumbers);
+      throw new Error('Invalid response format from Gemini');
+    }
+
+    // ✅ STEP 5: Map numbers back to actual note IDs
+    const rankedIds = rankedNumbers
+      .map(num => {
+        const mapping = noteMapping.find(m => m.number === num);
+        if (!mapping) {
+          console.warn('[rankNotes] ⚠️  Invalid note number:', num);
+          return null;
+        }
+        return mapping.id;
+      })
+      .filter(Boolean)  // Remove nulls from invalid numbers
+      .slice(0, 5);     // Ensure only 5 IDs
+
+    console.log('[rankNotes] ✅ Tier 1 (Gemini) success:', {
+      numbersReceived: rankedNumbers,
+      idsReturned: rankedIds.length,
+      validMappings: rankedIds.length
+    });
+
+    return rankedIds;
+  } catch (geminiError) {
+    console.warn('[rankNotes] Tier 1 (Gemini) failed:', {
+      error: geminiError.message,
+      code: geminiError.code,
+      status: geminiError.status
+    });
+
+    // TIER 2: GPT Fallback - Use same number-based prompt
     try {
+      console.log('[rankNotes] Tier 2: Attempting GPT-4o-mini fallback...');
       const gptResult = await withTimeout(
-        callOpenAI(prompt),
+        callOpenAI(prompt),  // ✅ Use same number-based prompt
         30000,
         'GPT Rank Notes'
       );
       
-      const rankedIds = Array.isArray(gptResult) ? gptResult : (gptResult.selections || []);
-      console.log('[rankNotes] ✅ Tier 2 (GPT) success');
-      return Array.isArray(rankedIds) ? rankedIds.slice(0, 5) : [];
+      console.log('[rankNotes] 📨 GPT raw response:', {
+        type: typeof gptResult,
+        isArray: Array.isArray(gptResult),
+        value: JSON.stringify(gptResult).substring(0, 100)
+      });
+
+      let rankedNumbers = [];
+      
+      // ✅ Parse GPT response (could be array or object)
+      if (Array.isArray(gptResult)) {
+        rankedNumbers = gptResult;
+      } else if (typeof gptResult === 'string') {
+        rankedNumbers = JSON.parse(gptResult);
+      } else if (gptResult && typeof gptResult === 'object') {
+        rankedNumbers = gptResult.selections || gptResult.ids || gptResult.notes || [];
+      }
+
+      // ✅ Validate numbers array
+      if (!Array.isArray(rankedNumbers) || rankedNumbers.length === 0) {
+        console.warn('[rankNotes] ⚠️  GPT returned invalid/empty:', rankedNumbers);
+        throw new Error('Invalid response format from GPT');
+      }
+
+      // ✅ Map numbers back to IDs (same logic as Gemini)
+      const rankedIds = rankedNumbers
+        .map(num => {
+          const mapping = noteMapping.find(m => m.number === num);
+          if (!mapping) {
+            console.warn('[rankNotes] ⚠️  GPT returned invalid number:', num);
+            return null;
+          }
+          return mapping.id;
+        })
+        .filter(Boolean)
+        .slice(0, 5);
+
+      console.log('[rankNotes] ✅ Tier 2 (GPT-4o-mini) success:', {
+        numbersReceived: rankedNumbers,
+        idsReturned: rankedIds.length
+      });
+
+      return rankedIds;
     } catch (gptError) {
-      console.error('[rankNotes] ❌ All Tiers failed:', gptError.message);
-      return [];
+      console.error('[rankNotes] ❌ All Tiers failed:', {
+        geminiError: geminiError.message,
+        gptError: gptError.message
+      });
+      
+      // ✅ TIER 3: Last resort fallback - return first 5 note IDs
+      console.log('[rankNotes] 🔄 Using fallback: returning first 5 notes');
+      return noteMapping.slice(0, 5).map(n => n.id);
     }
   }
 }
