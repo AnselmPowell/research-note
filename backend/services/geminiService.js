@@ -2030,7 +2030,9 @@ async function rankNotes(notes, queries, purpose) {
   const noteMapping = notes.map((note, idx) => ({
     number: idx + 1,  // 1-based numbering (easier for LLM to understand)
     id: note.id,
-    content: note.content.substring(0, 300)
+    content: note.content.substring(0, 300),
+    question: note.relatedQuestion || 'General research',  // ✅ NEW: Store question for each note
+    score: note.score || 0  // ✅ NEW: Store score for logging
   }));
 
   console.log('[rankNotes] 📝 Created mapping:', {
@@ -2040,7 +2042,9 @@ async function rankNotes(notes, queries, purpose) {
 
   // ✅ STEP 2: Build clean context for LLM with simple numbers
   const notesForLLM = noteMapping.map(n => 
-    `=== NOTE ${n.number} ===\n${n.content}${n.content.length >= 300 ? '...' : ''}`
+    `=== NOTE ${n.number} ===
+Question Answered: ${n.question || 'General research'}
+${n.content}${n.content.length >= 300 ? '...' : ''}`
   ).join('\n\n');
 
   // ✅ STEP 3: Simple, clear prompt asking for numbers only
@@ -2056,6 +2060,8 @@ ${queries.join('\n')}
 
 TASK:
 Select the TOP 5 most relevant notes (by number) for this research.
+Consider BOTH the research purpose AND the specific question each note answers.
+Prioritize notes that directly address the research questions.
 Rank from MOST relevant (#1) to LEAST relevant (#5).
 
 OUTPUT:

@@ -1926,7 +1926,9 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
             return {
               uniqueId,
-              quote: note.quote
+              quote: note.quote,
+              relatedQuestion: note.relatedQuestion || 'General research',  // ✅ NEW: Include question context
+              score: note.relevanceScore || 0  // ✅ NEW: Include score for filtering
             };
           })
           .filter(Boolean);
@@ -1944,17 +1946,33 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           return;
         }
 
+        // ✅ NEW: If more than 40 notes, filter to top 40 by score
+        let notesForRanking = notesToRank;
+        if (notesToRank.length > 40) {
+          console.log('[🔴 rankTopNotes] 📊 Filtering to top 40 notes by score...');
+          notesForRanking = [...notesToRank]
+            .sort((a, b) => (b.score || 0) - (a.score || 0))  // Sort descending by score
+            .slice(0, 40);  // Take top 40
+          
+          console.log('[🔴 rankTopNotes] ✅ Filtered notes:', {
+            original: notesToRank.length,
+            filtered: notesForRanking.length,
+            topScore: notesForRanking[0]?.score || 0,
+            lowestScore: notesForRanking[39]?.score || 0
+          });
+        }
+
         const queries = [...arxivKeywords, ...selectedInsightQuestions];
         
         console.log('[🔴 rankTopNotes] 🌐 Calling backend API:', {
-          notesToRankCount: notesToRank.length,
+          notesToRankCount: notesForRanking.length,  // ✅ UPDATED: Use filtered count
           queriesCount: queries.length,
           hasPurpose: !!researchPurpose,
           purposeLength: researchPurpose?.length || 0,
-          sampleNoteIds: notesToRank.slice(0, 2).map(n => n.uniqueId.substring(0, 50))
+          sampleNoteIds: notesForRanking.slice(0, 2).map(n => n.uniqueId.substring(0, 50))  // ✅ UPDATED
         });
 
-        const result = await rankNotesAI(notesToRank, queries, researchPurpose);
+        const result = await rankNotesAI(notesForRanking, queries, researchPurpose);  // ✅ UPDATED: Use filtered notes
         
         console.log('[🔴 rankTopNotes] 📨 Backend API Response:', {
           success: !!result,
