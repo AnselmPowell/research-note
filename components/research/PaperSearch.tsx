@@ -411,7 +411,7 @@ const ResearchCardNote: React.FC<{
 
   return (
     <div
-      className={`relative group/note transition-all duration-300 ease-in-out border rounded-xl overflow-hidden cursor-pointer
+      className={`relative group/note transition-all duration-300 ease-in-out border rounded-xl overflow-hidden cursor-pointer pt-6
         ${isExpanded ? "bg-white dark:bg-dark-card" : "bg-white/50 dark:bg-dark-card"}
         ${isSelected ? 'border-scholar-500 ring-1 ring-scholar-500' : 'border-gray-200 dark:border-gray-700 hover:shadow-sm'}
         ${isExpanded ? 'shadow-md ring-1 ring-scholar-100 dark:ring-scholar-900' : ''}
@@ -475,7 +475,7 @@ const ResearchCardNote: React.FC<{
 
         <div
           className={`
-             absolute top-2 right-2 flex items-center gap-1
+             absolute top-1 right-1 flex items-center gap-3
              transition-all duration-300 
              bg-white dark:bg-gray-800 p-1 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm
              ${isExpanded ? 'opacity-100' : 'opacity-0 -translate-y-2 group-hover/note:opacity-100 group-hover/note:translate-y-0'}
@@ -483,16 +483,16 @@ const ResearchCardNote: React.FC<{
           onClick={(e) => e.stopPropagation()}
         >
           <button onClick={handleSaveToggle} className={`p-1.5 rounded-md ${isSaved ? 'text-scholar-600 bg-scholar-50 dark:bg-scholar-900/30' : 'text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title="Save to Library">
-            <Plus size={16} />
+            <Plus size={18} />
           </button>
-          <button onClick={handleContextToggle} className={`p-1.5 rounded-md ${isInContext ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30' : 'text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title="Add to Context">
-            <BookmarkPlus size={16} />
+          <button onClick={handleContextToggle} className={`p-1.5 rounded-md ${isInContext ? 'text-scholar-600 bg-scholar-50 dark:bg-scholar-900/30' : 'text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`} title="Add to Context">
+            <BookmarkPlus size={18} />
           </button>
           <button onClick={handleViewPdf} className="p-1.5 rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-scholar-600 dark:hover:text-scholar-400" title="View text in PDF">
-            <TextSearch size={16} />
+            <TextSearch size={18} />
           </button>
           <button onClick={handleCopy} className="p-1.5 rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" title="Copy text">
-            {justCopied ? <Check size={16} /> : <Copy size={16} />}
+            {justCopied ? <Check size={18} /> : <Copy size={16} />}
           </button>
         </div>
 

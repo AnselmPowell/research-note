@@ -358,6 +358,9 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   
   // ✅ Track which Top 5 note was clicked to move it to position 0
   const [clickedTopNoteId, setClickedTopNoteId] = useState<string | null>(null);
+  
+  // ✅ NEW: Track which square card was clicked (for showing single note below squares in paper views)
+  const [clickedSquareNoteId, setClickedSquareNoteId] = useState<string | null>(null);
 
   // Define setters to match expected handler names (minimizes diff)
   const onAllNotesExpandedChange = setAllNotesExpanded;
@@ -618,24 +621,32 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
       clearTimeout(highlightTimerRef.current);
     }
     
-    // ✅ Track which Top 5 note was clicked (triggers reordering to position 0)
-    setClickedTopNoteId(noteId);
-    
-    // ✅ Set which note is expanded (only one at a time)
-    setExpandedNoteId(noteId);
-    setHighlightedNoteId(noteId);
-    
-    // ✅ Navigate to page 1 (clicked note will be moved to position 0 on page 1)
-    if (currentPage !== 1) {
-      setCurrentPage(1);
-    }
-    
-    // ✅ Auto-clear highlight after 3 seconds
-    highlightTimerRef.current = setTimeout(() => {
+    // ✅ NEW: Different behavior for different views
+    if (sortBy === 'most-relevant-notes') {
+      // ✅ MOST-RELEVANT-NOTES VIEW: Scroll + expand in main list (existing behavior)
+      setClickedSquareNoteId(null);  // Clear paper view state
+      
+      setClickedTopNoteId(noteId);
+      setExpandedNoteId(noteId);
+      setHighlightedNoteId(noteId);
+      
+      if (currentPage !== 1) {
+        setCurrentPage(1);
+      }
+      
+      highlightTimerRef.current = setTimeout(() => {
+        setHighlightedNoteId(null);
+        highlightTimerRef.current = null;
+      }, 3000);
+    } else {
+      // ✅ PAPER VIEWS: Show note below square cards
+      setClickedTopNoteId(null);  // Clear most-relevant-notes state
+      setExpandedNoteId(null);
       setHighlightedNoteId(null);
-      highlightTimerRef.current = null;
-    }, 3000);
-  }, [currentPage]);
+      
+      setClickedSquareNoteId(noteId);
+    }
+  }, [currentPage, sortBy]);
 
 
 
@@ -646,42 +657,55 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     return content.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [content, currentPage]);
 
-  // ✅ Extract Top 5 notes from FULL content (not paginated) for square cards
+  // ✅ Extract Top 5 notes from ALL papers (works in ALL views)
   const top5Notes = useMemo(() => {
-    if (topNoteIds.length === 0 || sortBy !== 'most-relevant-notes') {
+    if (topNoteIds.length === 0) {
       return [];
     }
 
-    // ✅ Step 1: Deduplicate topNoteIds from backend (in case AI returned duplicates)
     const uniqueTopNoteIds = Array.from(new Set(topNoteIds)).slice(0, 5);
-
-    // ✅ Step 2: Build unique notes list (prevent duplicate notes with same ID)
     const seenIds = new Set<string>();
-    const uniqueNotes = (content as any[])
+    
+    // ✅ CRITICAL: Extract from filteredCandidates (all papers), NOT content (view-specific)
+    const allNotes = filteredCandidates.flatMap(paper =>
+      (paper.notes || [])
+        .filter(note => (note?.quote || '').trim().length > 0)
+        .map((note, noteIdx) => {
+          const quoteHash = String(note.quote).substring(0, 60).replace(/[|\/\\]/g, '_');
+          const uniqueId = `${paper.id}|p${note.pageNumber}|i${noteIdx}|${quoteHash}`;
+          
+          return {
+            ...note,
+            uniqueId,
+            sourcePaper: paper,
+            sourceId: paper.id
+          };
+        })
+    );
+
+    const uniqueNotes = allNotes
       .filter(note => {
-        // Must be in top 5 IDs
         if (!uniqueTopNoteIds.includes(note.uniqueId)) return false;
-        
-        // ✅ CRITICAL: Prevent duplicate notes
         if (seenIds.has(note.uniqueId)) {
           console.warn('[Top5Notes] Duplicate note filtered:', note.uniqueId.substring(0, 50));
           return false;
         }
-        
         seenIds.add(note.uniqueId);
         return true;
       })
-      .sort((a, b) => uniqueTopNoteIds.indexOf(a.uniqueId) - uniqueTopNoteIds.indexOf(b.uniqueId));
+      .sort((a, b) => 
+        uniqueTopNoteIds.indexOf(a.uniqueId) - uniqueTopNoteIds.indexOf(b.uniqueId)
+      );
 
-    console.log('[Top5Notes] Built unique list:', {
-      originalTopIds: topNoteIds.length,
-      uniqueIds: uniqueTopNoteIds.length,
-      foundNotes: uniqueNotes.length,
-      duplicatesFiltered: topNoteIds.length - uniqueNotes.length
+    console.log('[Top5Notes] Built for all views:', {
+      currentView: sortBy,
+      topNoteIds: topNoteIds.length,
+      allNotesExtracted: allNotes.length,
+      foundInTop5: uniqueNotes.length
     });
 
     return uniqueNotes;
-  }, [topNoteIds, content, sortBy]);
+  }, [topNoteIds, filteredCandidates, sortBy]);
 
 
   // ─── Selection Actions ────────────────────────────────────────────────────────
@@ -848,9 +872,12 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   }, [paginatedContent, sortBy]);
 
   const selectableNotesTotalCount = useMemo(() => {
-    if (sortBy !== 'most-relevant-notes') return 0;
-    return (content as any[]).filter((note: any) => (note?.quote || '').trim().length > 0).length;
-  }, [content, sortBy]);
+    // ✅ Count ALL notes from ALL papers (works in all views)
+    const allNotes = filteredCandidates.flatMap(paper => 
+      (paper.notes || []).filter(note => (note?.quote || '').trim().length > 0)
+    );
+    return allNotes.length;
+  }, [filteredCandidates]);
 
   const handleResetFilters = useCallback(() => {
     onSearchQueryChange('');
@@ -1000,8 +1027,8 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
 
           {/* RIGHT: Filter Toggle + Expand/Collapse */}
           <div className="flex items-center gap-2 z-20">
-            {/* Top 5 Insights Button */}
-            {sortBy === 'most-relevant-notes' && selectableNotesTotalCount > 10 && researchPhase === 'completed' && !hasRankedOnce && (
+            {/* Top 5 Insights Button - NOW SHOWS IN ALL VIEWS */}
+            {selectableNotesTotalCount > 10 && researchPhase === 'completed' && !hasRankedOnce && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1231,8 +1258,8 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
           </div>
         )}
 
-        {/* ✅ TOP 5 SQUARE CARDS - Horizontal row at top */}
-        {sortBy === 'most-relevant-notes' && top5Notes.length > 0 && (
+        {/* ✅ TOP 5 SQUARE CARDS - Horizontal row at top - NOW SHOWS IN ALL VIEWS */}
+        {top5Notes.length > 0 && (
           <Top5SquareCards
             topNotes={top5Notes}
             topNoteIds={topNoteIds}
@@ -1240,6 +1267,47 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
             onScrollToNote={handleHighlightNote}
           />
         )}
+
+        {/* ✅ NEW: Show single expanded note below square cards in PAPER VIEWS ONLY */}
+        {sortBy !== 'most-relevant-notes' && clickedSquareNoteId && top5Notes.length > 0 && (() => {
+          // Find the clicked note from top5Notes
+          const clickedNote = top5Notes.find(n => n.uniqueId === clickedSquareNoteId);
+          
+          if (!clickedNote) return null;
+          
+          return (
+            <div className="mb-8 animate-fade-in">
+              {/* Visual separator */}
+              <div className="h-px bg-gray-200 dark:bg-gray-700 mb-6"></div>
+              
+              {/* Title above expanded note */}
+              <div className="flex items-center gap-2 mb-4">
+                <Sparkles size={16} className="text-scholar-600 dark:text-scholar-400" />
+                <h4 className="text-sm font-bold uppercase tracking-wider text-scholar-700 dark:text-scholar-400">
+                  Selected Insight Details
+                </h4>
+              </div>
+              
+              {/* Single expanded note */}
+              <ResearchCardNote
+                id={clickedNote.uniqueId}
+                note={clickedNote}
+                isSelected={selectedNoteIds.includes(clickedNote.uniqueId)}
+                onSelect={() => onSelectNote(clickedNote.uniqueId)}
+                sourceTitle={clickedNote.sourcePaper?.title}
+                sourcePaper={clickedNote.sourcePaper}
+                showScore={true}
+                isTop5={true}
+                topNoteIds={topNoteIds}
+                isExpanded={true}
+                onToggleExpand={() => setClickedSquareNoteId(null)}
+              />
+              
+              {/* Visual separator */}
+              <div className="h-px bg-gray-200 dark:bg-gray-700 mt-6"></div>
+            </div>
+          );
+        })()}
 
         {/* Paper results */}
         <div className={sortBy === 'most-relevant-notes' ? "space-y-4 transition-all duration-300" : "space-y-8 transition-all duration-300"}>

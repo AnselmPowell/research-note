@@ -9,8 +9,8 @@ interface Top5SquareCardsProps {
   onScrollToNote?: (noteId: string) => void;  // Callback to scroll to note in main list
 }
 
-export const Top5SquareCards: React.FC<Top5SquareCardsProps> = ({ 
-  topNotes, 
+export const Top5SquareCards: React.FC<Top5SquareCardsProps> = ({
+  topNotes,
   topNoteIds,
   onSelectNote,
   onScrollToNote
@@ -39,7 +39,7 @@ export const Top5SquareCards: React.FC<Top5SquareCardsProps> = ({
         {topNotes.slice(0, 5).map((note, idx) => {
           const rank = idx + 1;
           const paperTitle = note.sourcePaper?.title || 'Untitled Paper';
-          
+
           return (
             <button
               key={note.uniqueId}
@@ -50,7 +50,7 @@ export const Top5SquareCards: React.FC<Top5SquareCardsProps> = ({
                 transition-all duration-300 cursor-pointer
                 flex flex-col items-start justify-between
                 border-gray-200 dark:border-gray-700 
-                bg-white dark:bg-dark-card 
+                bg-white dark:bg-gray-700 
                 hover:border-scholar-300 dark:hover:border-scholar-600 
                 hover:shadow-lg hover:scale-102
               `}
@@ -71,11 +71,11 @@ export const Top5SquareCards: React.FC<Top5SquareCardsProps> = ({
               </p>
 
               {/* Bottom Row - Page Number Left, Details Right - Lower positioning */}
-              <div className="w-full flex justify-between items-end mt-2 pb-1">
+              <div className="w-full flex justify-between items-end mt-1 -mb-2">
                 <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 pl-1">
                   p.{note.pageNumber}
                 </span>
-                <span className="text-[11px] font-bold text-scholar-600 dark:text-scholar-400 hover:underline pr-1">
+                <span className="text-[10px]  text-scholar-600 dark:text-scholar-400 hover:underline pr-1">
                   Details
                 </span>
               </div>
