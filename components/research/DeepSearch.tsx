@@ -352,13 +352,13 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   // ✅ Track which note from Top 5 should be highlighted/expanded (only one at a time)
   const [highlightedNoteId, setHighlightedNoteId] = useState<string | null>(null);
   const highlightTimerRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   // ✅ Control which single note is expanded (only one at a time)
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
-  
+
   // ✅ Track which Top 5 note was clicked to move it to position 0
   const [clickedTopNoteId, setClickedTopNoteId] = useState<string | null>(null);
-  
+
   // ✅ NEW: Track which square card was clicked (for showing single note below squares in paper views)
   const [clickedSquareNoteId, setClickedSquareNoteId] = useState<string | null>(null);
 
@@ -431,7 +431,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   const { openColumn, setColumnVisibility } = useUI();
 
   // ─── Local Sort State ─────────────────────────────────────────────────────────
-  const [sortBy, setSortBy] = useState<SortOption>('relevant-papers');
+  const [sortBy, setSortBy] = useState<SortOption>('most-relevant-notes');
   const [isSortOpen, setIsSortOpen] = useState(false);
 
   // Determine candidates based on research phase (same logic as before)
@@ -551,7 +551,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
             };
           })
       );
-      
+
       // ✅ Deduplicate allNotes by uniqueId (safety measure)
       const seenIds = new Set<string>();
       const uniqueAllNotes = allNotes.filter(note => {
@@ -562,7 +562,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
         seenIds.add(note.uniqueId);
         return true;
       });
-      
+
       // Sort by: status priority first, then relevance score
       const sorted = uniqueAllNotes.sort((a, b) => {
         const priorityDiff = getStatusPriority(b.sourcePaper.analysisStatus) - getStatusPriority(a.sourcePaper.analysisStatus);
@@ -575,23 +575,23 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
         const topOnes = uniqueAllNotes
           .filter(n => topNoteIds.includes(n.uniqueId))
           .sort((a, b) => topNoteIds.indexOf(a.uniqueId) - topNoteIds.indexOf(b.uniqueId));
-        
+
         // ✅ If user clicked a specific Top 5 note, move it to position 0
         if (clickedTopNoteId && topOnes.some(n => n.uniqueId === clickedTopNoteId)) {
           const clickedNote = topOnes.find(n => n.uniqueId === clickedTopNoteId)!;
           const otherTopNotes = topOnes.filter(n => n.uniqueId !== clickedTopNoteId);
           const finalTopOnes = [clickedNote, ...otherTopNotes];
           const remaining = uniqueAllNotes.filter(n => !topNoteIds.includes(n.uniqueId));
-          
+
           console.log('[DeepSearch] Moved clicked note to position 0:', {
             clickedNoteId: clickedTopNoteId.substring(0, 50),
             totalTopNotes: finalTopOnes.length,
             remainingNotes: remaining.length
           });
-          
+
           return [...finalTopOnes, ...remaining];
         }
-        
+
         const remaining = uniqueAllNotes.filter(n => !topNoteIds.includes(n.uniqueId));
         return [...topOnes, ...remaining];
       }
@@ -621,20 +621,20 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     if (highlightTimerRef.current) {
       clearTimeout(highlightTimerRef.current);
     }
-    
+
     // ✅ NEW: Different behavior for different views
     if (sortBy === 'most-relevant-notes') {
       // ✅ MOST-RELEVANT-NOTES VIEW: Scroll + expand in main list (existing behavior)
       setClickedSquareNoteId(null);  // Clear paper view state
-      
+
       setClickedTopNoteId(noteId);
       setExpandedNoteId(noteId);
       setHighlightedNoteId(noteId);
-      
+
       if (currentPage !== 1) {
         setCurrentPage(1);
       }
-      
+
       highlightTimerRef.current = setTimeout(() => {
         setHighlightedNoteId(null);
         highlightTimerRef.current = null;
@@ -644,7 +644,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
       setClickedTopNoteId(null);  // Clear most-relevant-notes state
       setExpandedNoteId(null);
       setHighlightedNoteId(null);
-      
+
       setClickedSquareNoteId(noteId);
     }
   }, [currentPage, sortBy]);
@@ -666,7 +666,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
 
     const uniqueTopNoteIds = Array.from(new Set(topNoteIds)).slice(0, 5);
     const seenIds = new Set<string>();
-    
+
     // ✅ CRITICAL: Extract from filteredCandidates (all papers), NOT content (view-specific)
     const allNotes = filteredCandidates.flatMap(paper =>
       (paper.notes || [])
@@ -674,7 +674,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
         .map((note, noteIdx) => {
           const quoteHash = String(note.quote).substring(0, 60).replace(/[|\/\\]/g, '_');
           const uniqueId = `${paper.id}|p${note.pageNumber}|i${noteIdx}|${quoteHash}`;
-          
+
           return {
             ...note,
             uniqueId,
@@ -694,7 +694,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
         seenIds.add(note.uniqueId);
         return true;
       })
-      .sort((a, b) => 
+      .sort((a, b) =>
         uniqueTopNoteIds.indexOf(a.uniqueId) - uniqueTopNoteIds.indexOf(b.uniqueId)
       );
 
@@ -874,7 +874,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
 
   const selectableNotesTotalCount = useMemo(() => {
     // ✅ Count ALL notes from ALL papers (works in all views)
-    const allNotes = filteredCandidates.flatMap(paper => 
+    const allNotes = filteredCandidates.flatMap(paper =>
       (paper.notes || []).filter(note => (note?.quote || '').trim().length > 0)
     );
     return allNotes.length;
@@ -1039,8 +1039,8 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                 }}
                 disabled={researchPhase === 'ranking_notes'}
                 className={`flex items-center gap-2 px-3 py-2.5 text-xs font-bold rounded-lg transition-all ${topNoteIds.length > 0
-                  ? 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border border-amber-200/50'
-                  : 'text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                  ? 'text-scholar-700   dark:text-scholar-300  bg-scholar-50 dark:bg-scholar-900/30 border border-scholar-200/50'
+                  : 'text-scholar-600 dark:text-scholar-300 hover:text-scholar-600 dark:hover:text-scholar-300 hover:bg-scholar-50 dark:hover:bg-scholar-900/20'
                   }`}
                 title="Identify top 5 most critical insights"
               >
@@ -1053,30 +1053,32 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
               </button>
             )}
 
-            <button
-              onClick={() => onShowFiltersChange(!showFilters)}
-              className={`flex items-center gap-2 px-3 py-2.5 text-xs font-bold rounded-lg transition-all ${showFilters || searchQuery || localFilters.paper !== 'all' || localFilters.query !== 'all' || localFilters.hasNotes
-                ? 'text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30'
-                : 'text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}
-              title="Filter options"
-            >
-              <Filter size={20} />
-              <span>Filters</span>
-            </button>
-
             {/* Sort Dropdown */}
             <div className="relative">
               <button
-                onClick={() => setIsSortOpen(!isSortOpen)}
+                onClick={() => {
+                  // If already in most-relevant-notes view, toggle dropdown
+                  // Otherwise, switch to most-relevant-notes view
+                  if (sortBy === 'most-relevant-notes') {
+                    setIsSortOpen(!isSortOpen);
+                  } else {
+                    setSortBy('most-relevant-notes');
+                  }
+                }}
                 className="flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
               >
                 <span className="truncate max-w-[140px]">
-                  {sortBy === 'most-relevant-notes' && 'Most Relevant Notes'}
-                  {sortBy === 'relevant-papers' && 'Relevant Papers'}
-                  {sortBy === 'newest-papers' && 'Newest Papers'}
+                  Most Relevant Notes
                 </span>
-                <ChevronDown size={16} className={`text-gray-400 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsSortOpen(!isSortOpen);
+                  }}
+                  className="flex items-center justify-center"
+                >
+                  <ChevronDown size={16} className={`text-gray-400 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+                </button>
               </button>
 
               {isSortOpen && (
@@ -1100,6 +1102,18 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                 </>
               )}
             </div>
+
+            <button
+              onClick={() => onShowFiltersChange(!showFilters)}
+              className={`flex items-center gap-2 px-3 py-2.5 text-xs font-bold rounded-lg transition-all ${showFilters || searchQuery || localFilters.paper !== 'all' || localFilters.query !== 'all' || localFilters.hasNotes
+                ? 'text-scholar-600 dark:text-scholar-400 bg-scholar-50 dark:bg-scholar-900/30'
+                : 'text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              title="Filter options"
+            >
+              <Filter size={20} />
+              <span>Filters</span>
+            </button>
 
             {sortBy !== 'most-relevant-notes' && currentTabCandidates.some(p => p.notes && p.notes.length > 0) && (
               <button
@@ -1249,13 +1263,11 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
 
         {/* ✅ TOP 5 INSIGHTS RANKING STATUS - Show above notes during ranking */}
         {researchPhase === 'ranking_notes' && (
-          <div className="sticky top-0 z-40 bg-gradient-to-r from-scholar-50 to-scholar-100 dark:from-scholar-900/40 dark:to-scholar-800/40 border-b border-scholar-200 dark:border-scholar-700 rounded-b-xl p-4 mb-6 backdrop-blur-sm">
-            <div className="flex items-center justify-center gap-3">
-              <Loader2 size={18} className="animate-spin text-scholar-600 dark:text-scholar-400" />
-              <span className="text-sm font-semibold text-scholar-700 dark:text-scholar-300">
-                {status || "Analyzing top 5 insights..."}
-              </span>
-            </div>
+          <div className="flex items-center justify-center gap-3 py-4 mb-6 animate-fade-in">
+            <Loader2 size={20} className="animate-spin text-scholar-600 dark:text-scholar-400" />
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              {status || "Analyzing top 5 insights..."}
+            </span>
           </div>
         )}
 
@@ -1273,14 +1285,14 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
         {sortBy !== 'most-relevant-notes' && clickedSquareNoteId && top5Notes.length > 0 && (() => {
           // Find the clicked note from top5Notes
           const clickedNote = top5Notes.find(n => n.uniqueId === clickedSquareNoteId);
-          
+
           if (!clickedNote) return null;
-          
+
           return (
             <div className="mb-8 animate-fade-in">
               {/* Visual separator */}
               <div className="h-px bg-gray-200 dark:bg-gray-700 mb-6"></div>
-              
+
               {/* Title above expanded note */}
               <div className="flex items-center gap-2 mb-4">
                 <Sparkles size={16} className="text-scholar-600 dark:text-scholar-400" />
@@ -1288,7 +1300,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                   Selected Insight Details
                 </h4>
               </div>
-              
+
               {/* Single expanded note */}
               <ResearchCardNote
                 id={clickedNote.uniqueId}
@@ -1303,7 +1315,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                 isExpanded={true}
                 onToggleExpand={() => setClickedSquareNoteId(null)}
               />
-              
+
               {/* Visual separator */}
               <div className="h-px bg-gray-200 dark:bg-gray-700 mt-6"></div>
             </div>
@@ -1320,9 +1332,8 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                 <div
                   key={note.uniqueId}
                   data-note-id={note.uniqueId}
-                  className={`transition-all duration-500 ${
-                    isHighlighted ? 'ring-2 ring-scholar-500 rounded-xl' : ''
-                  }`}
+                  className={`transition-all duration-500 ${isHighlighted ? 'ring-2 ring-scholar-500 rounded-xl' : ''
+                    }`}
                 >
                   <ResearchCardNote
                     id={note.uniqueId}
