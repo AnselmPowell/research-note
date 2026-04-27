@@ -122,6 +122,8 @@ interface ResearchContextType {
   researchPurpose: string;
   submitResearchPurpose: (purpose: string) => void;
   skipResearchPurpose: () => void;
+  // NEW: Control research purpose modal visibility independently
+  showPurposeModal: boolean;
 }
 
 const ResearchContext = createContext<ResearchContextType | undefined>(undefined);
@@ -419,7 +421,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // NEW: Research Purpose gating
   const [researchPurpose, setResearchPurpose] = useState<string>('');
   const researchPurposeRef = useRef<string>('');
-  const [purposePromiseResolver, setPurposePromiseResolver] = useState<(() => void) | null>(null);
+  // NEW: Control modal visibility independently of research phase
+  const [showPurposeModal, setShowPurposeModal] = useState<boolean>(false);
 
   // Keep ref in sync for async pipeline access
   useEffect(() => {
@@ -441,24 +444,24 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       localStorageService.saveResearchPurpose(purpose); // Persist
     }
     
-    // Continue the research pipeline (non-blocking)
-    if (purposePromiseResolver) {
-      purposePromiseResolver();
-      setPurposePromiseResolver(null);
-    }
-  }, [purposePromiseResolver]);
+    // Close the modal
+    setShowPurposeModal(false);
+  }, []);
 
   const skipResearchPurpose = useCallback(() => {
-    // CRITICAL: Skip does NOT clear the purpose
-    // It preserves the existing purpose from localStorage
-    // This allows the "Top 5 Insights" LLM to still use it
-    // We simply move forward without submitting new data
+    // CRITICAL: Skip keeps localStorage value (for next modal pre-fill)
+    // BUT clears in-memory state so it's NOT used for ranking/analysis
+    // This means:
+    // - Next time modal opens: pre-fills with saved value
+    // - rankTopNotes receives: empty string (no purpose used)
     
-    if (purposePromiseResolver) {
-      purposePromiseResolver();
-      setPurposePromiseResolver(null);
-    }
-  }, [purposePromiseResolver]);
+    setResearchPurpose('');  // Clear in-memory state
+    researchPurposeRef.current = '';  // Clear ref
+    // NOTE: Does NOT clear localStorage - value persists for next modal
+    
+    // Close the modal
+    setShowPurposeModal(false);
+  }, []);
 
   // Auto-save deep research results whenever they change (debounced to prevent excessive writes)
   useEffect(() => {
@@ -956,11 +959,9 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       insightPromiseResolver();
       setInsightPromiseResolver(null);
     }
-    if (purposePromiseResolver) {
-      purposePromiseResolver();
-      setPurposePromiseResolver(null);
-    }
-  }, [insightPromiseResolver, purposePromiseResolver]);
+    // Close purpose modal if open
+    setShowPurposeModal(false);
+  }, [insightPromiseResolver]);
 
   // Complete reset for sign out - clears all research and search data
   const resetAllResearchData = useCallback(() => {
@@ -1040,11 +1041,9 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       insightPromiseResolver();
       setInsightPromiseResolver(null);
     }
-    if (purposePromiseResolver) {
-      purposePromiseResolver();
-      setPurposePromiseResolver(null);
-    }
-  }, [insightPromiseResolver, purposePromiseResolver]);
+    // Close purpose modal if open
+    setShowPurposeModal(false);
+  }, [insightPromiseResolver]);
 
   const analyzeArxivPapers = useCallback(async (papers: ArxivPaper[], userQuestions: string[], keywords: string[], signal?: AbortSignal) => {
     const PAPER_CONCURRENCY = 3;
@@ -1548,26 +1547,47 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const searchPromise = searchAllSources(structuredTerms, query.topics, query.questions, (msg) => setGatheringStatus(msg));
 
       // NEW: Gating for Insight Questions Review
+      console.log('[ResearchContext] 🔍 Checking insight questions:', {
+        hasInsights: structuredTerms.insight_questions?.length > 0,
+        count: structuredTerms.insight_questions?.length,
+        aborted: signal.aborted,
+        hasSubmittedInsights
+      });
+      
       if (structuredTerms.insight_questions?.length > 0 && !signal.aborted && !hasSubmittedInsights) {
+        console.log('[ResearchContext] ✅ Entering insight questions block');
         setResearchPhase('reviewing_insights');
         setGatheringStatus("Reviewing research suggestions...");
         await new Promise<void>((resolve) => {
           setInsightPromiseResolver(() => resolve);
         });
+        console.log('[ResearchContext] ✅ Insight questions resolved (user submitted/skipped)');
         if (signal.aborted) return;
+        
+        // ✅ Reload research purpose from localStorage before showing modal
+        // This ensures modal pre-fills even if previous search cleared the state
+        const savedPurpose = localStorageService.getResearchPurpose();
+        console.log('[ResearchContext] 📖 Loaded saved purpose from localStorage:', savedPurpose ? savedPurpose.substring(0, 50) + '...' : 'none');
+        if (savedPurpose) {
+          setResearchPurpose(savedPurpose);
+          researchPurposeRef.current = savedPurpose;
+        }
+        
+        // ✅ Show purpose modal after insight questions are resolved
+        console.log('[ResearchContext] 🎯 Setting showPurposeModal = true');
+        setShowPurposeModal(true);
+        console.log('[ResearchContext] ✅ ResearchPurposeModal should now be visible!');
+        
+        // ✅ Then change phase to continue pipeline
+        setResearchPhase('searching');
+        console.log('[ResearchContext] ✅ Phase changed to searching, pipeline continues');
+      } else {
+        console.log('[ResearchContext] ⏭️  SKIPPING insight questions block - not showing ResearchPurposeModal');
       }
 
       // FIX: Do NOT block the pipeline for research purpose
       // The modal will appear as a non-blocking UI overlay
       // Pipeline continues immediately - purpose is optional enhancement
-      
-      // Show the purpose modal as non-blocking UI (only if insights were shown)
-      if (structuredTerms.insight_questions?.length > 0 && !signal.aborted) {
-        setResearchPhase('awaiting_purpose');
-        setGatheringStatus("Understanding your goal...");
-        // ✅ CRITICAL FIX: Do NOT await here - let pipeline continue
-        // The promise resolver is set but NOT awaited - user can interact in parallel
-      }
 
       if (signal.aborted) return;
 
@@ -1819,8 +1839,10 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     resolveInsights,
     topNoteIds,
     hasRankedOnce,  // ✅ NEW: Export flag
+    researchPurpose,  // ✅ Research purpose value
     submitResearchPurpose,
     skipResearchPurpose,
+    showPurposeModal,  // ✅ NEW: Control modal visibility
     rankTopNotes: async () => {
       console.log('[🔴 rankTopNotes] BUTTON CLICKED - Function called');
       
@@ -2065,7 +2087,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addToPaperResults, clearPaperResults, removePaperFromResults, resetAccumulatedDataForMigration,
     insightQuestions, selectedInsightQuestions, hasSubmittedInsights, toggleInsightQuestion,
     updateInsightQuestion, addInsightQuestion, resolveInsights,
-    topNoteIds, hasRankedOnce, researchPurpose, arxivKeywords, submitResearchPurpose, skipResearchPurpose
+    topNoteIds, hasRankedOnce, researchPurpose, arxivKeywords, submitResearchPurpose, skipResearchPurpose,
+    showPurposeModal
   ]);
 
   return (

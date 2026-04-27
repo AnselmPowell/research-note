@@ -395,6 +395,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     submitResearchPurpose,
     skipResearchPurpose,
     researchPurpose,
+    showPurposeModal,  // ✅ NEW: Control modal visibility
     status,
     arxivKeywords: generatedKeywords,
     topNoteIds,
@@ -1397,31 +1398,38 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
       </div>
 
       {/* ── DYNAMIC LOADING BOX (Phases: initialising, searching, filtering) ──── */}
-      {(researchPhase === 'initialising' ||
+      {/* Hide when ResearchPurposeModal is showing */}
+      {!showPurposeModal && (researchPhase === 'initialising' ||
         researchPhase === 'searching' ||
         researchPhase === 'filtering' ||
         researchPhase === 'reviewing_insights') && (
-          <DynamicLoadingBox
-            researchPhase={researchPhase}
-            paperData={paperDataList}
-            gatheringStatus={status}
-            insightQuestions={insightQuestions}
-            selectedQuestions={selectedInsightQuestions}
-            onToggleQuestion={toggleInsightQuestion}
-            onUpdateQuestion={updateInsightQuestion}
-            onAddQuestion={addInsightQuestion}
-            onProceed={resolveInsights}
-            hasSubmittedInsights={hasSubmittedInsights}
-          />
+          <>
+            {console.log('[DeepSearch] 📦 RENDERING DynamicLoadingBox', { showPurposeModal, researchPhase })}
+            <DynamicLoadingBox
+              researchPhase={researchPhase}
+              paperData={paperDataList}
+              gatheringStatus={status}
+              insightQuestions={insightQuestions}
+              selectedQuestions={selectedInsightQuestions}
+              onToggleQuestion={toggleInsightQuestion}
+              onUpdateQuestion={updateInsightQuestion}
+              onAddQuestion={addInsightQuestion}
+              onProceed={resolveInsights}
+              hasSubmittedInsights={hasSubmittedInsights}
+            />
+          </>
         )}
 
-      {/* ── RESEARCH PURPOSE MODAL (Phase: awaiting_purpose) ────────────────── */}
-      {researchPhase === 'awaiting_purpose' && (
-        <ResearchPurposeModal
-          initialValue={researchPurpose}
-          onSubmit={submitResearchPurpose}
-          onSkip={skipResearchPurpose}
-        />
+      {/* ── RESEARCH PURPOSE MODAL (Non-blocking overlay) ────────────────── */}
+      {showPurposeModal && (
+        <>
+          {console.log('[DeepSearch] 🎯 RENDERING ResearchPurposeModal', { showPurposeModal, researchPurpose })}
+          <ResearchPurposeModal
+            initialValue={researchPurpose}
+            onSubmit={submitResearchPurpose}
+            onSkip={skipResearchPurpose}
+          />
+        </>
       )}
     </>
   );
