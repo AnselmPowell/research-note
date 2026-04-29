@@ -495,10 +495,16 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [insightQuestions, setInsightQuestions] = useState<string[]>([]);
   const [selectedInsightQuestions, setSelectedInsightQuestions] = useState<string[]>([]);
   const selectedInsightQuestionsRef = useRef<string[]>([]);
+  const insightQuestionsRef = useRef<string[]>([]); // NEW: Ref for synchronous access
 
   useEffect(() => {
     selectedInsightQuestionsRef.current = selectedInsightQuestions;
   }, [selectedInsightQuestions]);
+
+  // NEW: Keep insightQuestionsRef in sync with state
+  useEffect(() => {
+    insightQuestionsRef.current = insightQuestions;
+  }, [insightQuestions]);
 
   const [hasSubmittedInsights, setHasSubmittedInsights] = useState(false);
   const [insightPromiseResolver, setInsightPromiseResolver] = useState<(() => void) | null>(null);
@@ -1642,12 +1648,60 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setProcessedPdfs(userPdfs); // Store for navigation
         if (signal.aborted) return;
 
+        // ✅ GENERATE KEYWORDS EVEN FOR URL-ONLY (for insight questions)
+        endPhaseTimer('initialising');
+        const structuredTerms = await generateArxivSearchTerms([], query.questions);
+        const generatedQuestions = structuredTerms.insight_questions || [];
+        setInsightQuestions(generatedQuestions);
+        insightQuestionsRef.current = generatedQuestions;
+
         if (userPdfs.length > 0) {
+          // ════════════════════════════════════════════════════════════════
+          // 🔴 NEW BLOCKING POINT: Insight Questions (URL-Only Path)
+          // ════════════════════════════════════════════════════════════════
+          console.log('[ResearchContext] 🔍 Checking insight questions (URL-only path):', {
+            hasInsights: insightQuestionsRef.current.length > 0,
+            count: insightQuestionsRef.current.length,
+            aborted: signal.aborted,
+            hasSubmittedInsights
+          });
+          
+          if (insightQuestionsRef.current.length > 0 && !signal.aborted && !hasSubmittedInsights) {
+            console.log('[ResearchContext] ✅ Entering insight questions (URL-only path)');
+            setResearchPhase('reviewing_insights');
+            setGatheringStatus("Refine your research with additional questions...");
+            
+            await new Promise<void>((resolve) => {
+              setInsightPromiseResolver(() => resolve);
+            });
+            
+            console.log('[ResearchContext] ✅ Insight questions resolved (URL-only)');
+            if (signal.aborted) return;
+            
+            const savedPurpose = localStorageService.getResearchPurpose();
+            if (savedPurpose) {
+              setResearchPurpose(savedPurpose);
+              researchPurposeRef.current = savedPurpose;
+            }
+            setShowPurposeModal(true);
+          }
+          // ════════════════════════════════════════════════════════════════
+          
           setResearchPhase('extracting');
           setGatheringStatus("Extracting notes from your PDFs...");
+          
+          const purposePrefix = researchPurposeRef.current.trim()
+            ? [`Context/Purpose of this research: ${researchPurposeRef.current.trim()}`]
+            : [];
+          
+          const finalQuestionsForExtraction = [
+            ...purposePrefix,
+            ...query.questions,
+            ...selectedInsightQuestionsRef.current
+          ];
 
           // Only analyze user PDFs
-          await performHybridResearch(userPdfs, [], query.questions, []);
+          await performHybridResearch(userPdfs, [], finalQuestionsForExtraction, []);
         } else {
           setGatheringStatus("No valid PDFs found.");
           setResearchPhase('completed');
@@ -1676,56 +1730,21 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (signal.aborted) return;
       endPhaseTimer('initialising');
       const structuredTerms = await generateArxivSearchTerms(query.topics, query.questions);
-      setInsightQuestions(structuredTerms.insight_questions || []); // CAPTURE
+      const generatedQuestions = structuredTerms.insight_questions || [];
+      setInsightQuestions(generatedQuestions); // CAPTURE in state
+      insightQuestionsRef.current = generatedQuestions; // CAPTURE in ref (synchronous)
       const displayKeywords = [structuredTerms.primary_keyword, ...structuredTerms.secondary_keywords].filter(Boolean);
       setArxivKeywords(displayKeywords);
 
       if (signal.aborted) return;
 
-      // START BACKGROUND SEARCH
+      // START BACKGROUND SEARCH (No blocking - let search proceed immediately)
       startPhaseTimer('searching');
       setGatheringStatus("Searching academic repositories...");
+      setResearchPhase('searching'); // Set phase immediately
+      
       // KICK OFF SEARCH IN BACKGROUND
       const searchPromise = searchAllSources(structuredTerms, query.topics, query.questions, (msg) => setGatheringStatus(msg));
-
-      // NEW: Gating for Insight Questions Review
-      console.log('[ResearchContext] 🔍 Checking insight questions:', {
-        hasInsights: structuredTerms.insight_questions?.length > 0,
-        count: structuredTerms.insight_questions?.length,
-        aborted: signal.aborted,
-        hasSubmittedInsights
-      });
-      
-      if (structuredTerms.insight_questions?.length > 0 && !signal.aborted && !hasSubmittedInsights) {
-        console.log('[ResearchContext] ✅ Entering insight questions block');
-        setResearchPhase('reviewing_insights');
-        setGatheringStatus("Reviewing research suggestions...");
-        await new Promise<void>((resolve) => {
-          setInsightPromiseResolver(() => resolve);
-        });
-        console.log('[ResearchContext] ✅ Insight questions resolved (user submitted/skipped)');
-        if (signal.aborted) return;
-        
-        // ✅ Reload research purpose from localStorage before showing modal
-        // This ensures modal pre-fills even if previous search cleared the state
-        const savedPurpose = localStorageService.getResearchPurpose();
-        console.log('[ResearchContext] 📖 Loaded saved purpose from localStorage:', savedPurpose ? savedPurpose.substring(0, 50) + '...' : 'none');
-        if (savedPurpose) {
-          setResearchPurpose(savedPurpose);
-          researchPurposeRef.current = savedPurpose;
-        }
-        
-        // ✅ Show purpose modal after insight questions are resolved
-        console.log('[ResearchContext] 🎯 Setting showPurposeModal = true');
-        setShowPurposeModal(true);
-        console.log('[ResearchContext] ✅ ResearchPurposeModal should now be visible!');
-        
-        // ✅ Then change phase to continue pipeline
-        setResearchPhase('searching');
-        console.log('[ResearchContext] ✅ Phase changed to searching, pipeline continues');
-      } else {
-        console.log('[ResearchContext] ⏭️  SKIPPING insight questions block - not showing ResearchPurposeModal');
-      }
 
       // FIX: Do NOT block the pipeline for research purpose
       // The modal will appear as a non-blocking UI overlay
@@ -1798,6 +1817,43 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         endPhaseTimer('filtering');
 
+        // ════════════════════════════════════════════════════════════════
+        // 🔴 NEW BLOCKING POINT: Insight Questions Review (After Filtering)
+        // ════════════════════════════════════════════════════════════════
+        console.log('[ResearchContext] 🔍 Checking insight questions AFTER filtering:', {
+          hasInsights: insightQuestionsRef.current.length > 0,
+          count: insightQuestionsRef.current.length,
+          aborted: signal.aborted,
+          hasSubmittedInsights,
+          filteredPapersCount: filtered.length
+        });
+        
+        if (insightQuestionsRef.current.length > 0 && !signal.aborted && !hasSubmittedInsights) {
+          console.log('[ResearchContext] ✅ Entering insight questions block AFTER filtering');
+          setResearchPhase('reviewing_insights');
+          setGatheringStatus("Refine your research with additional questions...");
+          
+          // 🔴 BLOCK HERE - Wait for user to select questions
+          await new Promise<void>((resolve) => {
+            setInsightPromiseResolver(() => resolve);
+          });
+          
+          console.log('[ResearchContext] ✅ Insight questions resolved (user submitted/skipped)');
+          if (signal.aborted) return;
+          
+          // ✅ Research purpose modal (optional enhancement)
+          const savedPurpose = localStorageService.getResearchPurpose();
+          console.log('[ResearchContext] 📖 Loaded saved purpose from localStorage:', savedPurpose ? savedPurpose.substring(0, 50) + '...' : 'none');
+          if (savedPurpose) {
+            setResearchPurpose(savedPurpose);
+            researchPurposeRef.current = savedPurpose;
+          }
+          
+          console.log('[ResearchContext] 🎯 Setting showPurposeModal = true');
+          setShowPurposeModal(true);
+        }
+        // ════════════════════════════════════════════════════════════════
+
         setResearchPhase('extracting');
         startPhaseTimer('extracting');
 
@@ -1831,11 +1887,52 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       } else if (userPdfs.length > 0) {
         // Only user PDFs, no ArXiv matches
         endPhaseTimer('filtering');
+        
+        // ════════════════════════════════════════════════════════════════
+        // 🔴 NEW BLOCKING POINT: Insight Questions (PDF-Only Path)
+        // ════════════════════════════════════════════════════════════════
+        console.log('[ResearchContext] 🔍 Checking insight questions (PDF-only path):', {
+          hasInsights: insightQuestionsRef.current.length > 0,
+          count: insightQuestionsRef.current.length,
+          aborted: signal.aborted,
+          hasSubmittedInsights
+        });
+        
+        if (insightQuestionsRef.current.length > 0 && !signal.aborted && !hasSubmittedInsights) {
+          console.log('[ResearchContext] ✅ Entering insight questions block (PDF-only path)');
+          setResearchPhase('reviewing_insights');
+          setGatheringStatus("Refine your research with additional questions...");
+          
+          await new Promise<void>((resolve) => {
+            setInsightPromiseResolver(() => resolve);
+          });
+          
+          console.log('[ResearchContext] ✅ Insight questions resolved (PDF-only)');
+          if (signal.aborted) return;
+          
+          const savedPurpose = localStorageService.getResearchPurpose();
+          if (savedPurpose) {
+            setResearchPurpose(savedPurpose);
+            researchPurposeRef.current = savedPurpose;
+          }
+          setShowPurposeModal(true);
+        }
+        // ════════════════════════════════════════════════════════════════
+        
         setResearchPhase('extracting');
         startPhaseTimer('extracting');
         setGatheringStatus("Analyzing your provided PDFs...");
+        
         // Combine user questions + Selected AI Insight Questions (using Ref to avoid stale closure)
-        const finalQuestionsForExtraction = [...query.questions, ...selectedInsightQuestionsRef.current];
+        const purposePrefix = researchPurposeRef.current.trim()
+          ? [`Context/Purpose of this research: ${researchPurposeRef.current.trim()}`]
+          : [];
+        
+        const finalQuestionsForExtraction = [
+          ...purposePrefix,
+          ...query.questions,
+          ...selectedInsightQuestionsRef.current
+        ];
 
         console.log('[ResearchContext] 📝 FINAL QUESTIONS FOR EXTRACTION (PDF-ONLY):', {
           original: query.questions.length,

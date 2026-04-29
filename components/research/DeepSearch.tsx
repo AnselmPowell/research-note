@@ -1420,6 +1420,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
               researchPhase={researchPhase}
               paperData={paperDataList}
               gatheringStatus={status}
+              paperCount={filteredCandidates.length} // NEW: Pass total filtered papers count
               insightQuestions={insightQuestions}
               selectedQuestions={selectedInsightQuestions}
               onToggleQuestion={toggleInsightQuestion}

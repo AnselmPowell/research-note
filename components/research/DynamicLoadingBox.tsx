@@ -9,6 +9,7 @@ interface DynamicLoadingBoxProps {
     relevanceScore: number;
   }>;
   gatheringStatus: string;
+  paperCount?: number; // NEW: Total filtered papers count
   // NEW: Insight Questions props
   insightQuestions?: string[];
   selectedQuestions?: string[];
@@ -70,6 +71,7 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
   researchPhase,
   paperData,
   gatheringStatus,
+  paperCount, // NEW: Destructure paperCount
   insightQuestions = [],
   selectedQuestions = [],
   onToggleQuestion,
@@ -258,7 +260,7 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
                 {isReviewing && (
                   <div className="flex items-center gap-2 px-3 py-1 bg-scholar-600 text-white rounded-lg font-black text-[10px] uppercase tracking-tighter animate-pulse mb-1">
 
-                    <span>papers found extracting notes in {timeLeft}s</span>
+                    <span>extracting notes from {paperCount || paperData.length} papers in {timeLeft}s</span>
                   </div>
                 )}
               </div>
