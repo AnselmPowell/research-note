@@ -436,7 +436,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
 
   // Determine candidates based on research phase (same logic as before)
   const currentTabCandidates = useMemo(() => {
-    return researchPhase === 'extracting' || researchPhase === 'completed'
+    return researchPhase === 'extracting' || researchPhase === 'completed' || researchPhase === 'ranking_notes'
       ? filteredCandidates
       : arxivCandidates;
   }, [researchPhase, filteredCandidates, arxivCandidates]);

@@ -101,6 +101,11 @@ interface ResearchContextType {
   // NEW: Top Note Ranking
   topNoteIds: string[];
   hasRankedOnce: boolean;  // ✅ NEW: Track if user has ranked
+  selectIntelligent40Notes: (
+    allNotes: Array<{uniqueId: string; quote: string; relatedQuestion?: string; sourceId: string; pageNumber?: number}>,
+    questions: string[],
+    maxNotes?: number
+  ) => Array<{uniqueId: string; quote: string; relatedQuestion?: string; score?: number}>;
   rankTopNotes: () => Promise<void>;
   // NEW: Accumulated results for "My Results" tab (persistent across searches)
   accumulatedPapers: ArxivPaper[];
@@ -127,6 +132,143 @@ interface ResearchContextType {
 }
 
 const ResearchContext = createContext<ResearchContextType | undefined>(undefined);
+
+/**
+ * Intelligently select up to 40 notes from a larger pool using multi-strategy sampling
+ * 
+ * Strategy:
+ * 1. Question Coverage: Ensure each question has representation (up to 5 notes per question)
+ * 2. Paper Diversity: Sample from different papers to avoid bias toward one source
+ * 3. Page Distribution: Prefer notes from different pages to capture document breadth
+ * 4. Fallback: If still under 40, add remaining notes by paper order
+ */
+const selectIntelligent40Notes = (
+  allNotes: Array<{uniqueId: string; quote: string; relatedQuestion?: string; sourceId: string; pageNumber?: number}>,
+  questions: string[],
+  maxNotes: number = 40
+): Array<{uniqueId: string; quote: string; relatedQuestion?: string; score?: number}> => {
+  
+  console.log('[selectIntelligent40] 🎯 Starting intelligent selection:', {
+    totalNotes: allNotes.length,
+    targetMax: maxNotes,
+    questionsCount: questions.length
+  });
+  
+  // If 40 or fewer notes, return all
+  if (allNotes.length <= maxNotes) {
+    console.log('[selectIntelligent40] ✅ Note count within limit, returning all notes');
+    return allNotes.map(n => ({
+      uniqueId: n.uniqueId,
+      quote: n.quote,
+      relatedQuestion: n.relatedQuestion || 'General research',
+      score: 0  // Preserve for API compatibility
+    }));
+  }
+  
+  const selected: Set<string> = new Set();
+  const selectedNotes: Array<any> = [];
+  
+  // STRATEGY 1: Question Coverage (5 notes per question max)
+  console.log('[selectIntelligent40] 📋 STRATEGY 1: Question coverage sampling...');
+  const notesPerQuestion = Math.min(5, Math.floor(maxNotes / Math.max(questions.length, 1)));
+  
+  questions.forEach(question => {
+    const questionNotes = allNotes.filter(n => 
+      (n.relatedQuestion || '').toLowerCase().includes(question.toLowerCase()) ||
+      question.toLowerCase().includes((n.relatedQuestion || '').toLowerCase())
+    );
+    
+    // Take first N notes for this question (varied by page/paper)
+    const sampled = questionNotes
+      .slice(0, notesPerQuestion)
+      .filter(n => !selected.has(n.uniqueId));
+    
+    sampled.forEach(note => {
+      if (selected.size < maxNotes) {
+        selected.add(note.uniqueId);
+        selectedNotes.push({
+          uniqueId: note.uniqueId,
+          quote: note.quote,
+          relatedQuestion: note.relatedQuestion || 'General research',
+          score: 0
+        });
+      }
+    });
+  });
+  
+  console.log('[selectIntelligent40] ✅ After question coverage:', selected.size, 'notes selected');
+  
+  // STRATEGY 2: Paper Diversity (sample from each paper)
+  if (selected.size < maxNotes) {
+    console.log('[selectIntelligent40] 📚 STRATEGY 2: Paper diversity sampling...');
+    
+    // Group notes by source paper
+    const notesByPaper = new Map<string, typeof allNotes>();
+    allNotes.forEach(note => {
+      if (!notesByPaper.has(note.sourceId)) {
+        notesByPaper.set(note.sourceId, []);
+      }
+      notesByPaper.get(note.sourceId)!.push(note);
+    });
+    
+    // Round-robin sample from each paper
+    const paperIds = Array.from(notesByPaper.keys());
+    let paperIndex = 0;
+    let notesAdded = 0;
+    
+    while (selected.size < maxNotes && notesAdded < allNotes.length) {
+      const paperId = paperIds[paperIndex % paperIds.length];
+      const paperNotes = notesByPaper.get(paperId)!;
+      
+      // Find next unselected note from this paper
+      const unselected = paperNotes.find(n => !selected.has(n.uniqueId));
+      
+      if (unselected) {
+        selected.add(unselected.uniqueId);
+        selectedNotes.push({
+          uniqueId: unselected.uniqueId,
+          quote: unselected.quote,
+          relatedQuestion: unselected.relatedQuestion || 'General research',
+          score: 0
+        });
+      }
+      
+      paperIndex++;
+      notesAdded++;
+    }
+    
+    console.log('[selectIntelligent40] ✅ After paper diversity:', selected.size, 'notes selected');
+  }
+  
+  // STRATEGY 3: Fallback - Add remaining notes if still under 40
+  if (selected.size < maxNotes) {
+    console.log('[selectIntelligent40] 📦 STRATEGY 3: Filling remaining slots...');
+    
+    const remaining = allNotes
+      .filter(n => !selected.has(n.uniqueId))
+      .slice(0, maxNotes - selected.size);
+    
+    remaining.forEach(note => {
+      selected.add(note.uniqueId);
+      selectedNotes.push({
+        uniqueId: note.uniqueId,
+        quote: note.quote,
+        relatedQuestion: note.relatedQuestion || 'General research',
+        score: 0
+      });
+    });
+    
+    console.log('[selectIntelligent40] ✅ After fallback:', selected.size, 'notes selected');
+  }
+  
+  console.log('[selectIntelligent40] 🎉 FINAL SELECTION:', {
+    totalSelected: selectedNotes.length,
+    fromPapers: new Set(allNotes.filter(n => selected.has(n.uniqueId)).map(n => n.sourceId)).size,
+    coverage: `${selectedNotes.length}/${allNotes.length} notes`
+  });
+  
+  return selectedNotes;
+};
 
 export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeSearchMode, setActiveSearchMode] = useState<SearchMode>('deep');
@@ -1843,6 +1985,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     submitResearchPurpose,
     skipResearchPurpose,
     showPurposeModal,  // ✅ NEW: Control modal visibility
+    selectIntelligent40Notes,  // Reference to helper function defined above
     rankTopNotes: async () => {
       console.log('[🔴 rankTopNotes] BUTTON CLICKED - Function called');
       
@@ -1968,33 +2111,45 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           return;
         }
 
-        // ✅ NEW: If more than 40 notes, filter to top 40 by score
-        let notesForRanking = notesToRank;
-        if (notesToRank.length > 40) {
-          console.log('[🔴 rankTopNotes] 📊 Filtering to top 40 notes by score...');
-          notesForRanking = [...notesToRank]
-            .sort((a, b) => (b.score || 0) - (a.score || 0))  // Sort descending by score
-            .slice(0, 40);  // Take top 40
-          
-          console.log('[🔴 rankTopNotes] ✅ Filtered notes:', {
-            original: notesToRank.length,
-            filtered: notesForRanking.length,
-            topScore: notesForRanking[0]?.score || 0,
-            lowestScore: notesForRanking[39]?.score || 0
-          });
-        }
-
+        // ✅ INTELLIGENT SELECTION: If more than 40 notes, use smart sampling
         const queries = [...arxivKeywords, ...selectedInsightQuestions];
         
+        // Prepare notes with sourceId and pageNumber for intelligent selection
+        const notesWithMetadata = notesToRank.map(n => {
+          const sourceId = n.uniqueId.split('|')[0] || '';
+          const pageNumberMatch = n.uniqueId.split('|')[1]?.replace('p', '');
+          const pageNumber = pageNumberMatch ? parseInt(pageNumberMatch) : 0;
+          
+          return {
+            uniqueId: n.uniqueId,
+            quote: n.quote,
+            relatedQuestion: n.relatedQuestion || 'General research',
+            sourceId,
+            pageNumber
+          };
+        });
+        
+        const notesForRanking = selectIntelligent40Notes(
+          notesWithMetadata,
+          queries,
+          40  // Max notes to send
+        );
+
+        console.log('[🔴 rankTopNotes] 🎯 Intelligent selection complete:', {
+          original: notesToRank.length,
+          selected: notesForRanking.length,
+          strategy: 'question-coverage + paper-diversity'
+        });
+        
         console.log('[🔴 rankTopNotes] 🌐 Calling backend API:', {
-          notesToRankCount: notesForRanking.length,  // ✅ UPDATED: Use filtered count
+          notesToRankCount: notesForRanking.length,
           queriesCount: queries.length,
           hasPurpose: !!researchPurpose,
           purposeLength: researchPurpose?.length || 0,
-          sampleNoteIds: notesForRanking.slice(0, 2).map(n => n.uniqueId.substring(0, 50))  // ✅ UPDATED
+          sampleNoteIds: notesForRanking.slice(0, 2).map(n => n.uniqueId.substring(0, 50))
         });
 
-        const result = await rankNotesAI(notesForRanking, queries, researchPurpose);  // ✅ UPDATED: Use filtered notes
+        const result = await rankNotesAI(notesForRanking, queries, researchPurpose);
         
         console.log('[🔴 rankTopNotes] 📨 Backend API Response:', {
           success: !!result,
