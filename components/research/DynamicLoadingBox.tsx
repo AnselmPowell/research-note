@@ -24,7 +24,7 @@ const FADE_OUT_DURATION = 1000;
 const FADE_IN_DURATION = 1000;
 const DISPLAY_DURATION = 6000;
 const MESSAGE_CYCLE_DURATION = FADE_OUT_DURATION + FADE_IN_DURATION + DISPLAY_DURATION;
-const GRACE_PERIOD_SECONDS = 24;
+const GRACE_PERIOD_SECONDS = 60;
 
 const phaseMessages: Record<ResearchPhase, string[]> = {
   initialising: [
@@ -165,7 +165,13 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
 
   const handleSaveEdit = (index: number) => {
     if (tempEditText.trim() && onUpdateQuestion) {
-      onUpdateQuestion(index, tempEditText.trim());
+      const updatedQuestion = tempEditText.trim();
+      onUpdateQuestion(index, updatedQuestion);
+      
+      // Auto-select the edited question
+      if (onToggleQuestion && !selectedQuestions.includes(updatedQuestion)) {
+        onToggleQuestion(updatedQuestion);
+      }
     }
     setEditingIndex(null);
   };
