@@ -92,6 +92,7 @@ interface PaperCardProps {
 const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true, activeQuery = 'all' }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isAbstractExpanded, setIsAbstractExpanded] = useState(false);
+  const [expandedNoteIds, setExpandedNoteIds] = useState<Set<string>>(new Set()); // NEW: Track expanded notes
   const { toggleArxivSelection, selectedArxivIds, isPaperSelectedByUri } = useResearch();
   const { isPaperSaved, savePaper, deletePaper } = useDatabase();
   const { loadedPdfs, isPdfInContext, togglePdfContext, loadPdfFromUrl, setActivePdf, failedUrlErrors, downloadingUris, contextUris } = useLibrary();
@@ -309,7 +310,29 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
               <div className="mt-4 pl-0 sm:pl-4 border-l-0 sm:border-l-2 border-gray-100 dark:border-gray-800 space-y-3">
                 {visibleNotes.map((note, idx) => {
                   const noteId = getNoteId(paper.id, note.pageNumber, idx);
-                  return <ResearchCardNote key={noteId} id={noteId} note={note} isSelected={selectedNoteIds.includes(noteId)} onSelect={() => onSelectNote(noteId)} sourceTitle={paper.title} sourcePaper={paper} />;
+                  return (
+                    <ResearchCardNote
+                      key={noteId}
+                      id={noteId}
+                      note={note}
+                      isSelected={selectedNoteIds.includes(noteId)}
+                      onSelect={() => onSelectNote(noteId)}
+                      sourceTitle={paper.title}
+                      sourcePaper={paper}
+                      isExpanded={expandedNoteIds.has(noteId)}
+                      onToggleExpand={() => {
+                        setExpandedNoteIds(prev => {
+                          const next = new Set(prev);
+                          if (next.has(noteId)) {
+                            next.delete(noteId);
+                          } else {
+                            next.add(noteId);
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                  );
                 })}
               </div>
             )}
