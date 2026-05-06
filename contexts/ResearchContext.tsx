@@ -1180,8 +1180,16 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     setIsDeepResearching(false);
     setResearchPhase(prev => {
-      if (prev === 'extracting') { setGatheringStatus("Research stopped. Showing partial results."); return 'completed'; }
-      else { setGatheringStatus("Research stopped."); setArxivCandidates([]); setFilteredCandidates([]); return 'idle'; }
+      if (prev === 'downloading' || prev === 'downloaded' || prev === 'extracting') { 
+        setGatheringStatus("Research stopped. Showing partial results."); 
+        return 'completed'; 
+      }
+      else { 
+        setGatheringStatus("Research stopped."); 
+        setArxivCandidates([]); 
+        setFilteredCandidates([]); 
+        return 'idle'; 
+      }
     });
 
     // RESOLVE any hanging promises to allow the async function to exit gracefully
@@ -1194,63 +1202,144 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [insightPromiseResolver]);
 
   const analyzeArxivPapers = useCallback(async (papers: ArxivPaper[], userQuestions: string[], keywords: string[], signal?: AbortSignal) => {
-    const PAPER_CONCURRENCY = 3;
-    const processPaper = async (paper: ArxivPaper) => {
-      if (signal?.aborted) return;
-      setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: 'downloading' } : p));
-      syncPaperStatusToAccumulated(paper.id, 'downloading');  // NEW: Sync to accumulated
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PHASE A: DOWNLOAD ALL PDFs FIRST (5 concurrent)
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    const DOWNLOAD_CONCURRENCY = 5;
+    console.log(`[🔴 analyzeArxivPapers] Starting DOWNLOAD phase for ${papers.length} papers (${DOWNLOAD_CONCURRENCY} concurrent)`);
+    
+    const downloadResults = await asyncPool(DOWNLOAD_CONCURRENCY, papers, async (paper) => {
       try {
         if (signal?.aborted) throw new Error("Aborted");
-        // FIXED: Pass AbortSignal to fetchPdfBuffer for cancellation support
+        
+        // Update UI: Downloading
+        setFilteredCandidates(prev => 
+          prev.map(p => p.id === paper.id 
+            ? { ...p, analysisStatus: 'downloading' } 
+            : p
+          )
+        );
+        syncPaperStatusToAccumulated(paper.id, 'downloading');
+        
+        // Download PDF
         const buffer = await fetchPdfBuffer(paper.pdfUri, signal);
         if (signal?.aborted) throw new Error("Aborted");
+        
+        // Extract data (includes preview!)
         const extracted = await extractPdfData(buffer, signal);
-
+        
         const aiYear = extracted.metadata.year?.match(/\b(19|20)\d{2}\b/)?.[0];
         const currentYear = paper.publishedDate?.match(/\b(19|20)\d{2}\b/)?.[0];
-
+        
+        // Update paper with extracted metadata + preview
         setFilteredCandidates(prev => prev.map(p => {
           if (p.id !== paper.id) return p;
           const hasNoAuthors = !p.authors || p.authors.length === 0;
           return {
             ...p,
-            analysisStatus: 'processing',
+            analysisStatus: 'downloaded',  // NEW STATUS
             title: extracted.metadata.title || p.title,
-            // Only replace authors with AI-extracted lead author if the paper has no authors at all
             authors: (hasNoAuthors && extracted.metadata.author && extracted.metadata.author !== 'Unknown Author')
               ? [extracted.metadata.author]
               : p.authors,
-            // Update date only if AI found a year and the paper has no extractable year
             publishedDate: aiYear && !currentYear ? aiYear : p.publishedDate,
             harvardReference: extracted.metadata.harvardReference,
             publisher: extracted.metadata.publisher,
-            categories: extracted.metadata.categories
+            categories: extracted.metadata.categories,
+            previewImage: extracted.previewImage  // STORE PREVIEW
           };
         }));
-        syncPaperStatusToAccumulated(paper.id, 'processing');  // NEW: Sync to accumulated
+        syncPaperStatusToAccumulated(paper.id, 'downloaded');
+        
+        return { success: true, paper, extracted };
+        
+      } catch (error: any) {
+        console.error(`[🔴 analyzeArxivPapers] ❌ Download failed for paper ${paper.id}:`, error.message);
+        const finalStatus = (error.message === "Aborted" || signal?.aborted) ? 'stopped' : 'failed';
+        setFilteredCandidates(prev => 
+          prev.map(p => p.id === paper.id 
+            ? { ...p, analysisStatus: finalStatus } 
+            : p
+          )
+        );
+        syncPaperStatusToAccumulated(paper.id, finalStatus);
+        return { success: false, paper, error };
+      }
+    });
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SORT: Successful downloads FIRST, failed downloads LAST
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    const successfulDownloads = downloadResults.filter(r => r.success);
+    const failedDownloads = downloadResults.filter(r => !r.success);
+    
+    console.log(`[🔴 analyzeArxivPapers] ✅ Downloads complete: ${successfulDownloads.length}/${papers.length} successful`);
+    
+    // Reorder papers: successful at top, failed at bottom
+    setFilteredCandidates(prev => {
+      const successIds = new Set(successfulDownloads.map(r => r.paper.id));
+      const successful = prev.filter(p => successIds.has(p.id));
+      const failed = prev.filter(p => !successIds.has(p.id));
+      return [...successful, ...failed];
+    });
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PHASE B: EXTRACT NOTES FROM SUCCESSFUL DOWNLOADS (3 concurrent)
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    const NOTE_CONCURRENCY = 3;
+    console.log(`[🔴 analyzeArxivPapers] Starting NOTE EXTRACTION phase for ${successfulDownloads.length} papers (${NOTE_CONCURRENCY} concurrent)`);
 
+    // TRANSITION: Start extracting notes from downloaded PDFs
+    setResearchPhase('extracting');
+    setGatheringStatus('Extracting notes from papers...');
+
+    await asyncPool(NOTE_CONCURRENCY, successfulDownloads, async (result) => {
+      const { paper, extracted } = result;
+      
+      try {
         if (signal?.aborted) throw new Error("Aborted");
-        const relevantPages = await findRelevantPages([{ uri: paper.pdfUri, pages: extracted.pages }], userQuestions.join("\n"), keywords);
+        
+        // Update UI: Extracting notes
+        setFilteredCandidates(prev => 
+          prev.map(p => p.id === paper.id 
+            ? { ...p, analysisStatus: 'extracting' } 
+            : p
+          )
+        );
+        syncPaperStatusToAccumulated(paper.id, 'extracting');
+        
+        // Find relevant pages
+        const relevantPages = await findRelevantPages(
+          [{ uri: paper.pdfUri, pages: extracted.pages }], 
+          userQuestions.join("\n"), 
+          keywords
+        );
+        
         if (relevantPages.length > 0) {
-          // ✅ CRITICAL FIX: Stream notes to BOTH filteredCandidates AND deepResearchResults
+          // Stream notes callback
           const onStreamNotes = (newNotes: DeepResearchNote[]) => {
-            console.log(`[🔴 analyzeArxivPapers] 📥 onStreamNotes called with ${newNotes.length} notes from paper ${paper.id}`);
+            setFilteredCandidates(prev => 
+              prev.map(p => p.id === paper.id 
+                ? { ...p, notes: [...(p.notes || []), ...newNotes] } 
+                : p
+              )
+            );
+            syncPaperStatusToAccumulated(paper.id, 'extracting', newNotes);
             
-            // Update filteredCandidates (for paper card display)
-            setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, notes: [...(p.notes || []), ...newNotes] } : p));
-            syncPaperStatusToAccumulated(paper.id, 'extracting', newNotes);  // NEW: Sync notes AND status
-            
-            // ✅ CRITICAL FIX: Also add notes to deepResearchResults (for ranking)
             setDeepResearchResults(prev => {
               const notesWithSourceId = newNotes.map(note => ({
                 ...note,
-                sourceId: note.sourceId || paper.id // Use paper.id as fallback
+                sourceId: note.sourceId || paper.id
               }));
-              const updated = [...prev, ...notesWithSourceId];
-              console.log(`[🔴 analyzeArxivPapers] ✅ deepResearchResults updated: ${prev.length} → ${updated.length} notes`);
-              return updated;
+              return [...prev, ...notesWithSourceId];
             });
           };
+          
+          // Extract notes
           const allNotes = await extractNotesFromPages(
             relevantPages,
             userQuestions.join("\n"),
@@ -1259,23 +1348,42 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             extracted.references,
             onStreamNotes
           );
+          
           if (signal?.aborted) throw new Error("Aborted");
-          setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: 'completed', notes: allNotes } : p));
-          syncPaperStatusToAccumulated(paper.id, 'completed', allNotes);  // NEW: Final sync
+          
+          // Update UI: Completed
+          setFilteredCandidates(prev => 
+            prev.map(p => p.id === paper.id 
+              ? { ...p, analysisStatus: 'completed', notes: allNotes } 
+              : p
+            )
+          );
+          syncPaperStatusToAccumulated(paper.id, 'completed', allNotes);
+          
         } else {
           console.log(`[🔴 analyzeArxivPapers] ⚠️  No relevant pages found for paper ${paper.id}`);
-          setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: 'completed', notes: [] } : p));
-          syncPaperStatusToAccumulated(paper.id, 'completed', []);  // NEW: Final sync
+          setFilteredCandidates(prev => 
+            prev.map(p => p.id === paper.id 
+              ? { ...p, analysisStatus: 'completed', notes: [] } 
+              : p
+            )
+          );
+          syncPaperStatusToAccumulated(paper.id, 'completed', []);
         }
+        
       } catch (error: any) {
-        console.error(`[🔴 analyzeArxivPapers] ❌ Error processing paper ${paper.id}:`, error.message);
+        console.error(`[🔴 analyzeArxivPapers] ❌ Note extraction failed for paper ${paper.id}:`, error.message);
         const finalStatus = (error.message === "Aborted" || signal?.aborted) ? 'stopped' : 'failed';
-        setFilteredCandidates(prev => prev.map(p => p.id === paper.id ? { ...p, analysisStatus: finalStatus } : p));
-        syncPaperStatusToAccumulated(paper.id, finalStatus);  // NEW: Sync failure status
+        setFilteredCandidates(prev => 
+          prev.map(p => p.id === paper.id 
+            ? { ...p, analysisStatus: finalStatus } 
+            : p
+          )
+        );
+        syncPaperStatusToAccumulated(paper.id, finalStatus);
       }
-    };
-    console.log(`[🔴 analyzeArxivPapers] Starting analysis of ${papers.length} papers`);
-    await asyncPool(PAPER_CONCURRENCY, papers, processPaper);
+    });
+    
     console.log(`[🔴 analyzeArxivPapers] ✅ Analysis complete`);
   }, [syncPaperStatusToAccumulated]);
 
@@ -1480,7 +1588,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     setGatheringStatus("Analyzing documents...");
     if (uniquePdfs.length > 0 || uniqueArxiv.length > 0) {
-      setResearchPhase('extracting');
+      setResearchPhase('downloading');
     }
     const questionsStr = questions.join('\n');
     const tasks = [];

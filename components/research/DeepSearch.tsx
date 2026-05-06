@@ -195,15 +195,26 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
     <div className="group/paper animate-fade-in relative transition-colors">
       <div className={isExpanded ? 'p-1' : ''}>
         <div className="flex items-start">
-          <div className="pt-1 mr-2 sm:mr-4">
+          <div className={`pt-1 mr-2 sm:mr-4  ${paper.previewImage && paper.analysisStatus !== 'failed' ? 'absolute top-1 left-1' : ""} `}>
             <button onClick={handleSelectionToggle} className={`hover:text-scholar-600 dark:hover:text-scholar-400 transition-colors opacity-100 sm:group-hover/paper:opacity-100 ${isSelected ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-400 dark:text-gray-500 sm:opacity-0'}`}>
               {(isDownloading || isProcessing) ? <Loader2 size={24} className="animate-spin" />
                 : isSelected ? <Check size={24} className="text-scholar-600 dark:text-scholar-400" /> : <Square size={24} />}
             </button>
           </div>
 
+          {/* Preview Image - Larger and aligned with title */}
+          {paper.previewImage && paper.analysisStatus !== 'failed' ? (
+            <div className="flex-shrink-0 mt-10 mr-3 sm:mr-4 pt-0.5">
+              <img
+                src={paper.previewImage}
+                alt={`Preview of ${paper.title}`}
+                className="w-20 sm:w-24 h-28 sm:h-36 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-700"
+              />
+            </div>
+          ) : null}
+
           <div className="flex-grow min-w-0">
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center justify-between ">
               <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <span className="font-semibold text-scholar-600 dark:text-scholar-400 uppercase tracking-wider">
                   {isLocal ? 'LOCAL' : (paper.publishedDate?.match(/\b(19|20)\d{2}\b/)?.[0] || <span className="lowercase text-[10px] opacity-70">unknown</span>)}
@@ -255,11 +266,11 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
               {paper.title}
             </h3>
 
-            {paper.harvardReference && (
+            {/* {paper.harvardReference && (
               <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400 font-serif italic mb-2 leading-tight">
                 {paper.harvardReference}
               </p>
-            )}
+            )} */}
 
             <p
               role="button"
@@ -287,14 +298,14 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
                     {visibleNotes.length} Note{visibleNotes.length !== 1 ? 's' : ''} {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                   </button>
                 ) : isCompleted ? (
-                  <span className="text-xs text-gray-400 italic">No notes extracted</span>
+                  <span className="text-sm text-gray-400 italic">No notes found</span>
                 ) : isStopped ? (
                   <span className="text-xs text-gray-400 italic flex items-center gap-1"><Square size={12} /> stopped</span>
                 ) : isFailed ? (
                   <div className="flex items-center gap-1.5 text-[11px] font-medium text-red-700 dark:text-red-400">
                     <X size={14} className="text-red-800 dark:text-red-500 flex-shrink-0" />
                     <span className="truncate">
-                      {failedUrlErrors?.[paper.pdfUri]?.reason || "Load Failed"}: {failedUrlErrors?.[paper.pdfUri]?.actionableMsg || "Could not access file."}
+                      {failedUrlErrors?.[paper.pdfUri]?.reason || "Could not access pdf"}: {failedUrlErrors?.[paper.pdfUri]?.actionableMsg || "Could not access file."}
                     </span>
                   </div>
                 ) : (
@@ -307,33 +318,36 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
             </div>
 
             {isExpanded && visibleNotes.length > 0 && (
-              <div className="mt-4 pl-0 sm:pl-4 border-l-0 sm:border-l-2 border-gray-100 dark:border-gray-800 space-y-3">
-                {visibleNotes.map((note, idx) => {
-                  const noteId = getNoteId(paper.id, note.pageNumber, idx);
-                  return (
-                    <ResearchCardNote
-                      key={noteId}
-                      id={noteId}
-                      note={note}
-                      isSelected={selectedNoteIds.includes(noteId)}
-                      onSelect={() => onSelectNote(noteId)}
-                      sourceTitle={paper.title}
-                      sourcePaper={paper}
-                      isExpanded={expandedNoteIds.has(noteId)}
-                      onToggleExpand={() => {
-                        setExpandedNoteIds(prev => {
-                          const next = new Set(prev);
-                          if (next.has(noteId)) {
-                            next.delete(noteId);
-                          } else {
-                            next.add(noteId);
-                          }
-                          return next;
-                        });
-                      }}
-                    />
-                  );
-                })}
+              <div className="flex">
+                <span className="relative top-1 -left-14 h-100 border-l-4  sm:border-l-4 border-gray-100 dark:border-gray-800 space-y-3"></span>
+                <div className="mt-4  -pl-2 border-gray-100 dark:border-gray-800 space-y-3">
+                  {visibleNotes.map((note, idx) => {
+                    const noteId = getNoteId(paper.id, note.pageNumber, idx);
+                    return (
+                      <ResearchCardNote
+                        key={noteId}
+                        id={noteId}
+                        note={note}
+                        isSelected={selectedNoteIds.includes(noteId)}
+                        onSelect={() => onSelectNote(noteId)}
+                        sourceTitle={paper.title}
+                        sourcePaper={paper}
+                        isExpanded={expandedNoteIds.has(noteId)}
+                        onToggleExpand={() => {
+                          setExpandedNoteIds(prev => {
+                            const next = new Set(prev);
+                            if (next.has(noteId)) {
+                              next.delete(noteId);
+                            } else {
+                              next.add(noteId);
+                            }
+                            return next;
+                          });
+                        }}
+                      />
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -459,7 +473,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
 
   // Determine candidates based on research phase (same logic as before)
   const currentTabCandidates = useMemo(() => {
-    return researchPhase === 'extracting' || researchPhase === 'completed' || researchPhase === 'ranking_notes'
+    return researchPhase === 'downloading' || researchPhase === 'downloaded' || researchPhase === 'extracting' || researchPhase === 'completed' || researchPhase === 'ranking_notes'
       ? filteredCandidates
       : arxivCandidates;
   }, [researchPhase, filteredCandidates, arxivCandidates]);
@@ -492,7 +506,43 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     });
   }, [setActivePdf, openColumn, loadPdfFromUrl]);
 
-  const isBlurred = researchPhase === 'filtering';
+  const isBlurred = useMemo(() => {
+    // Blur during filtering phase
+    if (researchPhase === 'filtering') return true;
+
+    // Blur during download phase - stay blurred until 15 papers with data OR all downloads complete
+    if (researchPhase === 'downloading') {
+      if (filteredCandidates.length === 0) return true;
+      
+      const papersWithData = filteredCandidates.filter(p =>
+        (p.analysisStatus === 'downloaded' ||
+         p.analysisStatus === 'extracting' ||
+         p.analysisStatus === 'completed') &&
+        (p.previewImage || p.analysisStatus === 'failed')
+      ).length;
+      
+      // Stay blurred until 15 papers have data OR all downloads complete
+      const allDownloadsComplete = filteredCandidates.every(p =>
+        p.analysisStatus === 'downloaded' ||
+        p.analysisStatus === 'extracting' ||
+        p.analysisStatus === 'completed' ||
+        p.analysisStatus === 'failed' ||
+        p.analysisStatus === 'stopped'
+      );
+      
+      // Unblur once we have 15 papers with data OR all downloads complete
+      return papersWithData < 15 && !allDownloadsComplete;
+    }
+
+    // Don't blur during 'downloaded' or 'extracting' phases (already unblurred from downloading phase)
+    if (researchPhase === 'downloaded' || researchPhase === 'extracting') {
+      return false;
+    }
+
+    // Default: don't blur
+    return false;
+  }, [researchPhase, filteredCandidates]);
+
   const isSearching = researchPhase === 'searching' || researchPhase === 'initialising';
 
   const totalNotes = useMemo(() =>
@@ -1248,7 +1298,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
           <div className="flex items-center justify-between px-1 mb-2 animate-fade-in">
             <div className="text-sm text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
               <BookOpenText size={14} className="opacity-60" />
-              About {currentTabCandidates.length} paper{currentTabCandidates.length !== 1 ? 's' : ''} with {totalNotes} note{totalNotes !== 1 ? 's' : ''} found
+              {currentTabCandidates.length} paper{currentTabCandidates.length !== 1 ? 's' : ''} ● {totalNotes} note{totalNotes !== 1 ? 's' : ''} found
               {timeToFirstNotes !== null && (
                 <>
                   <span className="text-xs text-gray-400 mx-0.5">•</span>
@@ -1431,11 +1481,12 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
         )}
       </div>
 
-      {/* ── DYNAMIC LOADING BOX (Phases: initialising, searching, filtering) ──── */}
+      {/* ── DYNAMIC LOADING BOX (Phases: initialising, searching, filtering, downloading) ──── */}
       {/* Hide when ResearchPurposeModal is showing */}
       {!showPurposeModal && (researchPhase === 'initialising' ||
         researchPhase === 'searching' ||
         researchPhase === 'filtering' ||
+        researchPhase === 'downloading' ||
         researchPhase === 'reviewing_insights') && (
           <>
             {console.log('[DeepSearch] 📦 RENDERING DynamicLoadingBox', { showPurposeModal, researchPhase })}

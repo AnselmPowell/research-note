@@ -36,6 +36,7 @@ export interface LoadedPdf {
   pages: string[];
   references?: string[];
   numPages: number;
+  previewImage?: string;  // NEW: Base64 preview of first page
   structureMap?: string;  // Cached structure map from DB — avoids regeneration on repeated agent calls
 }
 
@@ -117,12 +118,13 @@ export interface ArxivPaper {
   sourceQuery?: string;
   sourceApi?: 'arxiv' | 'openalex' | 'google_cse' | 'pdfvector' | 'google_grounding';
   relevanceScore?: number;
-  analysisStatus?: 'pending' | 'downloading' | 'processing' | 'completed' | 'failed' | 'stopped';
+  analysisStatus?: 'pending' | 'downloading' | 'downloaded' | 'processing' | 'extracting' | 'completed' | 'failed' | 'stopped';
   notes?: DeepResearchNote[];
   references?: string[];
   harvardReference?: string;
   publisher?: string;
   categories?: string[];
+  previewImage?: string;  // NEW: Base64 preview of first page
   // NEW: Track when paper was added to accumulation for dynamic sorting in "My Results"
   addedToAccumulationAt?: number;
 }
@@ -135,7 +137,7 @@ export interface ArxivSearchStructured {
 }
 
 export type SearchMode = 'web' | 'deep' | 'upload' | 'results';
-export type ResearchPhase = 'idle' | 'initialising' | 'searching' | 'filtering' | 'reviewing_insights' | 'awaiting_purpose' | 'extracting' | 'completed' | 'failed' | 'ranking_notes';
+export type ResearchPhase = 'idle' | 'initialising' | 'searching' | 'filtering' | 'reviewing_insights' | 'awaiting_purpose' | 'downloading' | 'downloaded' | 'extracting' | 'completed' | 'failed' | 'ranking_notes';
 
 // NEW: Search API metrics tracking
 export interface SearchMetrics {

@@ -46,6 +46,11 @@ const phaseMessages: Record<ResearchPhase, string[]> = {
     'Filtering to match your query...',
     'Narrowing down to best matches...'
   ],
+  downloading: [
+    'Downloading PDF papers...',
+    'Processing paper metadata...',
+    'Reading PDF content...'
+  ],
   reviewing_insights: [
     'Last chance: refine your research goals...',
     'Waiting for your final input...'
@@ -188,8 +193,9 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
   const isReviewing = researchPhase === 'reviewing_insights';
   const isSearching = researchPhase === 'searching' || researchPhase === 'initialising';
   const isFiltering = researchPhase === 'filtering';
+  const isDownloading = researchPhase === 'downloading';
   const showInsights = insightQuestions.length > 0 && !hasSubmittedInsights && researchPhase !== 'extracting' && researchPhase !== 'completed';
-  const shouldShowBox = isReviewing || isFiltering || isSearching || showInsights;
+  const shouldShowBox = isReviewing || isFiltering || isSearching || isDownloading || showInsights;
   const containerSizeClass = showInsights ? 'max-w-3xl' : 'max-w-md';
 
   return (
@@ -214,7 +220,10 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
 
             <div className="text-center">
               <h3 className="text-[14px] font-black uppercase tracking-[0.3em] text-scholar-600/60 dark:text-scholar-400/60 transition-all mb-1">
-                {researchPhase.replace('_', ' ')}
+                {researchPhase === 'downloading' 
+                  ? 'Selecting most relevant papers'
+                  : researchPhase.replace('_', ' ')
+                }
               </h3>
               <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">{gatheringStatus}</p>
             </div>

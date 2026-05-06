@@ -25,6 +25,7 @@ interface ExtractedData {
   pages: string[];
   references: string[];
   numPages: number;
+  previewImage?: string;  // NEW: Base64 data URL of first page
 }
 
 /**
@@ -491,6 +492,15 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSig
     const numPages = doc.numPages;
     const pages: string[] = [];
     let fullTextForAbstract = "";
+    
+    // Initialize extracted data object
+    const extractedData: ExtractedData = {
+      metadata,
+      text: "",
+      pages: [],
+      references: [],
+      numPages
+    };
 
     // 3. Process Pages
     for (let i = 1; i <= numPages; i++) {
@@ -510,6 +520,38 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSig
       const pageText = generateMarkdownFromItems(sortedItems);
 
       pages.push(pageText);
+
+      // NEW: Capture first page as preview image
+      if (i === 1) {
+        try {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          if (ctx) {
+            // Calculate preview dimensions (maintain aspect ratio)
+            const PREVIEW_WIDTH = 200;  // Final image width in pixels
+            const viewport = page.getViewport({ scale: 1 });
+            const scale = PREVIEW_WIDTH / viewport.width;
+            const scaledViewport = page.getViewport({ scale });
+            
+            // Set canvas size
+            canvas.width = scaledViewport.width;
+            canvas.height = scaledViewport.height;
+            
+            // Render PDF page to canvas
+            await page.render({
+              canvasContext: ctx,
+              viewport: scaledViewport
+            }).promise;
+            
+            // Convert canvas to base64 data URL (JPEG for smaller size)
+            extractedData.previewImage = canvas.toDataURL('image/jpeg', 0.8);
+          }
+        } catch (previewError) {
+          // Preview generation failed - continue without it
+          console.warn('[PDF Service] Preview generation failed:', previewError);
+        }
+      }
 
       // Collect first 3 pages text for better abstract detection (handles cover pages)
       if (i <= 3) {
@@ -600,7 +642,8 @@ export const extractPdfData = async (arrayBuffer: ArrayBuffer, signal?: AbortSig
       text: abstract,
       pages,
       references,
-      numPages
+      numPages,
+      previewImage: extractedData.previewImage  // Include preview image if captured
     };
 
   } catch (error) {
