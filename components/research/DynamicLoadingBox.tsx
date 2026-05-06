@@ -194,8 +194,9 @@ export const DynamicLoadingBox: React.FC<DynamicLoadingBoxProps> = ({
   const isSearching = researchPhase === 'searching' || researchPhase === 'initialising';
   const isFiltering = researchPhase === 'filtering';
   const isDownloading = researchPhase === 'downloading';
+  const isExtracting = researchPhase === 'extracting';  // NEW: Track extracting phase for modal backdrop
   const showInsights = insightQuestions.length > 0 && !hasSubmittedInsights && researchPhase !== 'extracting' && researchPhase !== 'completed';
-  const shouldShowBox = isReviewing || isFiltering || isSearching || isDownloading || showInsights;
+  const shouldShowBox = isReviewing || isFiltering || isSearching || isDownloading || isExtracting || showInsights;  // UPDATED: Added isExtracting
   const containerSizeClass = showInsights ? 'max-w-3xl' : 'max-w-md';
 
   return (

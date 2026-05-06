@@ -468,8 +468,15 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   const { openColumn, setColumnVisibility } = useUI();
 
   // ─── Local Sort State ─────────────────────────────────────────────────────────
-  const [sortBy, setSortBy] = useState<SortOption>('most-relevant-notes');
+  const [sortBy, setSortBy] = useState<SortOption>('relevant-papers');
   const [isSortOpen, setIsSortOpen] = useState(false);
+
+  // Reset sort view to default when new research starts
+  useEffect(() => {
+    if (researchPhase === 'initialising') {
+      setSortBy('relevant-papers');
+    }
+  }, [researchPhase]);
 
   // Determine candidates based on research phase (same logic as before)
   const currentTabCandidates = useMemo(() => {
