@@ -35,6 +35,116 @@ function buildGroundingQuery(structured: ArxivSearchStructured): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// LOGGING HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ApiTiming {
+    api: string;
+    startTime: number;
+    endTime?: number;
+    duration?: number;
+    success: boolean;
+    resultCount: number;
+    query: string;
+    error?: string;
+    errorCategory?: 'timeout' | 'network' | 'auth' | 'rate_limit' | 'server' | 'parse' | 'unknown';
+}
+
+const apiTimings: ApiTiming[] = [];
+
+function logApiStart(api: string, query: string): number {
+    const startTime = performance.now();
+    console.log(`[${api}] 🚀 Starting search`);
+    console.log(`[${api}] 📝 Query: ${query.substring(0, 100)}${query.length > 100 ? '...' : ''}`);
+    return startTime;
+}
+
+function logApiSuccess(api: string, startTime: number, resultCount: number, query: string) {
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    console.log(`[${api}] ✅ Success in ${duration.toFixed(0)}ms - Found ${resultCount} papers`);
+    
+    apiTimings.push({
+        api,
+        startTime,
+        endTime,
+        duration,
+        success: true,
+        resultCount,
+        query
+    });
+}
+
+function logApiFailure(api: string, startTime: number, error: any, query: string) {
+    const endTime = performance.now();
+    const duration = endTime - startTime;
+    
+    // Categorize error for better user feedback
+    let errorCategory: ApiTiming['errorCategory'] = 'unknown';
+    let simpleReason = 'Unknown error';
+    
+    if (error.name === 'AbortError' || error.message?.includes('timeout')) {
+        errorCategory = 'timeout';
+        simpleReason = 'Request timed out';
+    } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+        errorCategory = 'network';
+        simpleReason = 'Network connection failed';
+    } else if (error.message?.includes('401') || error.message?.includes('403')) {
+        errorCategory = 'auth';
+        simpleReason = 'Authentication failed (check API keys)';
+    } else if (error.message?.includes('429')) {
+        errorCategory = 'rate_limit';
+        simpleReason = 'Rate limit exceeded (too many requests)';
+    } else if (error.message?.includes('500') || error.message?.includes('502') || error.message?.includes('503') || error.message?.includes('504')) {
+        errorCategory = 'server';
+        simpleReason = 'Server error (API provider issue)';
+    } else if (error.message?.includes('JSON') || error.message?.includes('parse')) {
+        errorCategory = 'parse';
+        simpleReason = 'Invalid response format';
+    }
+    
+    console.log(`[${api}] ❌ Failed in ${duration.toFixed(0)}ms - ${simpleReason}`);
+    console.log(`[${api}] 🔍 Error details: ${error.message}`);
+    
+    apiTimings.push({
+        api,
+        startTime,
+        endTime,
+        duration,
+        success: false,
+        resultCount: 0,
+        query,
+        error: simpleReason,
+        errorCategory
+    });
+}
+
+function logSearchSummary(totalDuration: number, mergedCount: number) {
+    console.log('\n' + '═'.repeat(80));
+    console.log('  🏁 SEARCH COMPLETED - FINAL REPORT');
+    console.log('═'.repeat(80));
+    
+    // Show each API's result
+    apiTimings.forEach(timing => {
+        const status = timing.success 
+            ? `✅ SUCCESS` 
+            : `❌ FAILED`;
+        const duration = timing.duration?.toFixed(0).padStart(6) || '?';
+        const resultInfo = timing.success 
+            ? `${timing.resultCount} papers found` 
+            : `Error: ${timing.error}`;
+        
+        console.log(`  ${timing.api.padEnd(15)} ${duration}ms  ${status}  ${resultInfo}`);
+    });
+    
+    console.log('─'.repeat(80));
+    console.log(`  ⏱️  Total Search Time: ${totalDuration.toFixed(0)}ms`);
+    console.log(`  📚 Total Papers (before dedup): ${apiTimings.reduce((sum, t) => sum + t.resultCount, 0)}`);
+    console.log(`  🎯 Unique Papers (after dedup): ${mergedCount}`);
+    console.log('═'.repeat(80) + '\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SHARED HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -166,33 +276,12 @@ function normaliseGoogleCSE(items: any[]): ArxivPaper[] {
 }
 
 function normalisePDFVector(results: any[], allKeywords: string[]): ArxivPaper[] {
-    console.log('[searchAggregator] 🔧 normalisePDFVector - Starting normalisation:', {
-        inputCount: results.length,
-        keywords: allKeywords,
-        firstItem: results[0]
-    });
-    
-    const mapped = results.map((pub, idx) => {
+    const mapped = results.map((pub) => {
         const pdfUri = pub.pdfURL || pub.url || null;
         
-        if (!pdfUri) {
-            console.log(`[searchAggregator] 🔧 normalisePDFVector - Item ${idx} filtered out: no pdfUri`, {
-                hasPdfURL: !!pub.pdfURL,
-                hasUrl: !!pub.url,
-                title: pub.title
-            });
-            return null;
-        }
+        if (!pdfUri) return null;
 
         const score = scoreRelevance(pub.title || '', pub.abstract || '', allKeywords, pub.year);
-        
-        console.log(`[searchAggregator] 🔧 normalisePDFVector - Item ${idx} mapped:`, {
-            title: pub.title?.substring(0, 50),
-            pdfUri: pdfUri?.substring(0, 50),
-            score,
-            year: pub.year,
-            abstract: pub.abstract?.substring(0, 50)
-        });
 
         return {
             id: pub.doi || pub.pdfURL || pub.url || pub.title,
@@ -204,20 +293,11 @@ function normalisePDFVector(results: any[], allKeywords: string[]): ArxivPaper[]
             pdfUri,
             publishedDate: String(pub.year || ''),
             sourceApi: 'pdfvector' as const,
-            // Pre-score for PDFVector; Stage 3 cosine will re-rank across all sources
-            // Pass pub.year for tie-breaker (+0.5 per year after 2000, from original)
             relevanceScore: score
         };
     });
 
-    const filtered = mapped.filter(Boolean) as ArxivPaper[];
-    
-    console.log('[searchAggregator] 🔧 normalisePDFVector - After filtering:', {
-        outputCount: filtered.length,
-        filtered: mapped.length - filtered.length
-    });
-    
-    return filtered;
+    return mapped.filter(Boolean) as ArxivPaper[];
 }
 
 function normaliseGrounding(results: any[]): ArxivPaper[] {
@@ -246,6 +326,8 @@ function normaliseGrounding(results: any[]): ArxivPaper[] {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function fetchOpenAlex(booleanQuery: string): Promise<ArxivPaper[]> {
+    const startTime = logApiStart('OpenAlex', booleanQuery);
+    
     try {
         const r = await fetch(`${API_BASE}/search/openalex`, {
             method: 'POST',
@@ -253,15 +335,25 @@ async function fetchOpenAlex(booleanQuery: string): Promise<ArxivPaper[]> {
             body: JSON.stringify({ data: { query: booleanQuery } }),
             signal: AbortSignal.timeout(18000)
         });
+        
+        if (!r.ok) {
+            throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+        }
+        
         const result = await r.json();
-        return normaliseOpenAlex(result.data || []);
+        const papers = normaliseOpenAlex(result.data || []);
+        
+        logApiSuccess('OpenAlex', startTime, papers.length, booleanQuery);
+        return papers;
     } catch (e: any) {
-        console.warn('[searchAggregator] OpenAlex failed:', e.message);
+        logApiFailure('OpenAlex', startTime, e, booleanQuery);
         return [];
     }
 }
 
 async function fetchGoogleCSE(booleanQuery: string): Promise<ArxivPaper[]> {
+    const startTime = logApiStart('GoogleCSE', booleanQuery);
+    
     try {
         const r = await fetch(`${API_BASE}/search/google-cse`, {
             method: 'POST',
@@ -269,20 +361,26 @@ async function fetchGoogleCSE(booleanQuery: string): Promise<ArxivPaper[]> {
             body: JSON.stringify({ data: { query: booleanQuery } }),
             signal: AbortSignal.timeout(25000)
         });
+        
+        if (!r.ok) {
+            throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+        }
+        
         const result = await r.json();
-        return normaliseGoogleCSE(result.data || []);
+        const papers = normaliseGoogleCSE(result.data || []);
+        
+        logApiSuccess('GoogleCSE', startTime, papers.length, booleanQuery);
+        return papers;
     } catch (e: any) {
-        console.warn('[searchAggregator] GoogleCSE failed:', e.message);
+        logApiFailure('GoogleCSE', startTime, e, booleanQuery);
         return [];
     }
 }
 
 async function fetchPDFVector(booleanQuery: string, allKeywords: string[]): Promise<ArxivPaper[]> {
+    const startTime = logApiStart('PDFVector', booleanQuery);
+    
     try {
-        console.log('[searchAggregator] 🔍 PDFVector - Starting search');
-        console.log('[searchAggregator] 🔍 PDFVector - Query being sent:', booleanQuery);
-        console.log('[searchAggregator] 🔍 PDFVector - Keywords:', allKeywords);
-        
         const r = await fetch(`${API_BASE}/search/pdfvector`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -290,46 +388,29 @@ async function fetchPDFVector(booleanQuery: string, allKeywords: string[]): Prom
             signal: AbortSignal.timeout(38000)
         });
         
-        console.log('[searchAggregator] 🔍 PDFVector - Response status:', r.status);
+        if (!r.ok) {
+            throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+        }
         
         const result = await r.json();
-        console.log('[searchAggregator] 🔍 PDFVector - Raw response data:', {
-            hasData: !!result.data,
-            dataLength: result.data?.length || 0,
-            dataType: typeof result.data,
-            firstItem: result.data?.[0],
-            fullResponse: result
-        });
-        
         const normalised = normalisePDFVector(result.data || [], allKeywords);
-        
-        console.log('[searchAggregator] 🔍 PDFVector - After normalisation:', {
-            normalisedCount: normalised.length,
-            firstNormalised: normalised[0]
-        });
         
         // Apply ScholarAI re-ranking: sort by relevance score, cap at 50
         const ranked = normalised
             .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
             .slice(0, 50);
-            
-        console.log('[searchAggregator] 🔍 PDFVector - After ranking/slicing:', {
-            finalCount: ranked.length,
-            scores: ranked.slice(0, 3).map(p => ({title: p.title.substring(0, 50), score: p.relevanceScore}))
-        });
         
+        logApiSuccess('PDFVector', startTime, ranked.length, booleanQuery);
         return ranked;
     } catch (e: any) {
-        console.warn('[searchAggregator] ❌ PDFVector failed:', {
-            message: e.message,
-            stack: e.stack,
-            name: e.name
-        });
+        logApiFailure('PDFVector', startTime, e, booleanQuery);
         return [];
     }
 }
 
 async function fetchGoogleGrounding(groundingQuery: string): Promise<ArxivPaper[]> {
+    const startTime = logApiStart('GoogleGrounding', groundingQuery);
+    
     try {
         const r = await fetch(`${API_BASE}/gemini/grounding-search`, {
             method: 'POST',
@@ -337,10 +418,18 @@ async function fetchGoogleGrounding(groundingQuery: string): Promise<ArxivPaper[
             body: JSON.stringify({ data: { query: groundingQuery } }),
             signal: AbortSignal.timeout(35000)
         });
+        
+        if (!r.ok) {
+            throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+        }
+        
         const result = await r.json();
-        return normaliseGrounding(result.data || []);
+        const papers = normaliseGrounding(result.data || []);
+        
+        logApiSuccess('GoogleGrounding', startTime, papers.length, groundingQuery);
+        return papers;
     } catch (e: any) {
-        console.warn('[searchAggregator] GoogleGrounding failed:', e.message);
+        logApiFailure('GoogleGrounding', startTime, e, groundingQuery);
         return [];
     }
 }
@@ -356,6 +445,9 @@ export const searchAllSources = async (
     onStatusUpdate?: (msg: string) => void
 ): Promise<{ papers: ArxivPaper[]; metrics: SearchMetrics }> => {
     const startTime = performance.now();
+    
+    // Clear previous timings
+    apiTimings.length = 0;
 
     // Build each API's specific query format
     const arxivQueries = buildArxivQueries(structured, originalTopics, originalQuestions);
@@ -363,8 +455,13 @@ export const searchAllSources = async (
     const groundingQ = buildGroundingQuery(structured);
     const allKeywords = [structured.primary_keyword, ...structured.secondary_keywords].filter(Boolean);
 
-    console.log('[searchAggregator] 🚀 Launching all 5 search APIs in parallel');
-    console.log('[searchAggregator] Boolean query:', booleanQuery);
+    console.log('\n' + '═'.repeat(80));
+    console.log('  STARTING MULTI-API SEARCH');
+    console.log('═'.repeat(80));
+    console.log(`  Query Keywords: ${allKeywords.join(', ')}`);
+    console.log(`  Boolean Query: ${booleanQuery}`);
+    console.log(`  ArXiv Queries: ${arxivQueries.length} variations`);
+    console.log('═'.repeat(80) + '\n');
 
     if (onStatusUpdate) onStatusUpdate('Searching academic sources...');
 
@@ -378,10 +475,46 @@ export const searchAllSources = async (
         }
     };
 
+    // Track ArXiv timing separately since it has its own logging
+    const arxivStartTime = performance.now();
+    const arxivQueryString = `${arxivQueries.length} queries: ${arxivQueries.slice(0, 2).join('; ')}${arxivQueries.length > 2 ? '...' : ''}`;
+    
+    console.log(`[ArXiv] 🚀 Starting search`);
+    console.log(`[ArXiv] 📝 Query: ${arxivQueryString}`);
+    
     // Promise.allSettled with incremental reporting
     const [arxivResult, openAlexResult, cseResult, pdfVectorResult, groundingResult] =
         await Promise.allSettled([
-            searchArxiv(arxivQueries, undefined, originalTopics).then(res => { updateProgress('ArXiv', res.length); return res; }),
+            searchArxiv(arxivQueries, undefined, originalTopics).then(res => { 
+                // Log ArXiv success in apiTimings
+                const arxivDuration = performance.now() - arxivStartTime;
+                console.log(`[ArXiv] ✅ Success in ${arxivDuration.toFixed(0)}ms - Found ${res.length} papers`);
+                apiTimings.push({
+                    api: 'ArXiv',
+                    startTime: arxivStartTime,
+                    endTime: performance.now(),
+                    duration: arxivDuration,
+                    success: true,
+                    resultCount: res.length,
+                    query: arxivQueryString
+                });
+                updateProgress('ArXiv', res.length); 
+                return res; 
+            }).catch(err => {
+                const arxivDuration = performance.now() - arxivStartTime;
+                console.log(`[ArXiv] ❌ Failed in ${arxivDuration.toFixed(0)}ms - ${err.message}`);
+                apiTimings.push({
+                    api: 'ArXiv',
+                    startTime: arxivStartTime,
+                    endTime: performance.now(),
+                    duration: arxivDuration,
+                    success: false,
+                    resultCount: 0,
+                    query: arxivQueryString,
+                    error: err.message
+                });
+                throw err; // Re-throw to maintain Promise.allSettled behavior
+            }),
             fetchOpenAlex(booleanQuery).then(res => { updateProgress('OpenAlex', res.length); return res; }),
             fetchGoogleCSE(booleanQuery).then(res => { updateProgress('Google', res.length); return res; }),
             fetchPDFVector(booleanQuery, allKeywords).then(res => { updateProgress('PDFs', res.length); return res; }),
@@ -436,13 +569,12 @@ export const searchAllSources = async (
         }
     }
 
-    console.log(
-        `[searchAggregator] 🏁 Done in ${Math.round(performance.now() - startTime)}ms — ` +
-        `${merged.length} unique papers after deduplication`
-    );
-
     // Update metrics with final count
     searchMetrics.totalPapers = merged.length;
+    
+    // Log comprehensive summary
+    const totalDuration = performance.now() - startTime;
+    logSearchSummary(totalDuration, merged.length);
 
     return {
         papers: merged,

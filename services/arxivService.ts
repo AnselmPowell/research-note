@@ -84,63 +84,57 @@ export const buildArxivQueries = (
  */
 const fetchWithFallback = async (apiUrl: string): Promise<string> => {
   const startTime = performance.now();
-  console.log(`[ArXiv Debug] Starting fetch for: ${apiUrl}`);
 
   // Strategy 1: Backend Proxy (PRODUCTION & DEV)
   try {
-    const s1Start = performance.now();
+    console.log(`[ArXiv] 🔗 Trying backend proxy...`);
     const API_BASE = import.meta.env.DEV
       ? 'http://localhost:3001/api/v1'
       : '/api/v1';
     const proxyUrl = `${API_BASE}/arxiv/proxy?url=${encodeURIComponent(apiUrl)}`;
-    console.log(`[ArXiv Debug] Strategy 1: Attempting Backend Proxy...`);
 
     const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
     if (response.ok) {
       const result = await response.json();
       if (result.success && result.data) {
-        console.log(`[ArXiv Debug] ✅ Strategy 1 (Backend) SUCCEEDED in ${Math.round(performance.now() - s1Start)}ms`);
+        console.log(`[ArXiv] ✅ Backend proxy succeeded (${(performance.now() - startTime).toFixed(0)}ms)`);
         return result.data;
       }
     }
-    console.warn(`[ArXiv Debug] ❌ Strategy 1 (Backend) returned status: ${response.status}`);
+    console.log(`[ArXiv] ⚠️  Backend proxy returned status: ${response.status}`);
   } catch (e: any) {
-    console.warn(`[ArXiv Debug] ❌ Strategy 1 (Backend) FAILED: ${e.message}`);
+    console.log(`[ArXiv] ⚠️  Backend proxy failed: ${e.message}`);
   }
 
   // Strategy 2: CorsProxy.io (Fallback for localhost only)
   try {
-    const s2Start = performance.now();
+    console.log(`[ArXiv] 🔗 Trying CorsProxy.io...`);
     const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`;
-    console.log(`[ArXiv Debug] Strategy 2: Attempting CorsProxy.io...`);
-
     const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) });
     if (response.ok) {
-      console.log(`[ArXiv Debug] ✅ Strategy 2 (CorsProxy) SUCCEEDED in ${Math.round(performance.now() - s2Start)}ms`);
+      console.log(`[ArXiv] ✅ CorsProxy.io succeeded (${(performance.now() - startTime).toFixed(0)}ms)`);
       return await response.text();
     }
-    console.warn(`[ArXiv Debug] ❌ Strategy 2 (CorsProxy) returned status: ${response.status}`);
+    console.log(`[ArXiv] ⚠️  CorsProxy.io returned status: ${response.status}`);
   } catch (e: any) {
-    console.warn(`[ArXiv Debug] ❌ Strategy 2 (CorsProxy) FAILED: ${e.message}`);
+    console.log(`[ArXiv] ⚠️  CorsProxy.io failed: ${e.message}`);
   }
 
   // Strategy 3: AllOrigins (Last resort)
-  const s3Start = performance.now();
   try {
+    console.log(`[ArXiv] 🔗 Trying AllOrigins (last resort)...`);
     const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
-    console.log(`[ArXiv Debug] Strategy 3: Attempting AllOrigins Proxy...`);
-
     const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
     if (response.ok) {
-      console.log(`[ArXiv Debug] ✅ Strategy 3 (AllOrigins) SUCCEEDED in ${Math.round(performance.now() - s3Start)}ms`);
+      console.log(`[ArXiv] ✅ AllOrigins succeeded (${(performance.now() - startTime).toFixed(0)}ms)`);
       return await response.text();
     }
-    console.error(`[ArXiv Debug] ❌ Strategy 3 (AllOrigins) FAILED with status: ${response.status}`);
+    console.log(`[ArXiv] ❌ AllOrigins failed with status: ${response.status}`);
   } catch (e: any) {
-    console.error(`[ArXiv Debug] ❌ Strategy 3 (AllOrigins) ERROR: ${e.message}`);
+    console.log(`[ArXiv] ❌ AllOrigins error: ${e.message}`);
   }
 
-  console.error(`[ArXiv Debug] 🚨 ALL STRATEGIES EXHAUSTED for URL: ${apiUrl}`);
+  console.log(`[ArXiv] 🚨 All 3 proxy strategies exhausted (${(performance.now() - startTime).toFixed(0)}ms)`);
   throw new Error("Could not connect to arXiv API through any proxy.");
 };
 
@@ -229,18 +223,23 @@ export const searchArxiv = async (
   const allPapers: ArxivPaper[] = [];
   const seenIds = new Set<string>();
 
-  console.log(`[ArXiv Debug] 🚀 Starting Global Search with ${queries.length} queries.`);
+  console.log(`[ArXiv] 🚀 Starting search with ${queries.length} queries (${CONCURRENCY_LIMIT} concurrent)`);
+  console.log(`[ArXiv] 📝 Queries: ${queries.slice(0, 3).join(', ')}${queries.length > 3 ? ` ... +${queries.length - 3} more` : ''}`);
 
-  const worker = async (query: string): Promise<ArxivPaper[]> => {
-    if (onStatusUpdate) onStatusUpdate(`Searching for papers related to "${query}"...`);
-    // Reduced jitter range slightly since proxies add natural variance
+  const worker = async (query: string, index: number): Promise<ArxivPaper[]> => {
+    console.log(`[ArXiv] 🔍 Query ${index + 1}/${queries.length}: ${query.substring(0, 60)}...`);
+    if (onStatusUpdate) onStatusUpdate(`Searching for papers related to "${query.substring(0, 40)}..."`);
     const jitter = Math.round(Math.random() * 500);
     await delay(jitter);
     return await fetchArxivQuery(query);
   };
 
   if (queries.length > 0) {
-    const results = await processConcurrent(queries, CONCURRENCY_LIMIT, worker);
+    const results = await processConcurrent(
+      queries.map((q, i) => ({ query: q, index: i })),
+      CONCURRENCY_LIMIT,
+      ({ query, index }) => worker(query, index)
+    );
 
     results.flat().forEach(paper => {
       if (!seenIds.has(paper.id)) {
@@ -250,25 +249,35 @@ export const searchArxiv = async (
     });
   }
 
+  console.log(`[ArXiv] ✅ Primary search complete: ${allPapers.length} papers found`);
+
   // Emergency Fallback logic preserved
   if (allPapers.length < 3 && fallbackTopics.length > 0) {
-    console.log(`[ArXiv Debug] ⚠️ Only ${allPapers.length} papers found. Triggering fallback.`);
+    console.log(`[ArXiv] ⚠️  Low results (${allPapers.length} papers) - activating fallback search`);
     const fallbackQueries = fallbackTopics
       .map(t => `all:${t.replace(/["\\]/g, '').trim()}`)
       .filter(q => !queries.includes(q));
 
     if (fallbackQueries.length > 0) {
-      const results = await processConcurrent(fallbackQueries, CONCURRENCY_LIMIT, worker);
+      console.log(`[ArXiv] 🔄 Fallback: ${fallbackQueries.length} additional queries`);
+      const results = await processConcurrent(
+        fallbackQueries.map((q, i) => ({ query: q, index: i })),
+        CONCURRENCY_LIMIT,
+        ({ query, index }) => worker(query, index)
+      );
       results.flat().forEach(paper => {
         if (!seenIds.has(paper.id)) {
           seenIds.add(paper.id);
           allPapers.push(paper);
         }
       });
+      console.log(`[ArXiv] ✅ Fallback complete: ${allPapers.length} total papers`);
     }
   }
 
-  console.log(`[ArXiv Debug] 🏁 TOTAL SEARCH FINISHED in ${Math.round(performance.now() - totalSearchStart)}ms. Total Unique Papers: ${allPapers.length}`);
+  const totalDuration = performance.now() - totalSearchStart;
+  console.log(`[ArXiv] 🏁 Search finished in ${totalDuration.toFixed(0)}ms - Total: ${allPapers.length} unique papers`);
+  
   return allPapers;
 };
 
@@ -307,7 +316,7 @@ async function processConcurrent<T, R>(
             finalResults.push(res);
           })
           .catch((err) => {
-            console.error(`[ArXiv Debug] Pool Task failure:`, err);
+            console.error(`[ArXiv] ⚠️  Query task failure:`, err.message);
           })
           .finally(() => {
             active--;

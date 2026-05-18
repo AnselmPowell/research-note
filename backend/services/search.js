@@ -71,10 +71,13 @@ router.post('/google-cse', async (req, res, next) => {
             return res.json({ success: true, data: [] });
         }
 
+        console.log(`[Backend/GoogleCSE] 🔍 Fetching 5 pages (50 results max)...`);
+
         // Original: 5 pages × 10 = 50 results max
         const pages = [1, 11, 21, 31, 41];
 
-        const fetchPage = async (start) => {
+        const fetchPage = async (start, pageNum) => {
+            console.log(`[Backend/GoogleCSE] 📄 Page ${pageNum}/5 (start=${start})`);
             const params = new URLSearchParams({
                 key,
                 cx,
@@ -91,17 +94,22 @@ router.post('/google-cse', async (req, res, next) => {
 
             if (!response.ok) {
                 if (response.status === 429) {
-                    console.warn('[Search/GoogleCSE] Quota exceeded on page', start);
+                    console.warn(`[Backend/GoogleCSE] ⚠️  Page ${pageNum}/5 - Quota exceeded`);
+                } else {
+                    console.warn(`[Backend/GoogleCSE] ⚠️  Page ${pageNum}/5 - HTTP ${response.status}`);
                 }
                 return { items: [] }; // Per-page failure — don't discard other pages
             }
 
-            return response.json().catch(() => ({ items: [] }));
+            const data = await response.json().catch(() => ({ items: [] }));
+            console.log(`[Backend/GoogleCSE] ✅ Page ${pageNum}/5 - Found ${data.items?.length || 0} results`);
+            return data;
         };
 
-        const results = await Promise.all(pages.map(start => fetchPage(start)));
+        const results = await Promise.all(pages.map((start, idx) => fetchPage(start, idx + 1)));
         const items = results.flatMap(data => data.items || []);
 
+        console.log(`[Backend/GoogleCSE] 🏁 Completed - Total ${items.length} results from ${results.filter(r => r.items?.length > 0).length}/5 pages`);
         res.json({ success: true, data: items });
     } catch (err) {
         console.warn('[Search/GoogleCSE] Failed:', err.message);
