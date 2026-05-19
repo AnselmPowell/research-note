@@ -17,6 +17,12 @@ if (config.geminiApiKey) {
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const cleanJson = (text) => text.replace(/```json/g, '').replace(/```/g, '').trim();
 
+// ─── Session-level OpenAI circuit breaker ────────────────────────────────────
+// Once OpenAI returns insufficient_quota, all further OpenAI calls are skipped
+// immediately rather than making a network round-trip that is guaranteed to fail.
+// Resets on server restart (session-scoped, not persisted).
+let openAIQuotaExhausted = false;
+
 /**
  * Utility to wrap a promise with a timeout
  */
@@ -39,6 +45,12 @@ async function callOpenAI(prompt) {
       openaiKeyValue: config.openaiApiKey ? `***${config.openaiApiKey.slice(-10)}` : 'NOT SET'
     });
     throw new Error(errorMsg);
+  }
+
+  // ⚡ Circuit breaker: skip if quota already known to be exhausted this session
+  if (openAIQuotaExhausted) {
+    console.warn('[callOpenAI] ⚡ Skipping — OpenAI quota exhausted for this session');
+    throw new Error('OpenAI quota exhausted for this session');
   }
 
   try {
@@ -68,6 +80,11 @@ async function callOpenAI(prompt) {
     if (!response.ok) {
       const err = await response.text();
       console.error('[callOpenAI] ❌ OpenAI API error:', { status: response.status, error: err });
+      // Trip the circuit breaker on quota exhaustion so future calls skip instantly
+      if (response.status === 429 && err.includes('insufficient_quota')) {
+        openAIQuotaExhausted = true;
+        console.warn('[callOpenAI] ⚡ OpenAI quota exhausted — disabling for this session');
+      }
       throw new Error(`OpenAI Error: ${response.status} - ${err}`);
     }
 
@@ -167,6 +184,12 @@ async function callOpenAIEmbedding(input) {
     throw new Error('OpenAI API key not configured');
   }
 
+  // ⚡ Circuit breaker: skip if quota already known to be exhausted this session
+  if (openAIQuotaExhausted) {
+    console.warn('[callOpenAIEmbedding] ⚡ Skipping — OpenAI quota exhausted for this session');
+    throw new Error('OpenAI quota exhausted for this session');
+  }
+
   try {
     console.log('[callOpenAIEmbedding] 🔄 Attempting OpenAI Embedding API call...');
     const response = await fetch('https://api.openai.com/v1/embeddings', {
@@ -185,6 +208,11 @@ async function callOpenAIEmbedding(input) {
 
     if (!response.ok) {
       const err = await response.text();
+      // Trip the circuit breaker on quota exhaustion
+      if (response.status === 429 && err.includes('insufficient_quota')) {
+        openAIQuotaExhausted = true;
+        console.warn('[callOpenAIEmbedding] ⚡ OpenAI quota exhausted — disabling for this session');
+      }
       throw new Error(`OpenAI Embedding Error: ${response.status} - ${err}`);
     }
 
@@ -678,22 +706,38 @@ async function getEmbedding(text, taskType) {
   const cacheKey = taskType + ':' + text.trim();
   if (cache.has(cacheKey)) return cache.get(cacheKey);
 
-  // TIER 1: Gemini Embedding (NO RETRY - fail fast)
-  try {
+  // Helper: single Gemini embedding attempt (extracted for retry use)
+  const attemptGeminiEmbedding = async () => {
     if (!genAI) throw new Error('Gemini not initialized');
-
     const model = genAI.getGenerativeModel({ model: 'gemini-embedding-2-preview' });
     const result = await model.embedContent({
       content: { parts: [{ text }] },
       taskType
     });
-
     const vec = result.embedding?.values || [];
-    if (vec.length > 0) {
-      cache.set(cacheKey, vec);
-      return vec;
+    if (vec.length === 0) throw new Error('Empty vector returned');
+    return vec;
+  };
+
+  // TIER 1: Gemini Embedding with ONE retry on 429 rate limit
+  try {
+    let vec;
+    try {
+      vec = await attemptGeminiEmbedding();
+    } catch (firstError) {
+      // Only retry on 429 — other errors fall through to OpenAI immediately
+      const is429 = firstError.status === 429 ||
+        (firstError.message && firstError.message.includes('429'));
+      if (is429) {
+        console.log('[getEmbedding] ⏳ 429 rate limit — retrying in 1.5s...');
+        await delay(1500);
+        vec = await attemptGeminiEmbedding(); // Single retry
+      } else {
+        throw firstError;
+      }
     }
-    throw new Error('Empty vector returned');
+    cache.set(cacheKey, vec);
+    return vec;
   } catch (geminiError) {
     console.warn('[getEmbedding] Tier 1 (Gemini) failed - switching to OpenAI:', {
       error: geminiError.message,
@@ -754,8 +798,8 @@ async function getBatchEmbeddings(texts, taskType) {
   }
 
   await asyncPool(3, batches, async (batch) => {
-    // TIER 1: Gemini Batch Embedding (NO RETRY - fail fast)
-    try {
+    // Helper: single Gemini batch embedding attempt (extracted for retry use)
+    const attemptGeminiBatch = async () => {
       if (!config.geminiApiKey) throw new Error('Gemini API key missing');
 
       const requests = batch.texts.map(t => ({
@@ -775,23 +819,43 @@ async function getBatchEmbeddings(texts, taskType) {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('[getBatchEmbeddings] Tier 1 (Gemini) API error:', {
+        const err = new Error('HTTP ' + response.status + ': ' + errorText.substring(0, 100));
+        err.status = response.status;
+        console.error('[getBatchEmbeddings] Gemini API error:', {
           status: response.status,
           statusText: response.statusText,
           error: errorText.substring(0, 200),
           model: 'gemini-embedding-2-preview'
         });
-        throw new Error('HTTP ' + response.status + ': ' + errorText.substring(0, 100));
+        throw err;
       }
 
       const data = await response.json();
-
       if (!data.embeddings || !Array.isArray(data.embeddings)) {
         throw new Error('Invalid embeddings response');
       }
+      return data.embeddings.map(e => e.values || []);
+    };
 
-      const embeddings = data.embeddings.map(e => e.values || []);
+    // TIER 1: Gemini Batch Embedding with ONE retry on 429 rate limit
+    try {
+      let embeddings;
+      try {
+        embeddings = await attemptGeminiBatch();
+      } catch (firstError) {
+        // Only retry on 429 — other errors fall through to OpenAI immediately
+        const is429 = firstError.status === 429 ||
+          (firstError.message && firstError.message.includes('429'));
+        if (is429) {
+          console.log('[getBatchEmbeddings] ⏳ 429 rate limit — retrying batch in 1.5s...');
+          await delay(1500);
+          embeddings = await attemptGeminiBatch(); // Single retry
+        } else {
+          throw firstError;
+        }
+      }
 
+      // Process successful embeddings
       embeddings.forEach((emb, i) => {
         const originalIndex = batch.indices[i];
         const text = batch.texts[i];
@@ -799,9 +863,9 @@ async function getBatchEmbeddings(texts, taskType) {
         results[originalIndex] = emb;
       });
 
-      return; // Success, exit batch process
+      return; // Success, exit batch worker
     } catch (geminiError) {
-      console.warn('[getBatchEmbeddings] Tier 1 (Gemini) failed - switching to OpenAI:', {
+      console.warn('[getBatchEmbeddings] Tier 1 (Gemini) failed after retry - switching to OpenAI:', {
         error: geminiError.message,
         status: geminiError?.status
       });
@@ -1197,8 +1261,13 @@ REMEMBER YOU ARE A STUDENT RESEARCH ASSISSTANT, YOUR GOAL IS TO HELP THE USER SE
  * Stage 3: LLM selects top 20 from the 80 LEFTOVER papers
  * 
  * Returns: Maximum 40 papers for PDF processing
+ * 
+ * Supports staged execution via options:
+ *   stage: 'all' (default) | 'first' (Stage 1+2 only) | 'remaining' (Stage 3+4 only)
+ *   excludeIds: string[] - IDs already selected (for 'remaining' stage)
  */
-async function filterRelevantPapers(papers, userQuestions, keywords) {
+async function filterRelevantPapers(papers, userQuestions, keywords, options = {}) {
+  const { stage = 'all', excludeIds = [] } = options;
   const startTime = Date.now();
   try {
     console.log('\n╔════════════════════════════════════════════════════════════════╗');
@@ -1343,20 +1412,25 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
 
     // ═══════════════════════════════════════════════════════════════
     // STAGE 2: LLM SELECTION FROM TOP 100
+    // (Skipped when stage='remaining' — jump straight to Stage 3)
     // ═══════════════════════════════════════════════════════════════
-    console.log('\n🤖 STAGE 2: LLM Selection from Top 100 Papers');
-    console.log('   Processing', top100.length, 'papers');
-    if (top100.length > 0) {
-      console.log('   Cosine score range:',
-        top100[0].relevanceScore.toFixed(3),
-        'to',
-        top100[top100.length - 1].relevanceScore.toFixed(3)
-      );
-    }
+    let stage2Selected = [];
+    const stage2SelectedIds = new Set();
 
-    const stage2Selected = await selectTopPapersWithLLM(
-      top100,
-      userQuestions,
+    if (stage !== 'remaining') {
+      console.log('\n🤖 STAGE 2: LLM Selection from Top 100 Papers');
+      console.log('   Processing', top100.length, 'papers');
+      if (top100.length > 0) {
+        console.log('   Cosine score range:',
+          top100[0].relevanceScore.toFixed(3),
+          'to',
+          top100[top100.length - 1].relevanceScore.toFixed(3)
+        );
+      }
+
+      stage2Selected = await selectTopPapersWithLLM(
+        top100,
+        userQuestions,
       keywords,
       20
     );
@@ -1371,16 +1445,31 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
       });
     }
 
-    // Get the IDs of selected papers to find leftovers
-    const stage2SelectedIds = new Set(stage2Selected.map(p => p.id));
+    // ═══════════════════════════════════════════════════════════════
+    // EARLY RETURN: stage === 'first' — return Stage 2 results only
+    // Frontend will call again with stage='remaining' for Stage 3
+    // ═══════════════════════════════════════════════════════════════
+    if (stage === 'first') {
+      console.log('\n✅ Stage "first" complete — returning', stage2Selected.length, 'papers for immediate download');
+      return stage2Selected;
+    }
+
+    // Track Stage 2 IDs for leftover calculation
+    stage2Selected.forEach(p => stage2SelectedIds.add(p.id));
+
+    } // end if (stage !== 'remaining')
 
     // ═══════════════════════════════════════════════════════════════
-    // STAGE 3: LLM SELECTION FROM 80 LEFTOVER PAPERS
+    // STAGE 3: LLM SELECTION FROM LEFTOVER PAPERS
+    // For stage='remaining': use excludeIds instead of stage2SelectedIds
     // ═══════════════════════════════════════════════════════════════
     let stage3Selected = [];
 
-    // Get the papers that were NOT selected in Stage 2
-    const leftoverPapers = top100.filter(p => !stage2SelectedIds.has(p.id));
+    // Get the papers that were NOT selected in Stage 2 (or excluded via options)
+    const idsToExclude = stage === 'remaining'
+      ? new Set(excludeIds)
+      : stage2SelectedIds;
+    const leftoverPapers = top100.filter(p => !idsToExclude.has(p.id));
 
     if (leftoverPapers.length > 0) {
       console.log('\n🤖 STAGE 3: LLM Selection from Leftover Papers');
@@ -1427,15 +1516,20 @@ async function filterRelevantPapers(papers, userQuestions, keywords) {
 
     // ═══════════════════════════════════════════════════════════════
     // STAGE 4: RESCUE FALLBACK
-    // If LLM was overly strict and selected < 30 papers, 
+    // If LLM was overly strict and total selected < 30 papers, 
     // take the next top 10 highest-scored papers that were not selected.
+    // For 'remaining' stage: count excludeIds (first batch) + current selection
     // ═══════════════════════════════════════════════════════════════
-    if (finalSelection.length < 30) {
-      console.log(`\n🆘 STAGE 4: Rescue Fallback (Current count: ${finalSelection.length})`);
+    const totalAcrossBatches = (stage === 'remaining' ? excludeIds.length : 0) + finalSelection.length;
+    if (totalAcrossBatches < 30) {
+      console.log(`\n🆘 STAGE 4: Rescue Fallback (Total across batches: ${totalAcrossBatches})`);
+
+      // Also exclude papers from the first batch (excludeIds)
+      const allExcludedIds = new Set([...seenFinalIds, ...excludeIds]);
 
       // top100 is already sorted by cosine score from Stage 1
       const rescuePapers = top100
-        .filter(p => !seenFinalIds.has(p.id)) // Only those NOT picked by LLM in Stages 2/3
+        .filter(p => !allExcludedIds.has(p.id))
         .slice(0, 10); // Take the top 10 next-best matches
 
       rescuePapers.forEach(p => {

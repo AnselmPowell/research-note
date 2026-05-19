@@ -26,9 +26,15 @@ export const generateArxivSearchTerms = async (topics: string[], questions: stri
   return await api.gemini.arxivSearchTerms(topics, questions);
 };
 
-export const filterRelevantPapers = async (papers: any[], userQuestions: string[], keywords: string[]) => {
+export const filterRelevantPapers = async (
+  papers: any[],
+  userQuestions: string[],
+  keywords: string[],
+  stage: string = 'all',
+  excludeIds: string[] = []
+) => {
   try {
-    const result = await api.gemini.filterPapers(papers, userQuestions, keywords);
+    const result = await api.gemini.filterPapers(papers, userQuestions, keywords, stage, excludeIds);
     return result;
   } catch (error) {
     console.error('[geminiService] ❌ Filter papers API call failed:', error);

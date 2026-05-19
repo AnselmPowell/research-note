@@ -90,7 +90,7 @@ interface PaperCardProps {
 
 // ─── PaperCard ─────────────────────────────────────────────────────────────────
 const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds, onSelectNote, onView, isLocal = false, forceExpanded = true, activeQuery = 'all' }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [isAbstractExpanded, setIsAbstractExpanded] = useState(false);
   const [expandedNoteIds, setExpandedNoteIds] = useState<Set<string>>(new Set()); // NEW: Track expanded notes
   const { toggleArxivSelection, selectedArxivIds, isPaperSelectedByUri } = useResearch();
@@ -133,9 +133,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
   });
 
   useEffect(() => {
-    if (visibleNotes.length > 0) {
-      setIsExpanded(forceExpanded);
-    }
+    setIsExpanded(forceExpanded);
   }, [forceExpanded]);
 
   const handleSelectionToggle = (e: React.MouseEvent) => {
@@ -319,7 +317,7 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
 
             {isExpanded && visibleNotes.length > 0 && (
               <div className="flex">
-                <span className="relative top-1 -left-14 h-100 border-l-4  sm:border-l-4 border-gray-100 dark:border-gray-800 space-y-3"></span>
+                <span className="relative top-10 -left-14 h-100 border-l-4  sm:border-l-4 border-gray-100 dark:border-gray-800 space-y-3"></span>
                 <div className="mt-4  -pl-2 border-gray-100 dark:border-gray-800 space-y-3">
                   {visibleNotes.map((note, idx) => {
                     const noteId = getNoteId(paper.id, note.pageNumber, idx);
@@ -376,7 +374,7 @@ interface DeepSearchProps {
 }
 
 export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
-  const [allNotesExpanded, setAllNotesExpanded] = useState(true);
+  const [allNotesExpanded, setAllNotesExpanded] = useState(false);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -471,12 +469,18 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   const [sortBy, setSortBy] = useState<SortOption>('relevant-papers');
   const [isSortOpen, setIsSortOpen] = useState(false);
 
-  // Reset sort view to default when new research starts
+  // Reset sort view and pagination to default when new research starts
   useEffect(() => {
     if (researchPhase === 'initialising') {
       setSortBy('relevant-papers');
+      setCurrentPage(1);
     }
   }, [researchPhase]);
+
+  // Reset to page 1 when filters or search query change (prevents empty pages)
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, localFilters]);
 
   // Determine candidates based on research phase (same logic as before)
   const currentTabCandidates = useMemo(() => {
@@ -517,17 +521,20 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     // Blur during filtering phase
     if (researchPhase === 'filtering') return true;
 
+    // Blur during reviewing insights phase (user is providing feedback)
+    if (researchPhase === 'reviewing_insights') return true;
+
     // Blur during download phase - stay blurred until 15 papers with data OR all downloads complete
     if (researchPhase === 'downloading') {
       if (filteredCandidates.length === 0) return true;
-      
+
       const papersWithData = filteredCandidates.filter(p =>
         (p.analysisStatus === 'downloaded' ||
-         p.analysisStatus === 'extracting' ||
-         p.analysisStatus === 'completed') &&
+          p.analysisStatus === 'extracting' ||
+          p.analysisStatus === 'completed') &&
         (p.previewImage || p.analysisStatus === 'failed')
       ).length;
-      
+
       // Stay blurred until 15 papers have data OR all downloads complete
       const allDownloadsComplete = filteredCandidates.every(p =>
         p.analysisStatus === 'downloaded' ||
@@ -536,14 +543,22 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
         p.analysisStatus === 'failed' ||
         p.analysisStatus === 'stopped'
       );
-      
+
       // Unblur once we have 15 papers with data OR all downloads complete
       return papersWithData < 15 && !allDownloadsComplete;
     }
 
     // Don't blur during 'downloaded' or 'extracting' phases (already unblurred from downloading phase)
     if (researchPhase === 'downloaded' || researchPhase === 'extracting') {
-      return false;
+      // Unblur once extraction has STARTED (not waiting for completion)
+      // Check if ANY papers are actively extracting
+      const extractingCount = filteredCandidates.filter(p =>
+        p.analysisStatus === 'extracting'
+      ).length;
+
+      // Keep blurred until at least ONE paper starts extracting
+      // Once extraction starts, show results immediately
+      return extractingCount === 0;
     }
 
     // Default: don't blur
@@ -587,10 +602,21 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   }, [currentTabCandidates, searchQuery, localFilters]);
 
   // ─── Helper: Status Priority for Sorting ──────────────────────────────────────
-  const getStatusPriority = (status?: string): number => {
-    if (status === 'failed') return 0;           // Bottom (failed papers)
-    if (status === 'pending') return 1;          // Middle (waiting to be processed)
-    return 2;                                     // Top (all others: extracting, completed, downloading, processing, stopped)
+  // 8-tier ordering — reads both status AND notes count for precise live-sort
+  const getStatusPriority = (paper: ArxivPaper): number => {
+    const status = paper.analysisStatus;
+    const hasNotes = (paper.notes?.length || 0) > 0;
+
+    if (status === 'completed' && hasNotes) return 7; // TOP: finished with results
+    if (status === 'extracting') return 6; // Actively extracting notes
+    if (status === 'downloaded') return 5; // Ready, queued for extraction
+    if (status === 'downloading') return 4; // Fetching PDF
+    if (status === 'processing') return 4; // Uploaded PDFs reading pages
+    if (status === 'completed' && !hasNotes) return 3; // Done, no notes found
+    if (status === 'stopped') return 2; // Stopped by user
+    if (status === 'pending') return 1; // Not yet started
+    if (status === 'failed') return 0; // Bottom: errored
+    return 4; // undefined status — treat as active
   };
 
 
@@ -645,7 +671,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
 
       // Sort by: status priority first, then relevance score
       const sorted = uniqueAllNotes.sort((a, b) => {
-        const priorityDiff = getStatusPriority(b.sourcePaper.analysisStatus) - getStatusPriority(a.sourcePaper.analysisStatus);
+        const priorityDiff = getStatusPriority(b.sourcePaper) - getStatusPriority(a.sourcePaper);
         if (priorityDiff !== 0) return priorityDiff;
         return (b.relevanceScore || 0) - (a.relevanceScore || 0);
       });
@@ -679,14 +705,14 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
       return sorted;
     } else if (sortBy === 'newest-papers') {
       return [...filteredPapers].sort((a, b) => {
-        const priorityDiff = getStatusPriority(b.analysisStatus) - getStatusPriority(a.analysisStatus);
+        const priorityDiff = getStatusPriority(b) - getStatusPriority(a);
         if (priorityDiff !== 0) return priorityDiff;
         return getSafeTimestamp(b.publishedDate) - getSafeTimestamp(a.publishedDate);
       });
     } else {
       // 'relevant-papers' default: sort by status priority first, then notes count
       return [...filteredPapers].sort((a, b) => {
-        const priorityDiff = getStatusPriority(b.analysisStatus) - getStatusPriority(a.analysisStatus);
+        const priorityDiff = getStatusPriority(b) - getStatusPriority(a);
         if (priorityDiff !== 0) return priorityDiff;
         return (b.notes?.length || 0) - (a.notes?.length || 0);
       });
@@ -1142,7 +1168,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                   if (sortBy === 'most-relevant-notes') {
                     setIsSortOpen(!isSortOpen);
                   } else {
-                    setSortBy('most-relevant-notes');
+                    setSortBy('most-relevant-notes'); setCurrentPage(1);
                   }
                 }}
                 className="flex items-center gap-2 px-3 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-300 hover:text-scholar-600 dark:hover:text-scholar-400 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all"
@@ -1165,16 +1191,16 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                 <>
                   <div className="fixed inset-0 z-40 pointer-events-none" onClick={() => setIsSortOpen(false)} />
                   <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50 animate-fade-in pointer-events-auto">
-                    <button onClick={() => { setSortBy('most-relevant-notes'); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                    <button onClick={() => { setSortBy('most-relevant-notes'); setCurrentPage(1); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       <Star size={16} className={sortBy === 'most-relevant-notes' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
                       <span className="text-sm font-medium dark:text-white">Most Relevant Notes</span>
                     </button>
                     <div className="h-px bg-gray-100 dark:bg-gray-700 mx-3 my-1" />
-                    <button onClick={() => { setSortBy('relevant-papers'); onAllNotesExpandedChange(false); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                    <button onClick={() => { setSortBy('relevant-papers'); onAllNotesExpandedChange(false); setCurrentPage(1); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       <Layers size={16} className={sortBy === 'relevant-papers' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
                       <span className="text-sm font-medium dark:text-white">Relevant Papers</span>
                     </button>
-                    <button onClick={() => { setSortBy('newest-papers'); onAllNotesExpandedChange(false); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                    <button onClick={() => { setSortBy('newest-papers'); onAllNotesExpandedChange(false); setCurrentPage(1); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       <Calendar size={16} className={sortBy === 'newest-papers' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
                       <span className="text-sm font-medium dark:text-white">Newest Papers</span>
                     </button>
@@ -1463,7 +1489,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-8 mt-12 sm:mt-16 mb-12 pagination-controls border-t border-gray-100 dark:border-gray-800 pt-8">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => { onCurrentPageChange(Math.max(1, currentPage - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onClick={() => { onCurrentPageChange(Math.max(1, currentPage - 1)); }}
                 disabled={currentPage === 1}
                 className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-dark-card hover:bg-scholar-50 dark:hover:bg-scholar-900/20 hover:border-scholar-200 dark:hover:border-scholar-800 disabled:opacity-30 disabled:hover:bg-transparent shadow-sm transition-all"
                 title="Previous page"

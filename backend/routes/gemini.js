@@ -70,8 +70,8 @@ router.post('/filter-papers', async (req, res, next) => {
     console.log(`[FILTER-${requestId}] 🔗 Client: ${req.ip}`);
     console.log(`[FILTER-${requestId}] 📊 Socket timeout: ${req.socket?.timeout}ms`);
     
-    const { papers, userQuestions, keywords } = req.body.data;
-    console.log(`[FILTER-${requestId}] 📥 Input: ${papers?.length} papers, ${userQuestions?.length} questions`);
+    const { papers, userQuestions, keywords, stage, excludeIds } = req.body.data;
+    console.log(`[FILTER-${requestId}] 📥 Input: ${papers?.length} papers, ${userQuestions?.length} questions, stage: ${stage || 'all'}`);
     
     // === INVESTIGATION: Track connection lifecycle ===
     req.on('close', () => {
@@ -99,7 +99,10 @@ router.post('/filter-papers', async (req, res, next) => {
     console.log(`[FILTER-${requestId}] ⏳ Timeout set: ${timeoutMs / 1000}s`);
     console.log(`[FILTER-${requestId}] 🔄 Starting filtering operation...`);
     
-    const filterPromise = geminiService.filterRelevantPapers(papers, userQuestions, keywords);
+    const filterPromise = geminiService.filterRelevantPapers(papers, userQuestions, keywords, {
+      stage: stage || 'all',
+      excludeIds: excludeIds || []
+    });
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error(`Filter papers operation timed out after ${timeoutMs/1000}s`)), timeoutMs)
     );

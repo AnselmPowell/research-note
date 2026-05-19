@@ -94,8 +94,8 @@ export const api = {
       apiCall<number[]>('/gemini/embedding', 'POST', { text, taskType }),
     getBatchEmbeddings: (texts: string[], taskType = 'RETRIEVAL_DOCUMENT') =>
       apiCall<number[][]>('/gemini/batch-embeddings', 'POST', { texts, taskType }),
-    filterPapers: (papers: any[], userQuestions: string[], keywords: string[]) =>
-      apiCall<any[]>('/gemini/filter-papers', 'POST', { papers, userQuestions, keywords }),
+    filterPapers: (papers: any[], userQuestions: string[], keywords: string[], stage?: string, excludeIds?: string[]) =>
+      apiCall<any[]>('/gemini/filter-papers', 'POST', { papers, userQuestions, keywords, stage, excludeIds }),
     extractNotes: (data: any) => apiCall<DeepResearchNote[]>('/gemini/extract-notes', 'POST', data),
     search: (query: string) => apiCall<SearchResultData>('/gemini/search', 'POST', { query }),
     insightQueries: (userQuestions: string, contextQuery: string) =>

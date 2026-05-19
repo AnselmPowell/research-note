@@ -1,5 +1,4 @@
 import { ArxivPaper, ArxivSearchStructured } from '../types';
-import { buildArxivQueries, searchArxiv } from './arxivService';
 import { SearchMetrics } from '../types';
 
 const API_BASE = import.meta.env.DEV ? 'http://localhost:3001/api/v1' : '/api/v1';
@@ -450,117 +449,65 @@ export const searchAllSources = async (
     apiTimings.length = 0;
 
     // Build each API's specific query format
-    const arxivQueries = buildArxivQueries(structured, originalTopics, originalQuestions);
     const booleanQuery = buildBooleanQuery(structured);
-    const groundingQ = buildGroundingQuery(structured);
     const allKeywords = [structured.primary_keyword, ...structured.secondary_keywords].filter(Boolean);
 
     console.log('\n' + '═'.repeat(80));
-    console.log('  STARTING MULTI-API SEARCH');
+    console.log('  STARTING MULTI-API SEARCH (OpenAlex + Google CSE)');
     console.log('═'.repeat(80));
     console.log(`  Query Keywords: ${allKeywords.join(', ')}`);
     console.log(`  Boolean Query: ${booleanQuery}`);
-    console.log(`  ArXiv Queries: ${arxivQueries.length} variations`);
     console.log('═'.repeat(80) + '\n');
 
     if (onStatusUpdate) onStatusUpdate('Searching academic sources...');
 
     // Incremental tracking
     let completedCount = 0;
-    const totalAis = 5;
+    const totalAis = 2;
     const updateProgress = (apiName: string, count: number) => {
         completedCount++;
         if (onStatusUpdate) {
             onStatusUpdate(`Searching... ${completedCount}/${totalAis} sources checked (${apiName} found ${count})`);
         }
     };
-
-    // Track ArXiv timing separately since it has its own logging
-    const arxivStartTime = performance.now();
-    const arxivQueryString = `${arxivQueries.length} queries: ${arxivQueries.slice(0, 2).join('; ')}${arxivQueries.length > 2 ? '...' : ''}`;
     
-    console.log(`[ArXiv] 🚀 Starting search`);
-    console.log(`[ArXiv] 📝 Query: ${arxivQueryString}`);
-    
-    // Promise.allSettled with incremental reporting
-    const [arxivResult, openAlexResult, cseResult, pdfVectorResult, groundingResult] =
+    // OpenAlex + Google CSE only — ArXiv, PDFVector and Grounding disabled
+    const [openAlexResult, cseResult] =
         await Promise.allSettled([
-            searchArxiv(arxivQueries, undefined, originalTopics).then(res => { 
-                // Log ArXiv success in apiTimings
-                const arxivDuration = performance.now() - arxivStartTime;
-                console.log(`[ArXiv] ✅ Success in ${arxivDuration.toFixed(0)}ms - Found ${res.length} papers`);
-                apiTimings.push({
-                    api: 'ArXiv',
-                    startTime: arxivStartTime,
-                    endTime: performance.now(),
-                    duration: arxivDuration,
-                    success: true,
-                    resultCount: res.length,
-                    query: arxivQueryString
-                });
-                updateProgress('ArXiv', res.length); 
-                return res; 
-            }).catch(err => {
-                const arxivDuration = performance.now() - arxivStartTime;
-                console.log(`[ArXiv] ❌ Failed in ${arxivDuration.toFixed(0)}ms - ${err.message}`);
-                apiTimings.push({
-                    api: 'ArXiv',
-                    startTime: arxivStartTime,
-                    endTime: performance.now(),
-                    duration: arxivDuration,
-                    success: false,
-                    resultCount: 0,
-                    query: arxivQueryString,
-                    error: err.message
-                });
-                throw err; // Re-throw to maintain Promise.allSettled behavior
-            }),
             fetchOpenAlex(booleanQuery).then(res => { updateProgress('OpenAlex', res.length); return res; }),
-            fetchGoogleCSE(booleanQuery).then(res => { updateProgress('Google', res.length); return res; }),
-            fetchPDFVector(booleanQuery, allKeywords).then(res => { updateProgress('PDFs', res.length); return res; }),
-            fetchGoogleGrounding(groundingQ).then(res => { updateProgress('Grounding', res.length); return res; })
+            fetchGoogleCSE(booleanQuery).then(res => { updateProgress('Google CSE', res.length); return res; })
         ]);
 
-    const arxivPapers = arxivResult.status === 'fulfilled' ? arxivResult.value : [];
     const openAlexPapers = openAlexResult.status === 'fulfilled' ? openAlexResult.value : [];
     const csePapers = cseResult.status === 'fulfilled' ? cseResult.value : [];
-    const pdfVectorPapers = pdfVectorResult.status === 'fulfilled' ? pdfVectorResult.value : [];
-    const groundingPapers = groundingResult.status === 'fulfilled' ? groundingResult.value : [];
 
-    // NEW: Create metrics object with per-API counts
+    // Metrics — disabled APIs set to 0
     const searchMetrics: SearchMetrics = {
-        arxiv: arxivPapers.length,
+        arxiv: 0,
         openalex: openAlexPapers.length,
         google_cse: csePapers.length,
-        pdfvector: pdfVectorPapers.length,
-        google_grounding: groundingPapers.length,
+        pdfvector: 0,
+        google_grounding: 0,
         totalPapers: 0, // Will update after deduplication
         timestamp: Date.now()
     };
 
-    const totalBeforeDedup = arxivPapers.length + openAlexPapers.length + csePapers.length + pdfVectorPapers.length + groundingPapers.length;
+    const totalBeforeDedup = openAlexPapers.length + csePapers.length;
 
     console.log(
         `[searchAggregator] ✅ Search Results — ` +
-        `ArXiv:${searchMetrics.arxiv} | ` +
         `OpenAlex:${searchMetrics.openalex} | ` +
         `GoogleCSE:${searchMetrics.google_cse} | ` +
-        `PDFVector:${searchMetrics.pdfvector} | ` +
-        `Grounding:${searchMetrics.google_grounding} | ` +
         `Total before dedup: ${totalBeforeDedup}`
     );
 
-    // Merge and deduplicate by pdfUri (the pipeline's universal key)
-    // Priority order: ArXiv first (most reliable), then structured DBs, then AI
+    // Merge and deduplicate — OpenAlex first, then Google CSE
     const seenUris = new Set<string>();
     const merged: ArxivPaper[] = [];
 
     for (const paper of [
-        ...arxivPapers,
         ...openAlexPapers,
-        ...pdfVectorPapers,
-        ...csePapers,
-        ...groundingPapers
+        ...csePapers
     ]) {
         const key = paper.pdfUri.toLowerCase().trim();
         if (key && !seenUris.has(key)) {

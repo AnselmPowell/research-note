@@ -540,10 +540,16 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const resolveInsights = useCallback(() => {
     setHasSubmittedInsights(true);
+    // Pipeline no longer awaits a promise, so resolver is no longer needed.
+    // Keep call for safety in case stopDeepResearch triggers it concurrently.
     if (insightPromiseResolver) {
       insightPromiseResolver();
       setInsightPromiseResolver(null);
     }
+    // Show the purpose modal now that the user has submitted/skipped insights.
+    // The pipeline pre-loaded the saved purpose into researchPurposeRef already,
+    // so the modal opens pre-filled and ready.
+    setShowPurposeModal(true);
   }, [insightPromiseResolver]);
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -1279,11 +1285,15 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     console.log(`[🔴 analyzeArxivPapers] ✅ Downloads complete: ${successfulDownloads.length}/${papers.length} successful`);
     
     // Reorder papers: successful at top, failed at bottom
+    // SCOPED to this batch only — other batches' papers stay in place
+    const batchPaperIds = new Set(papers.map(p => p.id));
     setFilteredCandidates(prev => {
       const successIds = new Set(successfulDownloads.map(r => r.paper.id));
-      const successful = prev.filter(p => successIds.has(p.id));
-      const failed = prev.filter(p => !successIds.has(p.id));
-      return [...successful, ...failed];
+      const batchPapers = prev.filter(p => batchPaperIds.has(p.id));
+      const otherPapers = prev.filter(p => !batchPaperIds.has(p.id));
+      const successful = batchPapers.filter(p => successIds.has(p.id));
+      const failed = batchPapers.filter(p => !successIds.has(p.id));
+      return [...otherPapers, ...successful, ...failed];
     });
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1765,7 +1775,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         if (userPdfs.length > 0) {
           // ════════════════════════════════════════════════════════════════
-          // 🔴 NEW BLOCKING POINT: Insight Questions (URL-Only Path)
+          // ✅ NON-BLOCKING: Show insight questions WHILE extraction runs
           // ════════════════════════════════════════════════════════════════
           console.log('[ResearchContext] 🔍 Checking insight questions (URL-only path):', {
             hasInsights: insightQuestionsRef.current.length > 0,
@@ -1773,40 +1783,46 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             aborted: signal.aborted,
             hasSubmittedInsights
           });
-          
+
           if (insightQuestionsRef.current.length > 0 && !signal.aborted && !hasSubmittedInsights) {
-            console.log('[ResearchContext] ✅ Entering insight questions (URL-only path)');
+            console.log('[ResearchContext] ✅ Showing insight questions NON-BLOCKING (URL-only path)');
+            // Set reviewing_insights phase so DynamicLoadingBox shows the insight
+            // questions panel with correct text, timer, and countdown badge.
+            // We do NOT await a promise here — extraction starts immediately below.
             setResearchPhase('reviewing_insights');
-            setGatheringStatus("Refine your research with additional questions...");
-            
-            await new Promise<void>((resolve) => {
-              setInsightPromiseResolver(() => resolve);
-            });
-            
-            console.log('[ResearchContext] ✅ Insight questions resolved (URL-only)');
-            if (signal.aborted) return;
-            
+            setGatheringStatus("Extracting notes... Refine your questions while we work.");
+
+            // Pre-load saved purpose so the purpose modal is ready when user submits
             const savedPurpose = localStorageService.getResearchPurpose();
             if (savedPurpose) {
               setResearchPurpose(savedPurpose);
               researchPurposeRef.current = savedPurpose;
             }
-            setShowPurposeModal(true);
+            // NOTE: showPurposeModal is NOT set here — it is triggered by
+            // resolveInsights() → submitResearchPurpose() after user submits
+          } else {
+            setResearchPhase('extracting');
           }
           // ════════════════════════════════════════════════════════════════
-          
-          setResearchPhase('extracting');
+
           setGatheringStatus("Extracting notes from your PDFs...");
-          
-          const purposePrefix = researchPurposeRef.current.trim()
-            ? [`Context/Purpose of this research: ${researchPurposeRef.current.trim()}`]
-            : [];
-          
+
+          // Build questions with whatever insights are selected RIGHT NOW.
+          // selectedInsightQuestionsRef stays live — any questions the user
+          // selects during extraction are picked up by papers not yet in Phase B.
           const finalQuestionsForExtraction = [
-            ...purposePrefix,
+            ...(researchPurposeRef.current.trim()
+              ? [`Context/Purpose of this research: ${researchPurposeRef.current.trim()}`]
+              : []),
             ...query.questions,
             ...selectedInsightQuestionsRef.current
           ];
+
+          console.log('[ResearchContext] 📝 Starting extraction (URL-only) with questions:', {
+            original: query.questions.length,
+            insights: selectedInsightQuestionsRef.current.length,
+            total: finalQuestionsForExtraction.length
+          });
 
           // Only analyze user PDFs
           await performHybridResearch(userPdfs, [], finalQuestionsForExtraction, []);
@@ -1890,104 +1906,124 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const filterStartTime = performance.now();
         console.log('[ResearchContext] ⏱️  Filtering START');
 
-        const filtered = await filterRelevantPapers(candidates, query.questions, displayKeywords);
+        // ═══════════════════════════════════════════════════════════════
+        // TWO-PHASE FILTERING: Get first 20, start downloads, then get remaining 20
+        // ═══════════════════════════════════════════════════════════════
+        const firstBatch = await filterRelevantPapers(candidates, query.questions, displayKeywords, 'first');
 
         // ✅ Extract top 10 papers with highest relevance scores
-        const topTenPapers = filtered.slice(0, 10).map(p => ({
+        const topTenPapers = firstBatch.slice(0, 10).map(p => ({
           title: p.title,
           relevanceScore: p.relevanceScore || 0
         }));
 
         const filterDuration = (performance.now() - filterStartTime).toFixed(0);
-        console.log('[ResearchContext] ✅ Filtering COMPLETE:', {
+        console.log('[ResearchContext] ✅ First batch filtering COMPLETE:', {
           durationMs: filterDuration,
           durationSeconds: (parseInt(filterDuration) / 1000).toFixed(2),
           inputCount: candidates.length,
-          outputCount: filtered.length,
-          firstFilteredTitle: filtered[0]?.title
-        });
-
-        // ✅ Log top 10 for debugging
-        console.log('[ResearchContext] 📊 Top 10 Filtered Papers:', {
-          count: topTenPapers.length,
-          papers: topTenPapers.map((p, i) => ({
-            rank: i + 1,
-            title: p.title.substring(0, 50),
-            score: Math.round((p.relevanceScore || 0) * 100) + '%'
-          }))
+          outputCount: firstBatch.length,
+          firstFilteredTitle: firstBatch[0]?.title
         });
 
         if (signal.aborted) return;
 
         // ✅ CRITICAL: Set data BEFORE changing phase
-        setFilteredCandidates(filtered);
+        setFilteredCandidates(firstBatch);
         setTopFilteredPapers(topTenPapers);
 
         endPhaseTimer('filtering');
 
         // ════════════════════════════════════════════════════════════════
-        // 🔴 NEW BLOCKING POINT: Insight Questions Review (After Filtering)
+        // ✅ NON-BLOCKING: Show insight questions WHILE downloads run
         // ════════════════════════════════════════════════════════════════
         console.log('[ResearchContext] 🔍 Checking insight questions AFTER filtering:', {
           hasInsights: insightQuestionsRef.current.length > 0,
           count: insightQuestionsRef.current.length,
           aborted: signal.aborted,
           hasSubmittedInsights,
-          filteredPapersCount: filtered.length
+          filteredPapersCount: firstBatch.length
         });
-        
+
         if (insightQuestionsRef.current.length > 0 && !signal.aborted && !hasSubmittedInsights) {
-          console.log('[ResearchContext] ✅ Entering insight questions block AFTER filtering');
+          console.log('[ResearchContext] ✅ Showing insight questions NON-BLOCKING (topics path)');
           setResearchPhase('reviewing_insights');
-          setGatheringStatus("Refine your research with additional questions...");
-          
-          // 🔴 BLOCK HERE - Wait for user to select questions
-          await new Promise<void>((resolve) => {
-            setInsightPromiseResolver(() => resolve);
-          });
-          
-          console.log('[ResearchContext] ✅ Insight questions resolved (user submitted/skipped)');
-          if (signal.aborted) return;
-          
-          // ✅ Research purpose modal (optional enhancement)
+          setGatheringStatus("Downloading papers... Refine your questions while we work.");
+
           const savedPurpose = localStorageService.getResearchPurpose();
-          console.log('[ResearchContext] 📖 Loaded saved purpose from localStorage:', savedPurpose ? savedPurpose.substring(0, 50) + '...' : 'none');
+          console.log('[ResearchContext] 📖 Pre-loading saved purpose:', savedPurpose ? savedPurpose.substring(0, 50) + '...' : 'none');
           if (savedPurpose) {
             setResearchPurpose(savedPurpose);
             researchPurposeRef.current = savedPurpose;
           }
-          
-          console.log('[ResearchContext] 🎯 Setting showPurposeModal = true');
-          setShowPurposeModal(true);
+        } else {
+          setResearchPhase('downloading');
         }
         // ════════════════════════════════════════════════════════════════
 
-        setResearchPhase('extracting');
         startPhaseTimer('extracting');
 
-        const totalSources = userPdfs.length + filtered.length;
-        setGatheringStatus(`Found ${totalSources} relevant sources. Gathering notes...`);
-
-        // Combine user questions + Selected AI Insight Questions (using Ref to avoid stale closure)
-        // AND inject research purpose context if provided
-        const purposePrefix = researchPurposeRef.current.trim()
-          ? [`Context/Purpose of this research: ${researchPurposeRef.current.trim()}`]
-          : [];
-
+        // Build questions with whatever insights are selected RIGHT NOW
         const finalQuestionsForExtraction = [
-          ...purposePrefix,
+          ...(researchPurposeRef.current.trim()
+            ? [`Context/Purpose of this research: ${researchPurposeRef.current.trim()}`]
+            : []),
           ...query.questions,
           ...selectedInsightQuestionsRef.current
         ];
 
-        console.log('[ResearchContext] 📝 FINAL QUESTIONS FOR EXTRACTION:', {
-          original: query.questions.length,
-          insights: selectedInsightQuestionsRef.current.length,
-          total: finalQuestionsForExtraction.length,
-          questions: finalQuestionsForExtraction
+        console.log('[ResearchContext] 📝 Two-phase download starting:', {
+          firstBatchCount: firstBatch.length,
+          userPdfsCount: userPdfs.length,
+          questions: finalQuestionsForExtraction.length
         });
 
-        await performHybridResearch(userPdfs, filtered, finalQuestionsForExtraction, displayKeywords);
+        // ═══════════════════════════════════════════════════════════════
+        // KICK OFF REMAINING FILTER IN BACKGROUND (embeddings cached → Stage 1 instant)
+        // ═══════════════════════════════════════════════════════════════
+        const firstBatchIds = firstBatch.map(p => p.id);
+        const remainingPromise = filterRelevantPapers(
+          candidates, query.questions, displayKeywords, 'remaining', firstBatchIds
+        ).catch(err => {
+          console.warn('[ResearchContext] ⚠️ Remaining filter failed:', err.message);
+          return [] as typeof firstBatch;
+        });
+
+        // Process user PDFs if any (fire-and-forget, runs concurrently)
+        let userPdfPromise: Promise<void> | null = null;
+        if (userPdfs.length > 0) {
+          setProcessedPdfs(userPdfs);
+          const questionsStr = finalQuestionsForExtraction.join('\n');
+          userPdfPromise = analyzeLoadedPdfs(userPdfs, questionsStr, signal);
+        }
+
+        // START DOWNLOADING + EXTRACTING FIRST BATCH IMMEDIATELY
+        const firstBatchPromise = analyzeArxivPapers(
+          firstBatch, finalQuestionsForExtraction, displayKeywords, signal
+        );
+
+        // Wait for remaining batch to arrive, then process those too
+        const remainingBatch = await remainingPromise;
+        let secondBatchPromise: Promise<void> | null = null;
+
+        if (remainingBatch.length > 0 && !signal.aborted) {
+          console.log('[ResearchContext] 📥 Remaining batch arrived:', remainingBatch.length, 'papers');
+          // Append to filteredCandidates — functional update prevents overwrite
+          setFilteredCandidates(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const newPapers = remainingBatch.filter(p => !existingIds.has(p.id));
+            return [...prev, ...newPapers];
+          });
+
+          secondBatchPromise = analyzeArxivPapers(
+            remainingBatch, finalQuestionsForExtraction, displayKeywords, signal
+          );
+        }
+
+        // Wait for ALL work to complete
+        await firstBatchPromise;
+        if (secondBatchPromise) await secondBatchPromise;
+        if (userPdfPromise) await userPdfPromise;
 
         if (signal.aborted) return;
         endPhaseTimer('extracting');
@@ -1997,7 +2033,7 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         endPhaseTimer('filtering');
         
         // ════════════════════════════════════════════════════════════════
-        // 🔴 NEW BLOCKING POINT: Insight Questions (PDF-Only Path)
+        // ✅ NON-BLOCKING: Show insight questions WHILE extraction runs
         // ════════════════════════════════════════════════════════════════
         console.log('[ResearchContext] 🔍 Checking insight questions (PDF-only path):', {
           hasInsights: insightQuestionsRef.current.length > 0,
@@ -2005,48 +2041,38 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           aborted: signal.aborted,
           hasSubmittedInsights
         });
-        
+
         if (insightQuestionsRef.current.length > 0 && !signal.aborted && !hasSubmittedInsights) {
-          console.log('[ResearchContext] ✅ Entering insight questions block (PDF-only path)');
+          console.log('[ResearchContext] ✅ Showing insight questions NON-BLOCKING (PDF-only path)');
           setResearchPhase('reviewing_insights');
-          setGatheringStatus("Refine your research with additional questions...");
-          
-          await new Promise<void>((resolve) => {
-            setInsightPromiseResolver(() => resolve);
-          });
-          
-          console.log('[ResearchContext] ✅ Insight questions resolved (PDF-only)');
-          if (signal.aborted) return;
-          
+          setGatheringStatus("Extracting notes... Refine your questions while we work.");
+
           const savedPurpose = localStorageService.getResearchPurpose();
           if (savedPurpose) {
             setResearchPurpose(savedPurpose);
             researchPurposeRef.current = savedPurpose;
           }
-          setShowPurposeModal(true);
+          // NOTE: showPurposeModal fires after resolveInsights(), not here
+        } else {
+          setResearchPhase('extracting');
         }
         // ════════════════════════════════════════════════════════════════
-        
-        setResearchPhase('extracting');
+
         startPhaseTimer('extracting');
         setGatheringStatus("Analyzing your provided PDFs...");
-        
-        // Combine user questions + Selected AI Insight Questions (using Ref to avoid stale closure)
-        const purposePrefix = researchPurposeRef.current.trim()
-          ? [`Context/Purpose of this research: ${researchPurposeRef.current.trim()}`]
-          : [];
-        
+
         const finalQuestionsForExtraction = [
-          ...purposePrefix,
+          ...(researchPurposeRef.current.trim()
+            ? [`Context/Purpose of this research: ${researchPurposeRef.current.trim()}`]
+            : []),
           ...query.questions,
           ...selectedInsightQuestionsRef.current
         ];
 
-        console.log('[ResearchContext] 📝 FINAL QUESTIONS FOR EXTRACTION (PDF-ONLY):', {
+        console.log('[ResearchContext] 📝 Starting extraction (PDF-only) with questions:', {
           original: query.questions.length,
           insights: selectedInsightQuestionsRef.current.length,
-          total: finalQuestionsForExtraction.length,
-          questions: finalQuestionsForExtraction
+          total: finalQuestionsForExtraction.length
         });
 
         await performHybridResearch(userPdfs, [], finalQuestionsForExtraction, displayKeywords);
