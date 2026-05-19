@@ -125,6 +125,7 @@ export interface ArxivPaper {
   publisher?: string;
   categories?: string[];
   previewImage?: string;  // NEW: Base64 preview of first page
+  pageCount?: number;     // Page count from PDF extraction
   // NEW: Track when paper was added to accumulation for dynamic sorting in "My Results"
   addedToAccumulationAt?: number;
 }

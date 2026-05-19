@@ -1254,7 +1254,8 @@ export const ResearchProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             harvardReference: extracted.metadata.harvardReference,
             publisher: extracted.metadata.publisher,
             categories: extracted.metadata.categories,
-            previewImage: extracted.previewImage  // STORE PREVIEW
+            previewImage: extracted.previewImage,  // STORE PREVIEW
+            pageCount: extracted.numPages           // STORE PAGE COUNT
           };
         }));
         syncPaperStatusToAccumulated(paper.id, 'downloaded');

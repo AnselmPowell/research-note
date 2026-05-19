@@ -202,12 +202,17 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
 
           {/* Preview Image - Larger and aligned with title */}
           {paper.previewImage && paper.analysisStatus !== 'failed' ? (
-            <div className="flex-shrink-0 mt-10 mr-3 sm:mr-4 pt-0.5">
+            <div className="flex-shrink-0 mt-10 mr-3 sm:mr-4 pt-0.5 flex flex-col items-center">
               <img
                 src={paper.previewImage}
                 alt={`Preview of ${paper.title}`}
                 className="w-20 sm:w-24 h-28 sm:h-36 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-700"
               />
+              {paper.pageCount && (
+                <span className="mt-2.5 text-xs font-medium text-scholar-800 dark:text-scholar-400">
+                  {paper.pageCount} pages
+                </span>
+              )}
             </div>
           ) : null}
 
