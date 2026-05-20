@@ -1408,7 +1408,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                   onClick={() => { setIsPaperDropdownOpen(!isPaperDropdownOpen); setIsQueryDropdownOpen(false); }}
                   className="w-full bg-white/80 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-left text-gray-900 dark:text-white outline-none shadow-sm transition-all flex items-center justify-between gap-2 hover:border-gray-200 dark:hover:border-gray-700"
                 >
-                  <span className="truncate text-sm">
+                  <span className="truncate text-sm" title={localFilters.paper !== 'all' ? (uniquePapers.find(p => p.id === localFilters.paper)?.title || '') : undefined}>
                     {localFilters.paper === 'all'
                       ? `All Papers (${uniquePapers.length})`
                       : truncateWords(uniquePapers.find(p => p.id === localFilters.paper)?.title || '', 11)
@@ -1432,7 +1432,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                           onClick={() => { onLocalFiltersChange({ ...localFilters, paper: p.id }); setIsPaperDropdownOpen(false); }}
                           className={`w-full text-left px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${localFilters.paper === p.id ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-700 dark:text-gray-200'}`}
                         >
-                          <span className="text-sm font-medium truncate">{truncateWords(p.title, 11)}</span>
+                          <span className="text-sm font-medium truncate" title={p.title}>{truncateWords(p.title, 11)}</span>
                           {p.noteCount > 0 && (
                             <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-[10px] font-black flex items-center justify-center">
                               {p.noteCount}
@@ -1454,7 +1454,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                   onClick={() => { setIsQueryDropdownOpen(!isQueryDropdownOpen); setIsPaperDropdownOpen(false); }}
                   className="w-full bg-white/80 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-left text-gray-900 dark:text-white outline-none shadow-sm transition-all flex items-center justify-between gap-2 hover:border-gray-200 dark:hover:border-gray-700"
                 >
-                  <span className="truncate text-sm">
+                  <span className="truncate text-sm" title={localFilters.query !== 'all' ? localFilters.query : undefined}>
                     {localFilters.query === 'all'
                       ? `All Queries (${uniqueQueries.length})`
                       : truncateWords(localFilters.query, 11)
@@ -1484,7 +1484,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                                 : 'text-gray-700 dark:text-gray-200'
                           }`}
                         >
-                          <span className="text-sm font-medium truncate">{truncateWords(query, 11)}</span>
+                          <span className="text-sm font-medium truncate" title={query}>{truncateWords(query, 11)}</span>
                           {noteCount > 0 && (
                             <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-[10px] font-black flex items-center justify-center">
                               {noteCount}
