@@ -481,6 +481,19 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   // ─── Local Sort State ─────────────────────────────────────────────────────────
   const [sortBy, setSortBy] = useState<SortOption>('relevant-papers');
   const [isSortOpen, setIsSortOpen] = useState(false);
+  const sortDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close sort dropdown when user clicks outside it
+  useEffect(() => {
+    if (!isSortOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(e.target as Node)) {
+        setIsSortOpen(false);
+      }
+    };
+    document.addEventListener('mouseup', handleClickOutside);
+    return () => document.removeEventListener('mouseup', handleClickOutside);
+  }, [isSortOpen]);
 
   // Reset sort view and pagination to default when new research starts
   useEffect(() => {
@@ -1038,7 +1051,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
 
                 {isSelectMenuOpen && (
                   <>
-                    <div className="fixed inset-0 z-40 pointer-events-none" onClick={() => onSelectMenuOpenChange(false)} />
+                    <div className="fixed inset-0 z-40 pointer-events-auto" onClick={() => onSelectMenuOpenChange(false)} />
                     <div className="absolute left-0 top-full mt-2 w-64 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 animate-fade-in pointer-events-auto" style={{ overflow: 'visible' }}>
                       <button
                         onClick={handleSelectPage}
@@ -1090,7 +1103,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
 
                 {isNoteSelectMenuOpen && (
                   <>
-                    <div className="fixed inset-0 z-40 pointer-events-none" onClick={() => onNoteSelectMenuOpenChange(false)} />
+                    <div className="fixed inset-0 z-40 pointer-events-auto" onClick={() => onNoteSelectMenuOpenChange(false)} />
                     <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 animate-fade-in pointer-events-auto" style={{ overflow: 'visible' }}>
                       <button
                         onClick={handleSelectNotesPage}
@@ -1151,7 +1164,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
           </div>
 
           {/* RIGHT: Filter Toggle + Expand/Collapse */}
-          <div className="flex items-center gap-2 z-20">
+          <div className="relative flex items-center gap-2 z-20">
             {/* Top 5 Insights Button - NOW SHOWS IN ALL VIEWS */}
             {selectableNotesTotalCount > 10 && researchPhase === 'completed' && !hasRankedOnce && (
               <button
@@ -1178,7 +1191,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
             )}
 
             {/* Sort Dropdown */}
-            <div className="relative">
+            <div ref={sortDropdownRef} className="relative z-30">
               <button
                 onClick={() => {
                   // If already in most-relevant-notes view, toggle dropdown
@@ -1207,7 +1220,6 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
 
               {isSortOpen && (
                 <>
-                  <div className="fixed inset-0 z-40 pointer-events-none" onClick={() => setIsSortOpen(false)} />
                   <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50 animate-fade-in pointer-events-auto">
                     <button onClick={() => { setSortBy('most-relevant-notes'); setCurrentPage(1); setIsSortOpen(false); }} className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       <Star size={16} className={sortBy === 'most-relevant-notes' ? "text-scholar-600 dark:text-scholar-400" : "text-gray-400"} />
