@@ -134,7 +134,11 @@ export const ResearchCardNote: React.FC<ResearchCardNoteProps> = React.memo(({
         ${isSelected ? 'border-scholar-500 ring-1 ring-scholar-500' : 'border-gray-200 dark:border-gray-700 hover:shadow-sm'}
         ${isExpanded ? 'shadow-md ring-1 ring-scholar-100 dark:ring-scholar-900' : ''}
       `}
-      onClick={() => researchPhase !== 'ranking_notes' && onToggleExpand()}
+      onClick={() => {
+        if (researchPhase === 'ranking_notes') return;
+        if (window.getSelection()?.toString()) return; // user is selecting text, don't toggle
+        onToggleExpand();
+      }}
     >
       <div className="p-4">
         <div className="flex items-start gap-3">
@@ -215,7 +219,7 @@ export const ResearchCardNote: React.FC<ResearchCardNoteProps> = React.memo(({
         </div>
 
         {isExpanded && (
-          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in">
+          <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-in" onClick={(e) => e.stopPropagation()}>
             {showScore && note.relevanceScore && (
               <div className="absolute top-6 right-4 text-right">
                 <div className="text-lg font-bold text-scholar-600 dark:text-scholar-400">{Math.round(note.relevanceScore * 100)}%</div>

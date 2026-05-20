@@ -286,12 +286,17 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
             <p
               role="button"
               aria-expanded={isAbstractExpanded}
-              onClick={(e) => { e.stopPropagation(); setIsAbstractExpanded(prev => !prev); }}
-              className={`text-sm text-gray-600 dark:text-gray-300 leading-relaxed ${isAbstractExpanded ? '' : 'line-clamp-2'} mb-3 cursor-pointer`}
+              onClick={(e) => { e.stopPropagation(); if (!isAbstractExpanded) setIsAbstractExpanded(true); }}
+              className={`text-sm text-gray-600 dark:text-gray-300 leading-relaxed ${isAbstractExpanded ? '' : 'line-clamp-2'} mb-3 ${!isAbstractExpanded ? 'cursor-pointer' : 'cursor-default'}`}
             >
               {paper.summary}
               {isAbstractExpanded && (
-                <span className="inline-flex items-center dark:text-scholar-400 ml-2 pt-3 text-gray-500 hover:text-gray-700" aria-hidden="true">
+                <span
+                  role="button"
+                  aria-label="Collapse abstract"
+                  className="inline-flex items-center dark:text-scholar-400 ml-2 pt-3 text-gray-500 hover:text-gray-700 cursor-pointer"
+                  onClick={(e) => { e.stopPropagation(); setIsAbstractExpanded(false); }}
+                >
                   <ChevronUp size={30} />
                 </span>
               )}
