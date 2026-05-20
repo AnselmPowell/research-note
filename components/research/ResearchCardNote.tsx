@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { DeepResearchNote, ArxivPaper } from '../../types';
 import { useResearch } from '../../contexts/ResearchContext';
 import { useDatabase } from '../../database/DatabaseContext';
@@ -11,7 +11,8 @@ import {
   BookmarkPlus,
   TextSearch,
   Copy,
-  Library
+  Library,
+  ChevronDown
 } from 'lucide-react';
 
 interface ResearchCardNoteProps {
@@ -42,6 +43,19 @@ export const ResearchCardNote: React.FC<ResearchCardNoteProps> = React.memo(({
   onToggleExpand  // ✅ Callback to parent
 }) => {
   const [justCopied, setJustCopied] = useState(false);
+  const [showCopyMenu, setShowCopyMenu] = useState(false);
+  const copyMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showCopyMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (copyMenuRef.current && !copyMenuRef.current.contains(e.target as Node)) {
+        setShowCopyMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCopyMenu]);
 
   const { toggleContextNote, isNoteInContext, setActiveSearchMode, researchPhase } = useResearch();
   const { isNoteSaved, deleteNote, saveNote, savedNotes } = useDatabase();
@@ -86,6 +100,25 @@ export const ResearchCardNote: React.FC<ResearchCardNoteProps> = React.memo(({
 
   const isInContext = isNoteInContext(note);
   const isSaved = isNoteSaved(note.pdfUri, note.quote);
+
+  const formatFullResearchNote = () => {
+    const paper = sourcePaper || (note as any).sourcePaper;
+    const authors = paper?.authors
+      ? (Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors)
+      : '';
+    const citationLines = note.citations?.map((c: any) => `${c.inline} ${c.full}`).join('\n') || '';
+    return [
+      `Title: ${paper?.title || sourceTitle || 'Untitled Paper'}`,
+      authors ? `Authors: ${authors}` : null,
+      `Page: ${note.pageNumber}`,
+      '---',
+      note.quote,
+      '---',
+      citationLines ? `Citations:\n${citationLines}` : null,
+      `Source: ${note.pdfUri}`,
+      harvardRef ? `Reference: ${harvardRef}` : null,
+    ].filter(Boolean).join('\n');
+  };
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -213,9 +246,32 @@ export const ResearchCardNote: React.FC<ResearchCardNoteProps> = React.memo(({
           <button onClick={handleViewPdf} className="p-1.5 rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-scholar-600 dark:hover:text-scholar-400" title="View text in PDF">
             <TextSearch size={18} />
           </button>
-          <button onClick={handleCopy} className="p-1.5 rounded-md text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" title="Copy text">
-            {justCopied ? <Check size={18} /> : <Copy size={18} />}
-          </button>
+          <div className="relative" ref={copyMenuRef}>
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowCopyMenu(!showCopyMenu); }}
+              className={`p-1.5 rounded-md flex items-center gap-0.5 transition-all ${showCopyMenu ? 'text-scholar-600 bg-scholar-50 dark:bg-scholar-900/30' : 'text-gray-400 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+              title="Copy"
+            >
+              {justCopied ? <Check size={18} /> : <Copy size={18} />}
+              <ChevronDown size={10} className={`transition-transform duration-200 ${showCopyMenu ? 'rotate-180' : ''}`} />
+            </button>
+            {showCopyMenu && (
+              <div className="absolute top-full right-0 mt-1 w-40 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 py-1 z-50 animate-fade-in origin-top-right">
+                <button
+                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(note.quote); setJustCopied(true); setShowCopyMenu(false); setTimeout(() => setJustCopied(false), 2000); }}
+                  className="w-full text-left px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                >
+                  Copy Note
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(formatFullResearchNote()); setJustCopied(true); setShowCopyMenu(false); setTimeout(() => setJustCopied(false), 2000); }}
+                  className="w-full text-left px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                >
+                  Copy Full
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {isExpanded && (

@@ -403,6 +403,17 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   const [isSelectMenuOpen, setIsSelectMenuOpen] = useState(false);
   const [isNoteSelectMenuOpen, setIsNoteSelectMenuOpen] = useState(false);
   const [justCopiedNotes, setJustCopiedNotes] = useState(false);
+  const [showBulkCopyMenu, setShowBulkCopyMenu] = useState(false);
+  const bulkCopyRef = useRef<HTMLDivElement>(null);
+
+
+  const { loadedPdfs, isPdfInContext, loadPdfFromUrl, setActivePdf, downloadingUris, failedUris } = useLibrary();
+  const { openColumn, setColumnVisibility } = useUI();
+
+  // ─── Local Sort State ─────────────────────────────────────────────────────────
+  const [sortBy, setSortBy] = useState<SortOption>('relevant-papers');
+  const [isSortOpen, setIsSortOpen] = useState(false);
+  const sortDropdownRef = useRef<HTMLDivElement>(null);
 
   // ✅ Track which note from Top 5 should be highlighted/expanded (only one at a time)
   const [highlightedNoteId, setHighlightedNoteId] = useState<string | null>(null);
@@ -458,21 +469,198 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     rankTopNotes
   } = useResearch();
 
-  const accumulatedPapers = arxivCandidates;
-  const accumulatedNotes = deepResearchResults;
+
+   // ─── Helper: Status Priority for Sorting ──────────────────────────────────────
+  // 8-tier ordering — reads both status AND notes count for precise live-sort
+  const getStatusPriority = (paper: ArxivPaper): number => {
+    const status = paper.analysisStatus;
+    const hasNotes = (paper.notes?.length || 0) > 0;
+
+    if (status === 'completed' && hasNotes) return 7; // TOP: finished with results
+    if (status === 'extracting') return 6; // Actively extracting notes
+    if (status === 'downloaded') return 5; // Ready, queued for extraction
+    if (status === 'downloading') return 4; // Fetching PDF
+    if (status === 'processing') return 4; // Uploaded PDFs reading pages
+    if (status === 'completed' && !hasNotes) return 3; // Done, no notes found
+    if (status === 'stopped') return 2; // Stopped by user
+    if (status === 'pending') return 1; // Not yet started
+    if (status === 'failed') return 0; // Bottom: errored
+    return 4; // undefined status — treat as active
+  };
+
+   // Determine candidates based on research phase (same logic as before)
+  const currentTabCandidates = useMemo(() => {
+    return researchPhase === 'downloading' || researchPhase === 'downloaded' || researchPhase === 'extracting' || researchPhase === 'completed' || researchPhase === 'ranking_notes'
+      ? filteredCandidates
+      : arxivCandidates;
+  }, [researchPhase, filteredCandidates, arxivCandidates]);
+
+  
+  // ─── Filter Step 1: Text + field filters ──────────────────────────────────────
+  const filteredPapers = useMemo(() => {
+    let base = [...currentTabCandidates];
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      base = base.filter(paper => {
+        const titleMatch = paper.title.toLowerCase().includes(q);
+        const abstractMatch = paper.summary?.toLowerCase().includes(q);
+        const notesMatch = paper.notes?.some(note =>
+          note.quote.toLowerCase().includes(q) ||
+          note.justification?.toLowerCase().includes(q)
+        );
+        return titleMatch || abstractMatch || notesMatch;
+      });
+    }
+    if (localFilters.paper !== 'all') {
+      base = base.filter(p => p.id === localFilters.paper);
+    }
+    if (localFilters.query !== 'all') {
+      base = base.filter(p =>
+        p.notes?.some(note => note.relatedQuestion === localFilters.query)
+      );
+    }
+    if (localFilters.hasNotes) {
+      base = base.filter(p => p.notes && p.notes.length > 0);
+    }
+    return base;
+  }, [currentTabCandidates, searchQuery, localFilters]);
+
+  
+  const content = useMemo(() => {
+    if (sortBy === 'most-relevant-notes') {
+      const allNotes = filteredPapers.flatMap(paper =>
+        (paper.notes || [])
+          .filter(note => {
+            if ((note?.quote || '').toString().trim().length === 0) return false;
+            if (localFilters.query && localFilters.query !== 'all') {
+              return note.relatedQuestion === localFilters.query;
+            }
+            return true;
+          })
+          .map((note, filterIdx) => {
+            // ✅ CRITICAL FIX: Use full quote length for uniqueness guarantee
+            // Substring(0, 50) can collide if two notes on same page start identically
+            // Using full quote ensures truly unique IDs
+            const fullQuoteHash = String(note.quote || '')
+              .replace(/[|\/\\]/g, '_')
+              .substring(0, 60);
+
+            // Get actual index in paper.notes array for consistency with rankTopNotes
+            const actualIndex = (paper.notes || []).findIndex((n: any) =>
+              n.quote === note.quote && n.pageNumber === note.pageNumber
+            );
+
+            // ✅ Include filterIdx as tiebreaker — prevents collisions when two notes
+            // on the same page share an identical quote prefix (truncated to 60 chars)
+            const uniqueId = actualIndex >= 0
+              ? `${paper.id}|p${note.pageNumber}|i${actualIndex}|${filterIdx}|${fullQuoteHash}`
+              : `${paper.id}|p${note.pageNumber}|i${filterIdx}|${filterIdx}|${fullQuoteHash}`;
+
+            return {
+              ...note,
+              sourcePaper: paper,
+              sourceId: paper.id,  // ← Track source paper
+              uniqueId
+            };
+          })
+      );
+
+      // ✅ Deduplicate allNotes by uniqueId (safety measure)
+      const seenIds = new Set<string>();
+      const uniqueAllNotes = allNotes.filter(note => {
+        if (seenIds.has(note.uniqueId)) {
+          console.warn('[DeepSearch] Duplicate note in allNotes filtered:', note.uniqueId.substring(0, 50));
+          return false;
+        }
+        seenIds.add(note.uniqueId);
+        return true;
+      });
+
+      // Sort by: status priority first, then relevance score
+      const sorted = uniqueAllNotes.sort((a, b) => {
+        const priorityDiff = getStatusPriority(b.sourcePaper) - getStatusPriority(a.sourcePaper);
+        if (priorityDiff !== 0) return priorityDiff;
+        return (b.relevanceScore || 0) - (a.relevanceScore || 0);
+      });
+
+      // 🔥 Refined Reordering: Bubble Top 5 insights to the absolute top
+      if (topNoteIds && topNoteIds.length > 0) {
+        const topOnes = uniqueAllNotes
+          .filter(n => topNoteIds.includes(n.uniqueId))
+          .sort((a, b) => topNoteIds.indexOf(a.uniqueId) - topNoteIds.indexOf(b.uniqueId));
+
+        // ✅ If user clicked a specific Top 5 note, move it to position 0
+        if (clickedTopNoteId && topOnes.some(n => n.uniqueId === clickedTopNoteId)) {
+          const clickedNote = topOnes.find(n => n.uniqueId === clickedTopNoteId)!;
+          const otherTopNotes = topOnes.filter(n => n.uniqueId !== clickedTopNoteId);
+          const finalTopOnes = [clickedNote, ...otherTopNotes];
+          const remaining = uniqueAllNotes.filter(n => !topNoteIds.includes(n.uniqueId));
+
+          console.log('[DeepSearch] Moved clicked note to position 0:', {
+            clickedNoteId: clickedTopNoteId.substring(0, 50),
+            totalTopNotes: finalTopOnes.length,
+            remainingNotes: remaining.length
+          });
+
+          return [...finalTopOnes, ...remaining];
+        }
+
+        const remaining = uniqueAllNotes.filter(n => !topNoteIds.includes(n.uniqueId));
+        return [...topOnes, ...remaining];
+      }
+
+      return sorted;
+    } else if (sortBy === 'newest-papers') {
+      return [...filteredPapers].sort((a, b) => {
+        const priorityDiff = getStatusPriority(b) - getStatusPriority(a);
+        if (priorityDiff !== 0) return priorityDiff;
+        return getSafeTimestamp(b.publishedDate) - getSafeTimestamp(a.publishedDate);
+      });
+    } else {
+      // 'relevant-papers' default: sort by status priority first, then notes count
+      return [...filteredPapers].sort((a, b) => {
+        const priorityDiff = getStatusPriority(b) - getStatusPriority(a);
+        if (priorityDiff !== 0) return priorityDiff;
+        return (b.notes?.length || 0) - (a.notes?.length || 0);
+      });
+    }
+  }, [filteredPapers, sortBy, localFilters.query, topNoteIds, clickedTopNoteId]);
 
 
 
-  const handleBulkCopyNotes = useCallback(() => {
+
+  const handleBulkCopyNotes = useCallback((mode: 'raw' | 'full') => {
     if (selectedNoteIds.length === 0) return;
-    const notesToCopy = accumulatedNotes
-      .filter(n => selectedNoteIds.includes(n.uniqueId))
-      .map(n => `> ${n.quote}\n\nSource: ${n.sourcePaper.title}`)
-      .join('\n\n---\n\n');
-    navigator.clipboard.writeText(notesToCopy);
+    // ✅ FIX: Filter from `content` (has uniqueId) not `accumulatedNotes` (does not)
+    const notesToCopy = (content as any[]).filter(n => selectedNoteIds.includes(n.uniqueId));
+    let text = '';
+    if (mode === 'raw') {
+      text = notesToCopy.map(n => `"${n.quote}"`).join('\n\n');
+    } else {
+      text = notesToCopy.map(n => {
+        const paper = n.sourcePaper;
+        const authors = paper?.authors
+          ? (Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors)
+          : '';
+        const citationLines = n.citations?.map((c: any) => `${c.inline} ${c.full}`).join('\n') || '';
+        return [
+          `Title: ${paper?.title || 'Untitled Paper'}`,
+          authors ? `Authors: ${authors}` : null,
+          `Page: ${n.pageNumber}`,
+          '---',
+          n.quote,
+          '---',
+          citationLines ? `Citations:\n${citationLines}` : null,
+          `Source: ${n.pdfUri}`,
+          paper?.harvardReference ? `Reference: ${paper.harvardReference}` : null,
+        ].filter(Boolean).join('\n');
+      }).join('\n\n========================\n\n');
+    }
+    navigator.clipboard.writeText(text);
     setJustCopiedNotes(true);
+    setShowBulkCopyMenu(false);
     setTimeout(() => setJustCopiedNotes(false), 2000);
-  }, [selectedNoteIds, accumulatedNotes]);
+  }, [selectedNoteIds, content]);
 
   const onSelectNote = useCallback((id: string) => {
     setSelectedNoteIds(prev =>
@@ -481,14 +669,6 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   }, []);
 
 
-
-  const { loadedPdfs, isPdfInContext, loadPdfFromUrl, setActivePdf, downloadingUris, failedUris } = useLibrary();
-  const { openColumn, setColumnVisibility } = useUI();
-
-  // ─── Local Sort State ─────────────────────────────────────────────────────────
-  const [sortBy, setSortBy] = useState<SortOption>('relevant-papers');
-  const [isSortOpen, setIsSortOpen] = useState(false);
-  const sortDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close sort dropdown when user clicks outside it
   useEffect(() => {
@@ -515,12 +695,6 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     setCurrentPage(1);
   }, [searchQuery, localFilters]);
 
-  // Determine candidates based on research phase (same logic as before)
-  const currentTabCandidates = useMemo(() => {
-    return researchPhase === 'downloading' || researchPhase === 'downloaded' || researchPhase === 'extracting' || researchPhase === 'completed' || researchPhase === 'ranking_notes'
-      ? filteredCandidates
-      : arxivCandidates;
-  }, [researchPhase, filteredCandidates, arxivCandidates]);
 
   // Calculate lightweight paper data (titles + relevance scores) for dynamic loading box
   // During filtering phase, use top 10 papers from ResearchContext; other phases use appropriate source
@@ -610,153 +784,6 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     [currentTabCandidates]
   );
 
-  // ─── Filter Step 1: Text + field filters ──────────────────────────────────────
-  const filteredPapers = useMemo(() => {
-    let base = [...currentTabCandidates];
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      base = base.filter(paper => {
-        const titleMatch = paper.title.toLowerCase().includes(q);
-        const abstractMatch = paper.summary?.toLowerCase().includes(q);
-        const notesMatch = paper.notes?.some(note =>
-          note.quote.toLowerCase().includes(q) ||
-          note.justification?.toLowerCase().includes(q)
-        );
-        return titleMatch || abstractMatch || notesMatch;
-      });
-    }
-    if (localFilters.paper !== 'all') {
-      base = base.filter(p => p.id === localFilters.paper);
-    }
-    if (localFilters.query !== 'all') {
-      base = base.filter(p =>
-        p.notes?.some(note => note.relatedQuestion === localFilters.query)
-      );
-    }
-    if (localFilters.hasNotes) {
-      base = base.filter(p => p.notes && p.notes.length > 0);
-    }
-    return base;
-  }, [currentTabCandidates, searchQuery, localFilters]);
-
-  // ─── Helper: Status Priority for Sorting ──────────────────────────────────────
-  // 8-tier ordering — reads both status AND notes count for precise live-sort
-  const getStatusPriority = (paper: ArxivPaper): number => {
-    const status = paper.analysisStatus;
-    const hasNotes = (paper.notes?.length || 0) > 0;
-
-    if (status === 'completed' && hasNotes) return 7; // TOP: finished with results
-    if (status === 'extracting') return 6; // Actively extracting notes
-    if (status === 'downloaded') return 5; // Ready, queued for extraction
-    if (status === 'downloading') return 4; // Fetching PDF
-    if (status === 'processing') return 4; // Uploaded PDFs reading pages
-    if (status === 'completed' && !hasNotes) return 3; // Done, no notes found
-    if (status === 'stopped') return 2; // Stopped by user
-    if (status === 'pending') return 1; // Not yet started
-    if (status === 'failed') return 0; // Bottom: errored
-    return 4; // undefined status — treat as active
-  };
-
-
-
-  const content = useMemo(() => {
-    if (sortBy === 'most-relevant-notes') {
-      const allNotes = filteredPapers.flatMap(paper =>
-        (paper.notes || [])
-          .filter(note => {
-            if ((note?.quote || '').toString().trim().length === 0) return false;
-            if (localFilters.query && localFilters.query !== 'all') {
-              return note.relatedQuestion === localFilters.query;
-            }
-            return true;
-          })
-          .map((note, filterIdx) => {
-            // ✅ CRITICAL FIX: Use full quote length for uniqueness guarantee
-            // Substring(0, 50) can collide if two notes on same page start identically
-            // Using full quote ensures truly unique IDs
-            const fullQuoteHash = String(note.quote || '')
-              .replace(/[|\/\\]/g, '_')
-              .substring(0, 60);
-
-            // Get actual index in paper.notes array for consistency with rankTopNotes
-            const actualIndex = (paper.notes || []).findIndex((n: any) =>
-              n.quote === note.quote && n.pageNumber === note.pageNumber
-            );
-
-            const uniqueId = actualIndex >= 0
-              ? `${paper.id}|p${note.pageNumber}|i${actualIndex}|${fullQuoteHash}`
-              : `${paper.id}|p${note.pageNumber}|i${filterIdx}|${fullQuoteHash}`;
-
-            return {
-              ...note,
-              sourcePaper: paper,
-              sourceId: paper.id,  // ← Track source paper
-              uniqueId
-            };
-          })
-      );
-
-      // ✅ Deduplicate allNotes by uniqueId (safety measure)
-      const seenIds = new Set<string>();
-      const uniqueAllNotes = allNotes.filter(note => {
-        if (seenIds.has(note.uniqueId)) {
-          console.warn('[DeepSearch] Duplicate note in allNotes filtered:', note.uniqueId.substring(0, 50));
-          return false;
-        }
-        seenIds.add(note.uniqueId);
-        return true;
-      });
-
-      // Sort by: status priority first, then relevance score
-      const sorted = uniqueAllNotes.sort((a, b) => {
-        const priorityDiff = getStatusPriority(b.sourcePaper) - getStatusPriority(a.sourcePaper);
-        if (priorityDiff !== 0) return priorityDiff;
-        return (b.relevanceScore || 0) - (a.relevanceScore || 0);
-      });
-
-      // 🔥 Refined Reordering: Bubble Top 5 insights to the absolute top
-      if (topNoteIds && topNoteIds.length > 0) {
-        const topOnes = uniqueAllNotes
-          .filter(n => topNoteIds.includes(n.uniqueId))
-          .sort((a, b) => topNoteIds.indexOf(a.uniqueId) - topNoteIds.indexOf(b.uniqueId));
-
-        // ✅ If user clicked a specific Top 5 note, move it to position 0
-        if (clickedTopNoteId && topOnes.some(n => n.uniqueId === clickedTopNoteId)) {
-          const clickedNote = topOnes.find(n => n.uniqueId === clickedTopNoteId)!;
-          const otherTopNotes = topOnes.filter(n => n.uniqueId !== clickedTopNoteId);
-          const finalTopOnes = [clickedNote, ...otherTopNotes];
-          const remaining = uniqueAllNotes.filter(n => !topNoteIds.includes(n.uniqueId));
-
-          console.log('[DeepSearch] Moved clicked note to position 0:', {
-            clickedNoteId: clickedTopNoteId.substring(0, 50),
-            totalTopNotes: finalTopOnes.length,
-            remainingNotes: remaining.length
-          });
-
-          return [...finalTopOnes, ...remaining];
-        }
-
-        const remaining = uniqueAllNotes.filter(n => !topNoteIds.includes(n.uniqueId));
-        return [...topOnes, ...remaining];
-      }
-
-      return sorted;
-    } else if (sortBy === 'newest-papers') {
-      return [...filteredPapers].sort((a, b) => {
-        const priorityDiff = getStatusPriority(b) - getStatusPriority(a);
-        if (priorityDiff !== 0) return priorityDiff;
-        return getSafeTimestamp(b.publishedDate) - getSafeTimestamp(a.publishedDate);
-      });
-    } else {
-      // 'relevant-papers' default: sort by status priority first, then notes count
-      return [...filteredPapers].sort((a, b) => {
-        const priorityDiff = getStatusPriority(b) - getStatusPriority(a);
-        if (priorityDiff !== 0) return priorityDiff;
-        return (b.notes?.length || 0) - (a.notes?.length || 0);
-      });
-    }
-  }, [filteredPapers, sortBy, localFilters.query, topNoteIds, clickedTopNoteId]);
-
 
 
   // ✅ Handler for Top 5 card clicks - moves clicked note to position 0 and expands it
@@ -817,7 +844,8 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
         .filter(note => (note?.quote || '').trim().length > 0)
         .map((note, noteIdx) => {
           const quoteHash = String(note.quote).substring(0, 60).replace(/[|\/\\]/g, '_');
-          const uniqueId = `${paper.id}|p${note.pageNumber}|i${noteIdx}|${quoteHash}`;
+          // ✅ Include noteIdx tiebreaker — matches the format used in content useMemo
+          const uniqueId = `${paper.id}|p${note.pageNumber}|i${noteIdx}|${noteIdx}|${quoteHash}`;
 
           return {
             ...note,
@@ -1142,19 +1170,43 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
 
             {/* Bulk Copy Notes Button */}
             {sortBy === 'most-relevant-notes' && selectedNoteIds.length > 0 && (
-              <button
-                onClick={handleBulkCopyNotes}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg shadow-sm transition-all ${justCopiedNotes
-                  ? 'bg-scholar-500 dark:bg-scholar-400 text-white hover:bg-scholar-500 dark:hover:bg-scholar-400'
-                  : 'text-white bg-scholar-600 dark:bg-scholar-700 hover:bg-scholar-700 dark:hover:bg-scholar-600'
-                  }`}
-                title={justCopiedNotes ? `Copied! ${selectedNoteIds.length} Notes` : `Copy ${selectedNoteIds.length} selected notes`}
-              >
-                {justCopiedNotes ? <Check size={16} className="stroke-[3]" /> : <Copy size={16} />}
-                <span className="hidden sm:inline">
-                  {justCopiedNotes ? `Copied! ${selectedNoteIds.length} Notes` : `Copy ${selectedNoteIds.length} Notes`}
-                </span>
-              </button>
+              <div className="relative" ref={bulkCopyRef}>
+                <button
+                  onClick={() => setShowBulkCopyMenu(!showBulkCopyMenu)}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg shadow-sm transition-all ${justCopiedNotes
+                    ? 'bg-scholar-500 dark:bg-scholar-400 text-white'
+                    : 'text-white bg-scholar-600 dark:bg-scholar-700 hover:bg-scholar-700 dark:hover:bg-scholar-600'
+                    }`}
+                  title={`Copy ${selectedNoteIds.length} selected notes`}
+                >
+                  {justCopiedNotes ? <Check size={16} className="stroke-[3]" /> : <Copy size={16} />}
+                  <span className="hidden sm:inline">
+                    {justCopiedNotes ? `Copied! ${selectedNoteIds.length} Notes` : `Copy ${selectedNoteIds.length} Notes`}
+                  </span>
+                  <ChevronDown size={12} className={`transition-transform ${showBulkCopyMenu ? 'rotate-180' : ''}`} />
+                </button>
+                {showBulkCopyMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowBulkCopyMenu(false)} />
+                    <div className="absolute left-0 top-full mt-2 w-52 bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50 animate-fade-in">
+                      <button
+                        onClick={() => handleBulkCopyNotes('raw')}
+                        className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <FileText size={16} className="text-gray-400" />
+                        <span className="text-sm font-medium text-gray-700 dark:text-white">Copy Quotes Only</span>
+                      </button>
+                      <button
+                        onClick={() => handleBulkCopyNotes('full')}
+                        className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <FileText size={16} className="text-scholar-600 dark:text-scholar-400" />
+                        <span className="text-sm font-medium text-gray-700 dark:text-white">Copy Full Notes</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
 
             {/* Clear All Results Button (Redirects to parent modal) */}
