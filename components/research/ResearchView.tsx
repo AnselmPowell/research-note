@@ -167,7 +167,7 @@ export const ResearchView: React.FC = () => {
       )}
 
       {/* ── TAB CONTENT ─────────────────────────────────────────────────────── */}
-      <div onScroll={handleScroll} className="flex-1 overflow-y-auto overflow-x-hidden py-4 custom-scrollbar">
+      <div id="research-scroll-container" onScroll={handleScroll} className="flex-1 overflow-y-auto overflow-x-hidden py-4 custom-scrollbar">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
           {activeTab === 'web' ? (
             <div className="space-y-6">

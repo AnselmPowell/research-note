@@ -77,6 +77,14 @@ const getSafeTimestamp = (dateStr: string) => {
   return 0;
 };
 
+const formatDuration = (ms: number): string => {
+  const totalSeconds = ms / 1000;
+  if (totalSeconds < 60) return `${totalSeconds.toFixed(1)}s`;
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = Math.floor(totalSeconds % 60).toString().padStart(2, '0');
+  return `${mins}m ${secs}s`;
+};
+
 // ─── PaperCard Props ───────────────────────────────────────────────────────────
 interface PaperCardProps {
   paper: ArxivPaper;
@@ -574,6 +582,11 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
 
   const totalNotes = useMemo(() =>
     currentTabCandidates.reduce((acc, paper) => acc + (paper.notes?.length || 0), 0),
+    [currentTabCandidates]
+  );
+
+  const papersWithNotes = useMemo(() =>
+    currentTabCandidates.filter(p => (p.notes?.length || 0) > 0).length,
     [currentTabCandidates]
   );
 
@@ -1335,16 +1348,33 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
         {!isBlurred && currentTabCandidates.length > 0 && (
           <div className="flex items-center justify-between px-1 mb-2 animate-fade-in">
             <div className="text-sm text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
-              <BookOpenText size={14} className="opacity-60" />
-              {currentTabCandidates.length} paper{currentTabCandidates.length !== 1 ? 's' : ''} ● {totalNotes} note{totalNotes !== 1 ? 's' : ''} found
+              
+              <span>{currentTabCandidates.length} paper{currentTabCandidates.length !== 1 ? 's' : ''}</span>
+
+              <span className="text-gray-300 dark:text-gray-600">●</span>
+              {totalNotes > 0 ? (
+              <>
+                <>
+                  <span>{papersWithNotes} paper{papersWithNotes !== 1 ? 's' : ''} with</span>
+                  <span>{totalNotes} note{totalNotes !== 1 ? 's' : ''}</span>
+                </>
+              
               {timeToFirstNotes !== null && (
                 <>
-                  <span className="text-xs text-gray-400 mx-0.5">•</span>
-                  <span className="text-sm text-gray-500 dark:text-scholar-400 font-medium">
-                    {(timeToFirstNotes / 1000).toFixed(2)}s
+                  <span className="text-gray-300 dark:text-gray-600">●</span>
+                  <span className="text-gray-500 dark:text-gray-600">
+                    {formatDuration(timeToFirstNotes)}
                   </span>
                 </>
               )}
+              </>
+              ) : <span className="text-sm text-gray-500 dark:text-gray-400 font-medium ">
+                  {totalNotes} note{totalNotes !== 1 ? 's' : ''}
+                </span> }
+  
+              
+                
+            
             </div>
             {(['initialising', 'searching', 'filtering', 'extracting'].includes(researchPhase)) && (
               <button
@@ -1507,7 +1537,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
               </span>
 
               <button
-                onClick={() => { onCurrentPageChange(Math.min(totalPages, currentPage + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                onClick={() => { onCurrentPageChange(Math.min(totalPages, currentPage + 1)); document.getElementById('research-scroll-container')?.scrollTo({ top: 0, behavior: 'smooth' }); }}
                 disabled={currentPage === totalPages}
                 className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-dark-card hover:bg-scholar-50 dark:hover:bg-scholar-900/20 hover:border-scholar-200 dark:hover:border-scholar-800 disabled:opacity-30 disabled:hover:bg-transparent shadow-sm transition-all"
                 title="Next page"

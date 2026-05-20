@@ -1,10 +1,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import * as pdfjsLibWeb from 'pdfjs-dist';
 import { PdfViewer } from './PdfViewer';
 import PdfUploader from './PdfUploader';
-import { X, FileText, Loader2, Plus, ChevronDown, Upload, Link as LinkIcon, ArrowRight } from 'lucide-react';
+import { X, Loader2, Plus, Upload, Link as LinkIcon, ArrowRight } from 'lucide-react';
 import { useLibrary } from '../../contexts/LibraryContext';
 import { useUI } from '../../contexts/UIContext';
 
