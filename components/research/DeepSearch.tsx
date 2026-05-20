@@ -786,10 +786,17 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   }, [researchPhase, filteredCandidates]);
 
   const isSearching = researchPhase === 'searching' || researchPhase === 'initialising';
+  const isFiltered = !!(searchQuery.trim() || localFilters.paper !== 'all' || localFilters.query !== 'all' || localFilters.hasNotes);
 
   const totalNotes = useMemo(() =>
-    currentTabCandidates.reduce((acc, paper) => acc + (paper.notes?.length || 0), 0),
-    [currentTabCandidates]
+    filteredPapers.reduce((acc, paper) => {
+      const notes = paper.notes || [];
+      const count = localFilters.query !== 'all'
+        ? notes.filter(n => n.relatedQuestion === localFilters.query && (n.quote || '').trim().length > 0).length
+        : notes.length;
+      return acc + count;
+    }, 0),
+    [filteredPapers, localFilters.query]
   );
 
   const papersWithNotes = useMemo(() =>
@@ -1511,9 +1518,12 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
           </div>
 
           <div className="flex justify-end mt-2">
-            <button onClick={handleResetFilters} className="text-[10px] font-bold text-red-700 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:underline transition-all">
-              Reset Filters
-            </button>
+            <button
+            onClick={handleResetFilters}
+            className="text-[12px] font-black text-scholar-600 dark:text-scholar-400 hover:text-scholar-800 dark:hover:text-scholar-300 uppercase tracking-widest transition-all hover:underline"
+          >
+            Reset Filters
+          </button>
           </div>
         </div>
       )}
@@ -1525,33 +1535,32 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
         {!isBlurred && currentTabCandidates.length > 0 && (
           <div className="flex items-center justify-between px-1 mb-2 animate-fade-in">
             <div className="text-sm text-gray-500 dark:text-gray-400 font-medium flex items-center gap-2">
-              
-              <span>{currentTabCandidates.length} paper{currentTabCandidates.length !== 1 ? 's' : ''}</span>
 
-              <span className="text-gray-300 dark:text-gray-600">●</span>
-              {totalNotes > 0 ? (
-              <>
+              {isFiltered ? (
+                // FILTERED: "3 papers with 18 notes"
+                <span>
+                  {filteredPapers.length} paper{filteredPapers.length !== 1 ? 's' : ''} with {totalNotes} note{totalNotes !== 1 ? 's' : ''}
+                </span>
+              ) : (
+                // UNFILTERED: "17 papers ● 5 papers with 83 notes"
                 <>
-                  <span>{papersWithNotes} paper{papersWithNotes !== 1 ? 's' : ''} with</span>
-                  <span>{totalNotes} note{totalNotes !== 1 ? 's' : ''}</span>
+                  <span>{currentTabCandidates.length} paper{currentTabCandidates.length !== 1 ? 's' : ''}</span>
+                  {totalNotes > 0 && (
+                    <>
+                      <span className="text-gray-300 dark:text-gray-600">●</span>
+                      <span>{papersWithNotes} paper{papersWithNotes !== 1 ? 's' : ''} with {totalNotes} note{totalNotes !== 1 ? 's' : ''}</span>
+                    </>
+                  )}
                 </>
-              
+              )}
+
               {timeToFirstNotes !== null && (
                 <>
                   <span className="text-gray-300 dark:text-gray-600">●</span>
-                  <span className="text-gray-500 dark:text-gray-600">
-                    {formatDuration(timeToFirstNotes)}
-                  </span>
+                  <span className="text-gray-500 dark:text-gray-600">{formatDuration(timeToFirstNotes)}</span>
                 </>
               )}
-              </>
-              ) : <span className="text-sm text-gray-500 dark:text-gray-400 font-medium ">
-                  {totalNotes} note{totalNotes !== 1 ? 's' : ''}
-                </span> }
-  
-              
-                
-            
+
             </div>
             {(['initialising', 'searching', 'filtering', 'extracting'].includes(researchPhase)) && (
               <button
