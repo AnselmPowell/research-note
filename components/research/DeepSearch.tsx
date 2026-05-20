@@ -77,6 +77,17 @@ const getSafeTimestamp = (dateStr: string) => {
   return 0;
 };
 
+// Normalise text for case-insensitive, accent-insensitive search
+// NFD decomposes accented chars (é → e + ́), then the regex strips the diacritics
+const normalizeText = (str: string): string =>
+  (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+// Truncate a string to a maximum number of words, appending ellipsis if longer
+const truncateWords = (str: string, max = 11): string => {
+  const words = (str || '').trim().split(/\s+/);
+  return words.length <= max ? str : words.slice(0, max).join(' ') + '…';
+};
+
 const formatDuration = (ms: number): string => {
   const totalSeconds = ms / 1000;
   if (totalSeconds < 60) return `${totalSeconds.toFixed(1)}s`;
@@ -405,6 +416,8 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   const [justCopiedNotes, setJustCopiedNotes] = useState(false);
   const [showBulkCopyMenu, setShowBulkCopyMenu] = useState(false);
   const bulkCopyRef = useRef<HTMLDivElement>(null);
+  const [isPaperDropdownOpen, setIsPaperDropdownOpen] = useState(false);
+  const [isQueryDropdownOpen, setIsQueryDropdownOpen] = useState(false);
 
 
   const { loadedPdfs, isPdfInContext, loadPdfFromUrl, setActivePdf, downloadingUris, failedUris } = useLibrary();
@@ -500,13 +513,13 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   const filteredPapers = useMemo(() => {
     let base = [...currentTabCandidates];
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = normalizeText(searchQuery);
       base = base.filter(paper => {
-        const titleMatch = paper.title.toLowerCase().includes(q);
-        const abstractMatch = paper.summary?.toLowerCase().includes(q);
+        const titleMatch = normalizeText(paper.title).includes(q);
+        const abstractMatch = normalizeText(paper.summary ?? '').includes(q);
         const notesMatch = paper.notes?.some(note =>
-          note.quote.toLowerCase().includes(q) ||
-          note.justification?.toLowerCase().includes(q)
+          normalizeText(note.quote).includes(q) ||
+          normalizeText(note.justification ?? '').includes(q)
         );
         return titleMatch || abstractMatch || notesMatch;
       });
@@ -962,11 +975,14 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
   const uniquePapers = useMemo(() => {
     let base = [...currentTabCandidates];
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = normalizeText(searchQuery);
       base = base.filter(paper =>
-        paper.title.toLowerCase().includes(q) ||
-        paper.summary?.toLowerCase().includes(q) ||
-        paper.notes?.some(note => note.quote.toLowerCase().includes(q) || note.justification?.toLowerCase().includes(q))
+        normalizeText(paper.title).includes(q) ||
+        normalizeText(paper.summary ?? '').includes(q) ||
+        paper.notes?.some(note =>
+          normalizeText(note.quote).includes(q) ||
+          normalizeText(note.justification ?? '').includes(q)
+        )
       );
     }
     if (localFilters.query !== 'all') {
@@ -975,17 +991,28 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     if (localFilters.hasNotes) {
       base = base.filter(p => p.notes && p.notes.length > 0);
     }
-    return base.map(p => ({ id: p.id, title: p.title }));
+    return base.map(p => ({
+      id: p.id,
+      title: p.title,
+      noteCount: (p.notes || []).filter(n => {
+        if ((n?.quote || '').trim().length === 0) return false;
+        if (localFilters.query !== 'all') return n.relatedQuestion === localFilters.query;
+        return true;
+      }).length
+    }));
   }, [currentTabCandidates, searchQuery, localFilters.query, localFilters.hasNotes]);
 
   const uniqueQueries = useMemo(() => {
     let base = [...currentTabCandidates];
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = normalizeText(searchQuery);
       base = base.filter(paper =>
-        paper.title.toLowerCase().includes(q) ||
-        paper.summary?.toLowerCase().includes(q) ||
-        paper.notes?.some(note => note.quote.toLowerCase().includes(q) || note.justification?.toLowerCase().includes(q))
+        normalizeText(paper.title).includes(q) ||
+        normalizeText(paper.summary ?? '').includes(q) ||
+        paper.notes?.some(note =>
+          normalizeText(note.quote).includes(q) ||
+          normalizeText(note.justification ?? '').includes(q)
+        )
       );
     }
     if (localFilters.paper !== 'all') {
@@ -994,13 +1021,22 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
     if (localFilters.hasNotes) {
       base = base.filter(p => p.notes && p.notes.length > 0);
     }
-    const queries = new Set<string>();
+    const queryMap = new Map<string, number>();
     base.forEach(paper => {
       (paper.notes || []).forEach(note => {
-        if (note.relatedQuestion) queries.add(note.relatedQuestion);
+        if (note.relatedQuestion) {
+          // Ensure every question appears — initialise to 0 if not yet seen
+          if (!queryMap.has(note.relatedQuestion)) {
+            queryMap.set(note.relatedQuestion, 0);
+          }
+          // Only count notes that have a real quote
+          if ((note.quote || '').trim().length > 0) {
+            queryMap.set(note.relatedQuestion, (queryMap.get(note.relatedQuestion) || 0) + 1);
+          }
+        }
       });
     });
-    return Array.from(queries);
+    return Array.from(queryMap.entries()).map(([query, noteCount]) => ({ query, noteCount }));
   }, [currentTabCandidates, searchQuery, localFilters.paper, localFilters.hasNotes]);
 
   // ─── Auto-reset stale filters ──────────────────────────────────────────────────
@@ -1013,7 +1049,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
 
   useEffect(() => {
     if (localFilters.query !== 'all') {
-      const queryExists = uniqueQueries.includes(localFilters.query);
+      const queryExists = uniqueQueries.some(q => q.query === localFilters.query);
       if (!queryExists) onLocalFiltersChange({ ...localFilters, query: 'all' });
     }
   }, [uniqueQueries, localFilters.query]);
@@ -1335,61 +1371,131 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
             <X size={18} />
           </button>
 
-          <div className="flex flex-col gap-5 sm:grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 sm:gap-6 pt-2">
-            {/* Search Input */}
-            <div className="sm:col-span-2 space-y-2">
-              <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">Keywords</label>
-              <div className="relative group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-scholar-600 dark:group-focus-within:text-scholar-400 transition-colors" />
-                <input
-                  className="w-full bg-white/80 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-xl pl-11 pr-10 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all"
-                  value={searchQuery}
-                  onChange={(e) => onSearchQueryChange(e.target.value)}
-                  placeholder="Search title, notes, insights..."
-                />
-                {searchQuery && (
-                  <button onClick={() => onSearchQueryChange('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                    <X size={16} />
-                  </button>
-                )}
-              </div>
+          {/* ROW 1: Keyword search — full width */}
+          <div className="pt-2 mb-5">
+            <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1 block mb-2">Keywords</label>
+            <div className="relative group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-scholar-600 dark:group-focus-within:text-scholar-400 transition-colors" />
+              <input
+                className="w-full bg-white/80 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-xl pl-11 pr-10 py-2.5 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all"
+                value={searchQuery}
+                onChange={(e) => onSearchQueryChange(e.target.value)}
+                placeholder="Search title, notes, insights..."
+                autoFocus
+              />
+              {searchQuery && (
+                <button onClick={() => onSearchQueryChange('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                  <X size={16} />
+                </button>
+              )}
             </div>
+          </div>
 
+          {/* ROW 2: Papers + Queries + Refine (Refine hidden in most-relevant-notes) */}
+          <div className={`flex flex-col gap-5 sm:grid sm:gap-6 ${sortBy !== 'most-relevant-notes' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
             {/* Paper Filter */}
             <div className="space-y-2">
               <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">Papers</label>
-              <select
-                value={localFilters.paper}
-                onChange={(e) => onLocalFiltersChange({ ...localFilters, paper: e.target.value })}
-                className="w-full bg-white/80 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all appearance-none cursor-pointer"
-              >
-                <option value="all">All Papers ({uniquePapers.length})</option>
-                {uniquePapers.map(p => (
-                  <option key={p.id} value={p.id}>{p.title}</option>
-                ))}
-              </select>
+              <div className="relative" style={{ overflow: 'visible' }}>
+                <button
+                  onClick={() => { setIsPaperDropdownOpen(!isPaperDropdownOpen); setIsQueryDropdownOpen(false); }}
+                  className="w-full bg-white/80 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-left text-gray-900 dark:text-white outline-none shadow-sm transition-all flex items-center justify-between gap-2 hover:border-gray-200 dark:hover:border-gray-700"
+                >
+                  <span className="truncate text-sm">
+                    {localFilters.paper === 'all'
+                      ? `All Papers (${uniquePapers.length})`
+                      : truncateWords(uniquePapers.find(p => p.id === localFilters.paper)?.title || '', 11)
+                    }
+                  </span>
+                  <ChevronDown size={14} className={`flex-shrink-0 text-gray-400 transition-transform duration-200 ${isPaperDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isPaperDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setIsPaperDropdownOpen(false)} />
+                    <div className="absolute left-0 top-full mt-1 w-full min-w-[380px] max-h-60 overflow-y-auto custom-scrollbar bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50 animate-fade-in pointer-events-auto">
+                      <button
+                        onClick={() => { onLocalFiltersChange({ ...localFilters, paper: 'all' }); setIsPaperDropdownOpen(false); }}
+                        className={`w-full text-left px-4 py-2.5 text-sm font-medium flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${localFilters.paper === 'all' ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-700 dark:text-gray-200'}`}
+                      >
+                        All Papers ({uniquePapers.length})
+                      </button>
+                      {uniquePapers.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => { onLocalFiltersChange({ ...localFilters, paper: p.id }); setIsPaperDropdownOpen(false); }}
+                          className={`w-full text-left px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${localFilters.paper === p.id ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-700 dark:text-gray-200'}`}
+                        >
+                          <span className="text-sm font-medium truncate">{truncateWords(p.title, 11)}</span>
+                          {p.noteCount > 0 && (
+                            <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-[10px] font-black flex items-center justify-center">
+                              {p.noteCount}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Query Filter */}
             <div className="space-y-2">
               <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">Queries</label>
-              <select
-                value={localFilters.query}
-                onChange={(e) => onLocalFiltersChange({ ...localFilters, query: e.target.value })}
-                className="w-full bg-white/80 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-scholar-500/10 shadow-sm transition-all appearance-none cursor-pointer"
-              >
-                <option value="all">All Queries ({uniqueQueries.length})</option>
-                {uniqueQueries.map(q => (
-                  <option key={q} value={q}>{q}</option>
-                ))}
-              </select>
+              <div className="relative" style={{ overflow: 'visible' }}>
+                <button
+                  onClick={() => { setIsQueryDropdownOpen(!isQueryDropdownOpen); setIsPaperDropdownOpen(false); }}
+                  className="w-full bg-white/80 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-xl px-4 py-2.5 text-sm text-left text-gray-900 dark:text-white outline-none shadow-sm transition-all flex items-center justify-between gap-2 hover:border-gray-200 dark:hover:border-gray-700"
+                >
+                  <span className="truncate text-sm">
+                    {localFilters.query === 'all'
+                      ? `All Queries (${uniqueQueries.length})`
+                      : truncateWords(localFilters.query, 11)
+                    }
+                  </span>
+                  <ChevronDown size={14} className={`flex-shrink-0 text-gray-400 transition-transform duration-200 ${isQueryDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isQueryDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setIsQueryDropdownOpen(false)} />
+                    <div className="absolute left-0 top-full mt-1 w-full min-w-[380px] max-h-60 overflow-y-auto custom-scrollbar bg-white dark:bg-dark-card rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 py-1.5 z-50 animate-fade-in pointer-events-auto">
+                      <button
+                        onClick={() => { onLocalFiltersChange({ ...localFilters, query: 'all' }); setIsQueryDropdownOpen(false); }}
+                        className={`w-full text-left px-4 py-2.5 text-sm font-medium flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${localFilters.query === 'all' ? 'text-scholar-600 dark:text-scholar-400' : 'text-gray-700 dark:text-gray-200'}`}
+                      >
+                        All Queries ({uniqueQueries.length})
+                      </button>
+                      {uniqueQueries.map(({ query, noteCount }) => (
+                        <button
+                          key={query}
+                          onClick={() => { onLocalFiltersChange({ ...localFilters, query }); setIsQueryDropdownOpen(false); }}
+                          className={`w-full text-left px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
+                            localFilters.query === query
+                              ? 'text-scholar-600 dark:text-scholar-400'
+                              : noteCount === 0
+                                ? 'text-gray-400 dark:text-gray-500'
+                                : 'text-gray-700 dark:text-gray-200'
+                          }`}
+                        >
+                          <span className="text-sm font-medium truncate">{truncateWords(query, 11)}</span>
+                          {noteCount > 0 && (
+                            <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-[10px] font-black flex items-center justify-center">
+                              {noteCount}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
-            {/* Has Notes Toggle */}
-            <div className="space-y-2">
-              <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">Refine</label>
-              <div className="flex gap-2">
-                {sortBy !== 'most-relevant-notes' && (
+            {/* Refine — hidden entirely in most-relevant-notes view */}
+            {sortBy !== 'most-relevant-notes' && (
+              <div className="space-y-2">
+                <label className="text-[10px] sm:text-[11px] font-black text-gray-400 dark:text-scholar-400 uppercase tracking-widest pl-1">Refine</label>
+                <div className="flex gap-2">
                   <button
                     onClick={() => onLocalFiltersChange({ ...localFilters, hasNotes: !localFilters.hasNotes })}
                     className={`flex-1 px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${localFilters.hasNotes
@@ -1399,9 +1505,9 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                   >
                     With Notes
                   </button>
-                )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="flex justify-end mt-2">
