@@ -335,20 +335,20 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
 
             {isExpanded && visibleNotes.length > 0 && (
               <div className="flex">
-                <span className="relative top-10 -left-14 h-100 border-l-4  sm:border-l-4 border-gray-100 dark:border-gray-800 space-y-3"></span>
+                <span className="relative top-16 -left-14 h-100 border-l-4  sm:border-l-4 border-gray-100 dark:border-gray-800 space-y-3"></span>
                 <div className="mt-4  -pl-2 border-gray-100 dark:border-gray-800 space-y-3">
                   {visibleNotes.map((note, idx) => {
                     const noteId = getNoteId(paper.id, note.pageNumber, idx);
                     return (
                       <ResearchCardNote
-                        key={noteId}
+                        key={noteId} 
                         id={noteId}
                         note={note}
                         isSelected={selectedNoteIds.includes(noteId)}
                         onSelect={() => onSelectNote(noteId)}
                         sourceTitle={paper.title}
                         sourcePaper={paper}
-                        isExpanded={expandedNoteIds.has(noteId)}
+                        isExpanded={expandedNoteIds.has(noteId)} 
                         onToggleExpand={() => {
                           setExpandedNoteIds(prev => {
                             const next = new Set(prev);
@@ -371,6 +371,8 @@ const PaperCard: React.FC<PaperCardProps> = React.memo(({ paper, selectedNoteIds
       </div>
     </div>
   );
+
+
 }, (prevProps, nextProps) => {
   return (
     prevProps.paper.id === nextProps.paper.id &&
@@ -1212,7 +1214,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                 <span className="truncate max-w-[140px]">
                   Most Relevant Notes
                 </span>
-                <button
+                <div
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsSortOpen(!isSortOpen);
@@ -1220,7 +1222,7 @@ export const DeepSearch: React.FC<DeepSearchProps> = ({ onShowClearModal }) => {
                   className="flex items-center justify-center"
                 >
                   <ChevronDown size={16} className={`text-gray-400 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
-                </button>
+                </div>
               </button>
 
               {isSortOpen && (
