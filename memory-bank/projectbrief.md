@@ -83,6 +83,18 @@ Streaming Updates (UI real-time)
 User Saves → Neon PostgreSQL
 ```
 
+### What Actually Happens in the Backend (Timeline)
+Here's the real sequence mapped to approximate times:
+
+initialising (~2-5s): Gemini generates ArXiv search terms + insight questions from the user's topics/questions.
+searching (~5-15s): OpenAlex + Google CSE are searched in parallel. Returns ~50-150 candidate papers (deduped). These are set as arxivCandidates.
+filtering — Stage 1 Cosine (~3-5s): All candidates get embeddings. Cosine similarity scores them against user intent. Papers ≥0.48 pass. Top 100 kept.
+filtering — Stage 2 LLM Selection (~5-10s, the SLOW part): LLM reads top 100 and selects 20 most relevant. This is where the wait is.
+First 20 arrive → downloading/extracting starts immediately. Phase changes. Blur lifts progressively.
+Stage 3 (background): LLM picks up to 20 more from the leftovers. These append when ready.
+
+
+
 ### Context Architecture
 ```
 UIContext           → Layout, theme, modals
